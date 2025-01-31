@@ -1,3 +1,4 @@
+// StartDownloader.java
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.WebDriver;
@@ -16,33 +17,33 @@ public class StartDownloader {
     
     public static void main(String[] args) {
         try {
-            // Initialize configuration
+            // Konfiguration initialisieren
             ConfigurationManager configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
             configManager.initializeDirectories();
             
-            // Initialize logger
+            // Logger initialisieren
             LoggerManager.initializeLogger(configManager.getLogConfigPath());
             
-            // Initialize WebDriver
+            // WebDriver initialisieren
             WebDriverManager webDriverManager = new WebDriverManager(configManager.getDownloadPath());
             WebDriver driver = webDriverManager.initializeDriver();
             
-            // Direktes Erstellen der Credentials, da wir jetzt nur MQL5-spezifische Konfiguration haben
-            Credentials credentials = new Credentials("username", "password");
+            // Anmeldedaten aus Konfiguration lesen
+            Credentials credentials = configManager.getCredentials();
             
-            // Start the download process
+            // Download-Prozess starten
             try {
                 SignalDownloader downloader = new SignalDownloader(driver, configManager, credentials);
                 downloader.startDownloadProcess();
             } catch (IOException e) {
-                logger.error("Error initializing SignalDownloader", e);
+                logger.error("Fehler beim Initialisieren des SignalDownloaders", e);
                 if (driver != null) {
                     driver.quit();
                 }
             }
             
         } catch (Exception e) {
-            logger.error("Error in main process", e);
+            logger.error("Fehler im Hauptprozess", e);
         }
     }
 }
