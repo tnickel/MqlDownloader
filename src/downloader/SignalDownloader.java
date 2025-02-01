@@ -1,5 +1,7 @@
 package downloader;
 
+
+
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,8 +18,6 @@ import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
-import com.google.common.base.Function;
-
 import config.ConfigurationManager;
 import config.Credentials;
 
@@ -26,7 +26,7 @@ public class SignalDownloader {
     private final ConfigurationManager configManager;
     private final Credentials credentials;
     private final WebDriverWait wait;
-    private final String baseUrl;
+    private String baseUrl;
     private static final Logger logger = LogManager.getLogger(SignalDownloader.class);
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
@@ -37,23 +37,32 @@ public class SignalDownloader {
         this.baseUrl = configManager.getMqlBaseUrl();
     }
 
+    public void setMqlVersion(String version) throws IOException {
+        if (!version.equals("mt4") && !version.equals("mt5")) {
+            throw new IllegalArgumentException("MQL-Version muss entweder 'mt4' oder 'mt5' sein");
+        }
+        configManager.setMqlVersion(version);
+        updateBaseUrl(version);
+    }
+
+    private void updateBaseUrl(String version) {
+        this.baseUrl = String.format("https://www.mql5.com/en/signals/%s/list", version);
+    }
+
     public void startDownloadProcess() {
         try {
             performLogin();
             processSignalProviders();
         } catch (Exception e) {
-            logger.error("Error in download process", e);
-        } finally {
-            closeDriver();
+            logger.error("Fehler im Download-Prozess", e);
         }
     }
 
     private void performLogin() {
-        logger.info("Starting login process...");
+        logger.info("Starte Anmeldeprozess...");
         driver.get("https://www.mql5.com/en/auth_login");
 
-        Function<WebDriver, WebElement> waitFunction = ExpectedConditions.visibilityOfElementLocated(By.id("Login"));
-        WebElement usernameField = wait.until(waitFunction);
+        WebElement usernameField = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("Login")));
         WebElement passwordField = driver.findElement(By.id("Password"));
 
         usernameField.sendKeys(credentials.getUsername());
@@ -68,7 +77,7 @@ public class SignalDownloader {
         if (loginButton != null) {
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", loginButton);
         } else {
-            throw new RuntimeException("Login button could not be found");
+            throw new RuntimeException("Login Button konnte nicht gefunden werden");
         }
     }
 
@@ -89,7 +98,7 @@ public class SignalDownloader {
             wait.until(ExpectedConditions.urlContains("/en"));
             Thread.sleep(getRandomWaitTime());
         } catch (Exception e) {
-            throw new RuntimeException("Login verification failed", e);
+            throw new RuntimeException("Login-Verifizierung fehlgeschlagen", e);
         }
     }
 
@@ -98,12 +107,12 @@ public class SignalDownloader {
         boolean hasNextPage = true;
 
         while (hasNextPage) {
-            String pageUrl = baseUrl + "/list/page" + currentPage;
+            String pageUrl = baseUrl + "/page" + currentPage;
             try {
                 processSignalProvidersPage(pageUrl);
                 currentPage++;
             } catch (RuntimeException e) {
-                if (e.getMessage().equals("No signal providers found")) {
+                if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
                     hasNextPage = false;
                 } else {
                     throw e;
@@ -118,7 +127,7 @@ public class SignalDownloader {
 
         List<WebElement> providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
         if (providerLinks.isEmpty()) {
-            throw new RuntimeException("No signal providers found");
+            throw new RuntimeException("Keine Signal-Provider gefunden");
         }
 
         for (int i = 0; i < providerLinks.size(); i++) {
@@ -129,7 +138,7 @@ public class SignalDownloader {
     private void processSignalProvider(String pageUrl, int index) {
         List<WebElement> providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
         if (index >= providerLinks.size()) {
-            logger.warn("Provider index out of bounds, skipping");
+            logger.warn("Provider-Index außerhalb der Grenzen, überspringe");
             return;
         }
 
@@ -150,7 +159,7 @@ public class SignalDownloader {
 
         List<WebElement> exportLinks = driver.findElements(By.xpath("//*[text()='History']"));
         if (exportLinks.isEmpty()) {
-            logger.warn("No export link found for provider: " + providerName);
+            logger.warn("Kein Export-Link gefunden für Provider: " + providerName);
             return;
         }
 
@@ -164,38 +173,48 @@ public class SignalDownloader {
         try {
             Thread.sleep(getRandomWaitTime());
             File downloadedFile = findDownloadedFile(configManager.getDownloadPath());
+            
             if (downloadedFile != null && downloadedFile.exists()) {
                 String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|]", "_");
                 String originalId = downloadedFile.getName().replaceAll("[^0-9]", "");
                 
-                File targetFile = new File(configManager.getDownloadPath(), 
+                // Den aktuellen spezifischen Download-Pfad (mql4 oder mql5) verwenden
+                String targetPath = configManager.getCurrentDownloadPath();
+                createDirectoryIfNotExists(targetPath);
+                
+                File targetFile = new File(targetPath, 
                     String.format("%s_%s.csv", safeProviderName, originalId));
-                Files.move(downloadedFile.toPath(), targetFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                logger.info("File downloaded for " + providerName + " (ID: " + originalId + "): " + targetFile.getAbsolutePath());
+                    
+                Files.move(downloadedFile.toPath(), targetFile.toPath(), 
+                    StandardCopyOption.REPLACE_EXISTING);
+                    
+                logger.info("Datei heruntergeladen für " + providerName + 
+                    " (ID: " + originalId + "): " + targetFile.getAbsolutePath());
+            } else {
+                logger.warn("Keine heruntergeladene Datei gefunden für Provider: " + providerName);
             }
         } catch (Exception e) {
-            logger.error("Error handling downloaded file for " + providerName, e);
+            logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName, e);
         }
     }
 
-    private void closeDriver() {
-        try {
-            Thread.sleep(2000);
-            if (driver != null) {
-                driver.quit();
+    private void createDirectoryIfNotExists(String path) {
+        File dir = new File(path);
+        if (!dir.exists()) {
+            boolean created = dir.mkdirs();
+            if (!created) {
+                logger.error("Konnte Verzeichnis nicht erstellen: " + path);
             }
-        } catch (InterruptedException e) {
-            logger.error("Error while closing driver", e);
         }
-    }
-
-    private static int getRandomWaitTime() {
-        return (int) (Math.random() * (30000 - 10000)) + 10000;
     }
 
     private static File findDownloadedFile(String downloadDirectory) {
         File dir = new File(downloadDirectory);
         File[] files = dir.listFiles((d, name) -> name.endsWith(".csv"));
         return files != null && files.length > 0 ? files[0] : null;
+    }
+
+    private static int getRandomWaitTime() {
+        return (int) (Math.random() * (30000 - 10000)) + 10000;
     }
 }
