@@ -1,8 +1,7 @@
 package downloader;
 
-
-
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
@@ -145,9 +144,66 @@ public class SignalDownloader {
         WebElement link = providerLinks.get(index);
         String providerUrl = link.getAttribute("href");
         String providerName = link.getText().trim();
-
+        
+        // Extract provider ID from URL and remove any additional parameters
+        String providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
+        if (providerId.contains("?")) {
+            providerId = providerId.substring(0, providerId.indexOf("?"));
+        }
+        
+        // Download the root page first
+        downloadProviderRootPage(providerUrl, providerId, providerName);
+        
+        // Then download the trade history
         downloadTradeHistory(providerUrl, providerName);
+        
+        // Return to the provider list
         driver.get(pageUrl);
+    }
+
+    private void downloadProviderRootPage(String providerUrl, String providerId, String providerName) {
+        try {
+            // Construct the root page URL
+            String mqlVersion = configManager.getMqlVersion(); // "mt4" or "mt5"
+            // Clean providerId to ensure it only contains the numeric part
+            String cleanProviderId = providerId;
+            if (cleanProviderId.contains("?")) {
+                cleanProviderId = cleanProviderId.substring(0, cleanProviderId.indexOf("?"));
+            }
+            String rootPageUrl = String.format("https://www.mql5.com/de/signals/%s?source=Site+Signals+%s+Table",
+                    cleanProviderId, mqlVersion.toUpperCase());
+            
+            // Navigate to the page
+            driver.get(rootPageUrl);
+            
+            // Wait for the page to load
+            Thread.sleep(getRandomWaitTime());
+            
+            // Get the page source
+            String pageSource = driver.getPageSource();
+            
+            // Create a safe filename by removing invalid characters from both provider name and ID
+            String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
+            // Clean up the providerId to ensure it only contains the numeric ID
+            String safeProviderId = providerId;
+            if (safeProviderId.contains("?")) {
+                safeProviderId = safeProviderId.substring(0, safeProviderId.indexOf("?"));
+            }
+            String targetPath = configManager.getCurrentDownloadPath();
+            String htmlFileName = String.format("%s_%s_root.html", safeProviderName, safeProviderId);
+            
+            // Save the HTML content
+            File htmlFile = new File(targetPath, htmlFileName);
+            try (FileWriter writer = new FileWriter(htmlFile)) {
+                writer.write(pageSource);
+            }
+            
+            logger.info("Provider root page downloaded for " + providerName + 
+                " (ID: " + providerId + "): " + htmlFile.getAbsolutePath());
+                
+        } catch (Exception e) {
+            logger.error("Error downloading root page for provider: " + providerName, e);
+        }
     }
 
     private void downloadTradeHistory(String providerUrl, String providerName) {
