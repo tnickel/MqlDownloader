@@ -25,6 +25,11 @@ public class ConfigurationManager {
     private static final String KEY_USERNAME = "username";
     private static final String KEY_PASSWORD = "password";
     private static final String KEY_MQL_VERSION = "mqlVersion";
+    private static final String KEY_MIN_WAIT = "minWaitTime";
+    private static final String KEY_MAX_WAIT = "maxWaitTime";
+    
+    private static final int DEFAULT_MIN_WAIT = 10000; // 10 seconds
+    private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
 
     public ConfigurationManager(String rootDirPath) {
         this.rootDirPath = rootDirPath;
@@ -34,8 +39,6 @@ public class ConfigurationManager {
         this.downloadPath = rootDirPath + "\\download";
         loadCredentials();
     }
-
-    
 
     private void saveProperty(String key, String value) {
         Properties props = loadProperties();
@@ -87,7 +90,30 @@ public class ConfigurationManager {
         return credentials;
     }
 
-  
+    public void setWaitTimes(int minWait, int maxWait) {
+        if (minWait < 2000) { // Minimum 2 seconds
+            minWait = 2000;
+        }
+        if (maxWait <= minWait) {
+            maxWait = minWait + 1000; // Ensure max is always greater than min
+        }
+        
+        Properties props = loadProperties();
+        props.setProperty(KEY_MIN_WAIT, String.valueOf(minWait));
+        props.setProperty(KEY_MAX_WAIT, String.valueOf(maxWait));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("Wait times updated - Min: " + minWait + "ms, Max: " + maxWait + "ms");
+    }
+
+    public int getMinWaitTime() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_MIN_WAIT, String.valueOf(DEFAULT_MIN_WAIT)));
+    }
+
+    public int getMaxWaitTime() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT)));
+    }
 
     public void initializeDirectories() {
         createDirectory(configDirPath);
@@ -104,6 +130,8 @@ public class ConfigurationManager {
             props.setProperty(KEY_DOWNLOAD_PATH, downloadPath);
             props.setProperty(KEY_USERNAME, "");
             props.setProperty(KEY_PASSWORD, "");
+            props.setProperty(KEY_MIN_WAIT, String.valueOf(DEFAULT_MIN_WAIT));
+            props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
             saveProperties(props, "MQL Downloader Standard-Konfiguration");
             logger.info("Standard-Konfigurationsdatei erstellt: " + mqlConfigFilePath);
         }
@@ -151,6 +179,8 @@ public class ConfigurationManager {
         props.setProperty(KEY_DOWNLOAD_PATH, downloadPath);
         props.setProperty(KEY_USERNAME, "");
         props.setProperty(KEY_PASSWORD, "");
+        props.setProperty(KEY_MIN_WAIT, String.valueOf(DEFAULT_MIN_WAIT));
+        props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
         saveProperties(props, "MQL Downloader Konfiguration - Zurückgesetzt auf Standardwerte");
         
         logger.info("Konfiguration wurde auf Standardwerte zurückgesetzt");
@@ -158,9 +188,9 @@ public class ConfigurationManager {
         this.currentDownloadPath = null;
         this.credentials = new Credentials("", "");
     }
+
     public void setBaseUrl(String url) {
         this.baseUrl = url;
-        // Speichern der URL in der Konfigurationsdatei
         Properties props = new Properties();
         File mqlConfigFile = new File(mqlConfigFilePath);
 
@@ -178,13 +208,10 @@ public class ConfigurationManager {
         }
     }
 
-    // Neue Methode zum Setzen des Download-Pfads
     public void setDownloadPath(String path) {
         this.currentDownloadPath = path;
-        // Erstellen des Verzeichnisses, falls es nicht existiert
         createDirectory(path);
         
-        // Speichern des Pfads in der Konfigurationsdatei
         Properties props = new Properties();
         File mqlConfigFile = new File(mqlConfigFilePath);
 
@@ -202,7 +229,6 @@ public class ConfigurationManager {
         }
     }
 
-    // Getter für die Base URL
     public String getBaseUrl() {
         if (baseUrl == null) {
             try {
@@ -219,7 +245,6 @@ public class ConfigurationManager {
         return baseUrl;
     }
 
-    // Getter für den aktuellen Download-Pfad
     public String getCurrentDownloadPath() {
         if (currentDownloadPath == null) {
             try {
@@ -236,6 +261,7 @@ public class ConfigurationManager {
         }
         return currentDownloadPath;
     }
+
     public void setMqlVersion(String version) throws IOException {
         if (!version.equals("mt4") && !version.equals("mt5")) {
             throw new IllegalArgumentException("MQL-Version muss entweder 'mt4' oder 'mt5' sein");
@@ -254,6 +280,7 @@ public class ConfigurationManager {
         Properties props = loadProperties();
         return props.getProperty(KEY_MQL_VERSION, "mt5"); // Standard ist MT5
     }
+
     public String getMqlBaseUrl() {
         Properties props = loadProperties();
         if (baseUrl == null) {
@@ -261,5 +288,4 @@ public class ConfigurationManager {
         }
         return baseUrl;
     }
-
 }

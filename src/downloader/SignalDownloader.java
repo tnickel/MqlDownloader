@@ -27,6 +27,7 @@ public class SignalDownloader {
     private final WebDriverWait wait;
     private String baseUrl;
     private static final Logger logger = LogManager.getLogger(SignalDownloader.class);
+    private volatile boolean stopRequested;
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
         this.driver = driver;
@@ -34,6 +35,11 @@ public class SignalDownloader {
         this.credentials = credentials;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(60));
         this.baseUrl = configManager.getMqlBaseUrl();
+        this.stopRequested = false;
+    }
+
+    public void setStopFlag(boolean stopRequested) {
+        this.stopRequested = stopRequested;
     }
 
     public void setMqlVersion(String version) throws IOException {
@@ -50,10 +56,13 @@ public class SignalDownloader {
 
     public void startDownloadProcess() {
         try {
-            performLogin();
-            processSignalProviders();
+            if (!stopRequested) performLogin();
+            if (!stopRequested) processSignalProviders();
         } catch (Exception e) {
-            logger.error("Fehler im Download-Prozess", e);
+            if (!stopRequested) {
+                logger.error("Fehler im Download-Prozess", e);
+                throw e;
+            }
         }
     }
 
@@ -105,7 +114,7 @@ public class SignalDownloader {
         int currentPage = 1;
         boolean hasNextPage = true;
 
-        while (hasNextPage) {
+        while (hasNextPage && !stopRequested) {
             String pageUrl = baseUrl + "/page" + currentPage;
             try {
                 processSignalProvidersPage(pageUrl);
@@ -113,7 +122,7 @@ public class SignalDownloader {
             } catch (RuntimeException e) {
                 if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
                     hasNextPage = false;
-                } else {
+                } else if (!stopRequested) {
                     throw e;
                 }
             }
@@ -121,6 +130,8 @@ public class SignalDownloader {
     }
 
     private void processSignalProvidersPage(String pageUrl) {
+        if (stopRequested) return;
+
         driver.get(pageUrl);
         wait.until(ExpectedConditions.presenceOfElementLocated(By.className("signal")));
 
@@ -129,12 +140,14 @@ public class SignalDownloader {
             throw new RuntimeException("Keine Signal-Provider gefunden");
         }
 
-        for (int i = 0; i < providerLinks.size(); i++) {
+        for (int i = 0; i < providerLinks.size() && !stopRequested; i++) {
             processSignalProvider(pageUrl, i);
         }
     }
 
     private void processSignalProvider(String pageUrl, int index) {
+        if (stopRequested) return;
+
         List<WebElement> providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
         if (index >= providerLinks.size()) {
             logger.warn("Provider-Index außerhalb der Grenzen, überspringe");
@@ -145,31 +158,33 @@ public class SignalDownloader {
         String providerUrl = link.getAttribute("href");
         String providerName = link.getText().trim();
         
-        // Extract provider ID from URL and remove any additional parameters
+        // Extract provider ID from URL and clean it
         String providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
         if (providerId.contains("?")) {
             providerId = providerId.substring(0, providerId.indexOf("?"));
         }
-        
-        // Download the root page first
+
         downloadProviderRootPage(providerUrl, providerId, providerName);
+        if (!stopRequested) {
+            downloadTradeHistory(providerUrl, providerName);
+        }
         
-        // Then download the trade history
-        downloadTradeHistory(providerUrl, providerName);
-        
-        // Return to the provider list
-        driver.get(pageUrl);
+        if (!stopRequested) {
+            driver.get(pageUrl);
+        }
     }
 
     private void downloadProviderRootPage(String providerUrl, String providerId, String providerName) {
+        if (stopRequested) return;
+
         try {
-            // Construct the root page URL
             String mqlVersion = configManager.getMqlVersion(); // "mt4" or "mt5"
-            // Clean providerId to ensure it only contains the numeric part
             String cleanProviderId = providerId;
             if (cleanProviderId.contains("?")) {
                 cleanProviderId = cleanProviderId.substring(0, cleanProviderId.indexOf("?"));
             }
+            
+            // Construct the root page URL
             String rootPageUrl = String.format("https://www.mql5.com/de/signals/%s?source=Site+Signals+%s+Table",
                     cleanProviderId, mqlVersion.toUpperCase());
             
@@ -182,15 +197,10 @@ public class SignalDownloader {
             // Get the page source
             String pageSource = driver.getPageSource();
             
-            // Create a safe filename by removing invalid characters from both provider name and ID
+            // Create a safe filename
             String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
-            // Clean up the providerId to ensure it only contains the numeric ID
-            String safeProviderId = providerId;
-            if (safeProviderId.contains("?")) {
-                safeProviderId = safeProviderId.substring(0, safeProviderId.indexOf("?"));
-            }
             String targetPath = configManager.getCurrentDownloadPath();
-            String htmlFileName = String.format("%s_%s_root.html", safeProviderName, safeProviderId);
+            String htmlFileName = String.format("%s_%s_root.html", safeProviderName, cleanProviderId);
             
             // Save the HTML content
             File htmlFile = new File(targetPath, htmlFileName);
@@ -199,14 +209,18 @@ public class SignalDownloader {
             }
             
             logger.info("Provider root page downloaded for " + providerName + 
-                " (ID: " + providerId + "): " + htmlFile.getAbsolutePath());
+                " (ID: " + cleanProviderId + "): " + htmlFile.getAbsolutePath());
                 
         } catch (Exception e) {
-            logger.error("Error downloading root page for provider: " + providerName, e);
+            if (!stopRequested) {
+                logger.error("Error downloading root page for provider: " + providerName, e);
+            }
         }
     }
 
     private void downloadTradeHistory(String providerUrl, String providerName) {
+        if (stopRequested) return;
+
         driver.get(providerUrl);
         
         WebElement tradeHistoryTab = wait.until(ExpectedConditions.elementToBeClickable(
@@ -226,15 +240,16 @@ public class SignalDownloader {
     }
 
     private void handleDownloadedFile(String providerName, String signalProviderId) {
+        if (stopRequested) return;
+
         try {
             Thread.sleep(getRandomWaitTime());
             File downloadedFile = findDownloadedFile(configManager.getDownloadPath());
             
             if (downloadedFile != null && downloadedFile.exists()) {
-                String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|]", "_");
+                String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
                 String originalId = downloadedFile.getName().replaceAll("[^0-9]", "");
                 
-                // Den aktuellen spezifischen Download-Pfad (mql4 oder mql5) verwenden
                 String targetPath = configManager.getCurrentDownloadPath();
                 createDirectoryIfNotExists(targetPath);
                 
@@ -250,7 +265,9 @@ public class SignalDownloader {
                 logger.warn("Keine heruntergeladene Datei gefunden für Provider: " + providerName);
             }
         } catch (Exception e) {
-            logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName, e);
+            if (!stopRequested) {
+                logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName, e);
+            }
         }
     }
 
@@ -269,8 +286,10 @@ public class SignalDownloader {
         File[] files = dir.listFiles((d, name) -> name.endsWith(".csv"));
         return files != null && files.length > 0 ? files[0] : null;
     }
-
-    private static int getRandomWaitTime() {
-        return (int) (Math.random() * (30000 - 10000)) + 10000;
+    private int getRandomWaitTime() {
+        int minWait = configManager.getMinWaitTime();
+        int maxWait = configManager.getMaxWaitTime();
+        return (int) (Math.random() * (maxWait - minWait)) + minWait;
     }
+  
 }
