@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.logging.log4j.LogManager;
@@ -14,6 +15,7 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
+import org.openqa.selenium.net.UrlChecker.TimeoutException;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
@@ -30,6 +32,8 @@ public class SignalDownloader {
     private volatile boolean stopRequested;
     private int providerCount = 0;
     private ProgressCallback progressCallback;
+    private int consecutiveErrors = 0;
+    private static final int MAX_CONSECUTIVE_ERRORS = 10;
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
         this.driver = driver;
@@ -127,38 +131,52 @@ public class SignalDownloader {
         }
     }
 
-    private void processSignalProviders() {
-        int currentPage = 1;
-        boolean hasNextPage = true;
-
-        while (hasNextPage && !stopRequested) {
-            String pageUrl = baseUrl + "/page" + currentPage;
-            try {
-                processSignalProvidersPage(pageUrl);
-                currentPage++;
-            } catch (RuntimeException e) {
-                if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
-                    hasNextPage = false;
-                } else if (!stopRequested) {
-                    throw e;
-                }
-            }
-        }
-    }
+   
 
     private void processSignalProvidersPage(String pageUrl) {
         if (stopRequested) return;
 
         driver.get(pageUrl);
-        wait.until(ExpectedConditions.presenceOfElementLocated(By.className("signal")));
+        
+        try {
+            wait.until(ExpectedConditions.presenceOfElementLocated(By.className("signal")));
 
-        List<WebElement> providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
-        if (providerLinks.isEmpty()) {
-            throw new RuntimeException("Keine Signal-Provider gefunden");
-        }
+            // Versuche verschiedene Arten, die Provider-Links zu finden
+            List<WebElement> providerLinks = new ArrayList<>();
+            
+            try {
+                providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
+            } catch (Exception e) {
+                // Alternative Selektoren
+                providerLinks = driver.findElements(By.cssSelector("a[href*='/signals/']"));
+            }
 
-        for (int i = 0; i < providerLinks.size() && !stopRequested; i++) {
-            processSignalProvider(pageUrl, i);
+            if (providerLinks.isEmpty()) {
+                // Letzer Versuch: Suche nach allen Links die "signals" im href haben
+                providerLinks = driver.findElements(By.cssSelector("a[href*='signals']"));
+            }
+
+            if (providerLinks.isEmpty()) {
+                throw new RuntimeException("Keine Signal-Provider gefunden");
+            }
+
+            for (int i = 0; i < providerLinks.size() && !stopRequested; i++) {
+                try {
+                    processSignalProvider(pageUrl, i);
+                } catch (Exception e) {
+                    logger.error("Fehler beim Verarbeiten von Provider " + i + " auf Seite " + pageUrl, e);
+                    // Einzelner Provider-Fehler führt nicht zum Abbruch
+                }
+            }
+            
+        } catch (Exception e) {
+            // Logge den Seiteninhalt für Debugging-Zwecke
+            try {
+                logger.debug("Aktueller Seiteninhalt: " + driver.getPageSource());
+            } catch (Exception pageSourceError) {
+                logger.error("Konnte Seiteninhalt nicht loggen", pageSourceError);
+            }
+            throw e;
         }
     }
 
@@ -313,5 +331,40 @@ public class SignalDownloader {
         int minWait = configManager.getMinWaitTime();
         int maxWait = configManager.getMaxWaitTime();
         return (int) (Math.random() * (maxWait - minWait)) + minWait;
+    }
+    private void processSignalProviders() {
+        int currentPage = 1;
+        boolean hasNextPage = true;
+
+        while (hasNextPage && !stopRequested) {
+            String pageUrl = baseUrl + "/page" + currentPage;
+            try {
+                processSignalProvidersPage(pageUrl);
+                currentPage++;
+                consecutiveErrors = 0; // Reset error counter on success
+            } catch (RuntimeException e) {
+                if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
+                    hasNextPage = false;
+                } else {
+                    consecutiveErrors++;
+                    logger.error("Fehler beim Verarbeiten der Seite " + currentPage + 
+                               " (Fehler " + consecutiveErrors + " von " + MAX_CONSECUTIVE_ERRORS + ")", e);
+                    
+                    if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                        logger.error("Zu viele aufeinanderfolgende Fehler (" + MAX_CONSECUTIVE_ERRORS + 
+                                   "). Beende Download-Prozess.");
+                        throw e;
+                    }
+                    
+                    // Warte kurz und versuche die gleiche Seite nochmal
+                    try {
+                        Thread.sleep(getRandomWaitTime());
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                    continue; // Versuche die gleiche Seite nochmal
+                }
+            }
+        }
     }
 }
