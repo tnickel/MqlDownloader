@@ -28,6 +28,8 @@ public class SignalDownloader {
     private String baseUrl;
     private static final Logger logger = LogManager.getLogger(SignalDownloader.class);
     private volatile boolean stopRequested;
+    private int providerCount = 0;
+    private ProgressCallback progressCallback;
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
         this.driver = driver;
@@ -36,10 +38,25 @@ public class SignalDownloader {
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(60));
         this.baseUrl = configManager.getMqlBaseUrl();
         this.stopRequested = false;
+        this.providerCount = 0;
     }
 
     public void setStopFlag(boolean stopRequested) {
         this.stopRequested = stopRequested;
+        if (stopRequested) {
+            providerCount = 0;
+        }
+    }
+
+    public void setProgressCallback(ProgressCallback callback) {
+        this.progressCallback = callback;
+    }
+
+    private void updateProgress() {
+        providerCount++;
+        if (progressCallback != null) {
+            progressCallback.onProgress(providerCount);
+        }
     }
 
     public void setMqlVersion(String version) throws IOException {
@@ -164,11 +181,16 @@ public class SignalDownloader {
             providerId = providerId.substring(0, providerId.indexOf("?"));
         }
 
+        // Download root page first
         downloadProviderRootPage(providerUrl, providerId, providerName);
+        
+        // Then download trade history if not stopped
         if (!stopRequested) {
             downloadTradeHistory(providerUrl, providerName);
+            updateProgress(); // Update the counter after successful download
         }
         
+        // Return to provider list if not stopped
         if (!stopRequested) {
             driver.get(pageUrl);
         }
@@ -286,10 +308,10 @@ public class SignalDownloader {
         File[] files = dir.listFiles((d, name) -> name.endsWith(".csv"));
         return files != null && files.length > 0 ? files[0] : null;
     }
+
     private int getRandomWaitTime() {
         int minWait = configManager.getMinWaitTime();
         int maxWait = configManager.getMaxWaitTime();
         return (int) (Math.random() * (maxWait - minWait)) + minWait;
     }
-  
 }
