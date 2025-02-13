@@ -72,18 +72,15 @@ public class HtmlConverter {
         String txtFileName = htmlFileName.replace(".html", ".txt");
         Path txtFile = htmlFile.getParent().resolve(txtFileName);
 
-        // Get relative path from download directory
-        Path downloadDir = Paths.get(downloadPath);
-        String relativeHtmlPath = downloadDir.relativize(htmlFile).toString().replace('\\', '/');
-        logger.info("Processing file: " + relativeHtmlPath + " to " + txtFileName);
+        logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
 
-        // Extract values using HtmlParser with relative path
-        double balance = htmlParser.getBalance(relativeHtmlPath);
-        double equityDrawdown = htmlParser.getEquityDrawdown(relativeHtmlPath);
-        double avgProfit = htmlParser.getAvr3MonthProfit(relativeHtmlPath);
-        List<String> lastMonths = htmlParser.getLastThreeMonthsDetails(relativeHtmlPath);
-        double stability = htmlParser.getStabilitaetswert(relativeHtmlPath);
-        StabilityResult stabilityResult = htmlParser.getStabilitaetswertDetails(relativeHtmlPath);
+        // Extract values using HtmlParser
+        double balance = htmlParser.getBalance(htmlFileName);
+        double equityDrawdown = htmlParser.getEquityDrawdown(htmlFileName);
+        double avgProfit = htmlParser.getAvr3MonthProfit(htmlFileName);
+        List<String> lastMonths = htmlParser.getLastThreeMonthsDetails(htmlFileName);
+        double stability = htmlParser.getStabilitaetswert(htmlFileName);
+        StabilityResult stabilityResult = htmlParser.getStabilitaetswertDetails(htmlFileName);
         String stabilityDetails = stabilityResult != null ? stabilityResult.getDetails() : null;
 
         // Build output string
@@ -95,10 +92,8 @@ public class HtmlConverter {
         output.append("********************************\n\n");
         
         output.append("Last 3 Months Details=\n");
-        if (lastMonths != null && !lastMonths.isEmpty()) {
-            for (String month : lastMonths) {
-                output.append(month).append("\n");
-            }
+        for (String month : lastMonths) {
+            output.append(month).append("\n");
         }
         output.append("********************************\n\n");
         
@@ -109,12 +104,6 @@ public class HtmlConverter {
             output.append(cleanDetails).append("\n");
         } else {
             output.append("Nicht genügend Daten verfügbar für detaillierte Stabilitätsanalyse\n");
-            if (lastMonths != null && !lastMonths.isEmpty()) {
-                output.append("Gefundene Werte:\n");
-                for (String month : lastMonths) {
-                    output.append(month).append("\n");
-                }
-            }
         }
         output.append("********************************");
 
