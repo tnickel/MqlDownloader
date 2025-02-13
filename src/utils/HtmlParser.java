@@ -55,7 +55,7 @@ public class HtmlParser {
       }
 
       String htmlFileName = csvFileName.replace(".csv", "_root.html");
-      File htmlFile = new File(rootPath, htmlFileName);
+      File htmlFile = new File( htmlFileName);
       
       if (!htmlFile.exists()) {
           LOGGER.warning("HTML file not found: " + htmlFile.getAbsolutePath());

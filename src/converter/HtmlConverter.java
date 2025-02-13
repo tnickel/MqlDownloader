@@ -68,7 +68,7 @@ public class HtmlConverter {
     }
 
     private void convertHtmlFile(Path htmlFile) throws IOException {
-        String htmlFileName = htmlFile.getFileName().toString();
+        String htmlFileName = htmlFile.toString();
         String txtFileName = htmlFileName.replace(".html", ".txt");
         Path txtFile = htmlFile.getParent().resolve(txtFileName);
 
