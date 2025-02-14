@@ -17,6 +17,7 @@ public class HtmlConverter {
     private static final Logger logger = LogManager.getLogger(HtmlConverter.class);
     private final String downloadPath;
     private final HtmlParser htmlParser;
+    private ConversionProgress progressCallback;
 
     public HtmlConverter(String downloadPath) {
         this.downloadPath = downloadPath;
@@ -27,19 +28,66 @@ public class HtmlConverter {
     public void convertAllHtmlFiles() {
         logger.info("Starting conversion process...");
         
-        // Konvertiere erst MQL4 Dateien
+        // Get total files count first
+        int totalFiles = 0;
+        try {
+            totalFiles += countHtmlFiles(Paths.get(downloadPath, "mql4"));
+            totalFiles += countHtmlFiles(Paths.get(downloadPath, "mql5"));
+        } catch (IOException e) {
+            logger.error("Error counting files", e);
+        }
+        
+        int currentFile = 0;
+        
+        // MQL4 Verzeichnis
         Path mql4Path = Paths.get(downloadPath, "mql4");
-        logger.info("Processing MQL4 directory: " + mql4Path);
-        convertFilesInDirectory(mql4Path);
+        currentFile = processDirectory(mql4Path, currentFile, totalFiles);
         
-        // Dann MQL5 Dateien
+        // MQL5 Verzeichnis
         Path mql5Path = Paths.get(downloadPath, "mql5");
-        logger.info("Processing MQL5 directory: " + mql5Path);
-        convertFilesInDirectory(mql5Path);
+        currentFile = processDirectory(mql5Path, currentFile, totalFiles);
         
-        logger.info("Conversion process completed.");
+        updateProgress(100, "Konvertierung abgeschlossen");
     }
-    
+    public void setProgressCallback(ConversionProgress callback) {
+        this.progressCallback = callback;
+    }
+    private int processDirectory(Path directory, int currentFile, int totalFiles) {
+        try {
+            if (!Files.exists(directory)) {
+                return currentFile;
+            }
+
+            List<Path> htmlFiles = Files.walk(directory)
+                .filter(path -> path.toString().endsWith("_root.html"))
+                .collect(Collectors.toList());
+
+            for (Path htmlFile : htmlFiles) {
+                convertHtmlFile(htmlFile);
+                currentFile++;
+                updateProgress(
+                    (int)((currentFile / (double)totalFiles) * 100),
+                    String.format("Konvertiere Datei %d von %d", currentFile, totalFiles)
+                );
+            }
+        } catch (IOException e) {
+            logger.error("Error processing directory: " + directory, e);
+        }
+        return currentFile;
+    }
+    private void updateProgress(int percentage, String message) {
+        if (progressCallback != null) {
+            progressCallback.onProgress(percentage, message);
+        }
+    }
+    private int countHtmlFiles(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return 0;
+        }
+        return (int) Files.walk(directory)
+            .filter(path -> path.toString().endsWith("_root.html"))
+            .count();
+    }
     private void convertFilesInDirectory(Path directory) {
         try {
             if (!Files.exists(directory)) {

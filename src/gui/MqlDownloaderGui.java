@@ -26,6 +26,8 @@ public class MqlDownloaderGui extends JFrame {
     private Thread downloadThread;
     private JTextArea logArea;
     private JScrollPane scrollPane;
+    private JProgressBar convertProgress;
+    private JLabel convertStatusLabel;
 
     public MqlDownloaderGui() {
         configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
@@ -36,35 +38,35 @@ public class MqlDownloaderGui extends JFrame {
         setTitle("MQL Signal Downloader");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
-        setSize(800, 600);  // Made window bigger
+        setSize(800, 600);
 
-        // Top panel for buttons
+        // Top panel für Buttons
         JPanel topPanel = new JPanel(new GridLayout(4, 1, 5, 5));
         topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Create button panels
+        // Button Panels erstellen
         JPanel mql4Panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
         JPanel mql5Panel = new JPanel(new FlowLayout(FlowLayout.CENTER, 20, 5));
         JPanel convertPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         JPanel stopPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
 
-        // Initialize buttons
+        // Buttons initialisieren
         mql4Button = createStyledButton("MQL4 Download");
         mql5Button = createStyledButton("MQL5 Download");
         stopButton = createStopButton();
         convertButton = createConvertButton();
 
-        // Initialize counter labels
+        // Counter Labels initialisieren
         mql4CounterLabel = createCounterLabel();
         mql5CounterLabel = createCounterLabel();
 
-        // Add action listeners
+        // Action Listener hinzufügen
         mql4Button.addActionListener(e -> handleDownloadButton("MQL4"));
         mql5Button.addActionListener(e -> handleDownloadButton("MQL5"));
         stopButton.addActionListener(e -> handleStopButton());
         convertButton.addActionListener(e -> handleConvertButton());
 
-        // Add components to panels
+        // Komponenten zu Panels hinzufügen
         mql4Panel.add(mql4Button);
         mql4Panel.add(mql4CounterLabel);
         mql5Panel.add(mql5Button);
@@ -72,13 +74,13 @@ public class MqlDownloaderGui extends JFrame {
         convertPanel.add(convertButton);
         stopPanel.add(stopButton);
 
-        // Add panels to top panel
+        // Panels zum Top Panel hinzufügen
         topPanel.add(mql4Panel);
         topPanel.add(mql5Panel);
         topPanel.add(convertPanel);
         topPanel.add(stopPanel);
 
-        // Initialize log area
+        // Log Area initialisieren
         logArea = new JTextArea();
         logArea.setEditable(false);
         logArea.setFont(new Font("Monospaced", Font.PLAIN, 12));
@@ -93,23 +95,38 @@ public class MqlDownloaderGui extends JFrame {
             TitledBorder.LEFT, 
             TitledBorder.TOP));
 
-        // Main panel to hold everything
+        // Progress Bar initialisieren
+        convertProgress = new JProgressBar(0, 100);
+        convertProgress.setStringPainted(true);
+        convertProgress.setVisible(false);
+
+        convertStatusLabel = new JLabel("");
+        convertStatusLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        convertStatusLabel.setVisible(false);
+
+        JPanel progressPanel = new JPanel(new BorderLayout(5, 5));
+        progressPanel.add(convertProgress, BorderLayout.CENTER);
+        progressPanel.add(convertStatusLabel, BorderLayout.SOUTH);
+        progressPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
+
+        // Main Panel für alles
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         mainPanel.add(topPanel, BorderLayout.NORTH);
         mainPanel.add(scrollPane, BorderLayout.CENTER);
+        mainPanel.add(progressPanel, BorderLayout.SOUTH);
 
-        // Add main panel to frame
+        // Zum Frame hinzufügen
         add(mainPanel);
 
-        // Initialize menu
+        // Menu Bar initialisieren
         setJMenuBar(createMenuBar());
 
-        // Stop Button initial deactivate
+        // Stop Button initial deaktivieren
         stopButton.setEnabled(false);
 
-        // Initial log message
-        log("Application started. Ready for operations.");
+        // Initiale Log Nachricht
+        log("Anwendung gestartet. Bereit für Operationen.");
     }
 
     private void log(String message) {
@@ -161,38 +178,50 @@ public class MqlDownloaderGui extends JFrame {
     }
 
     private void handleConvertButton() {
-        log("Starting conversion process...");
+        log("Starte Konvertierungsprozess...");
         convertButton.setEnabled(false);
+        convertProgress.setValue(0);
+        convertProgress.setVisible(true);
+        convertStatusLabel.setVisible(true);
         setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
 
         Thread conversionThread = new Thread(() -> {
             try {
                 String basePath = configManager.getRootDirPath() + "\\download";
-                log("Base conversion path: " + basePath);
-                
                 HtmlConverter converter = new HtmlConverter(basePath);
+                
+                converter.setProgressCallback((progress, status) -> {
+                    SwingUtilities.invokeLater(() -> {
+                        convertProgress.setValue(progress);
+                        convertStatusLabel.setText(status);
+                        log(status);
+                    });
+                });
+                
                 converter.convertAllHtmlFiles();
                 
                 SwingUtilities.invokeLater(() -> {
-                    log("Conversion completed successfully!");
+                    log("Konvertierung erfolgreich abgeschlossen!");
                     JOptionPane.showMessageDialog(this,
-                        "HTML files have been successfully converted to TXT format.",
-                        "Conversion Complete",
+                        "HTML Dateien wurden erfolgreich in TXT Format konvertiert.",
+                        "Konvertierung Abgeschlossen",
                         JOptionPane.INFORMATION_MESSAGE);
                 });
             } catch (Exception e) {
-                log("Error during conversion: " + e.getMessage());
-                logger.error("Conversion error", e);
+                log("Fehler während der Konvertierung: " + e.getMessage());
+                logger.error("Konvertierungsfehler", e);
                 SwingUtilities.invokeLater(() -> {
                     JOptionPane.showMessageDialog(this,
-                        "Error during conversion: " + e.getMessage(),
-                        "Conversion Error",
+                        "Fehler während der Konvertierung: " + e.getMessage(),
+                        "Konvertierungsfehler",
                         JOptionPane.ERROR_MESSAGE);
                 });
             } finally {
                 SwingUtilities.invokeLater(() -> {
                     convertButton.setEnabled(true);
                     setCursor(Cursor.getDefaultCursor());
+                    convertProgress.setVisible(false);
+                    convertStatusLabel.setVisible(false);
                 });
             }
         });
@@ -201,7 +230,7 @@ public class MqlDownloaderGui extends JFrame {
     }
 
     private void handleDownloadButton(String version) {
-        log("Starting " + version + " download process...");
+        log("Starte " + version + " Download Prozess...");
         stopRequested = false;
         updateCounter(version, 0);
         
@@ -215,19 +244,19 @@ public class MqlDownloaderGui extends JFrame {
         stopButton.setEnabled(true);
 
         String downloadPath = configManager.getRootDirPath() + "\\download\\" + version.toLowerCase();
-        log("Download path: " + downloadPath);
+        log("Download Pfad: " + downloadPath);
         configManager.setDownloadPath(downloadPath);
         
         downloadThread = new Thread(() -> {
             try {
-                log("Initializing directories...");
+                logger.info("Initialisiere Verzeichnisse...");
                 configManager.initializeDirectories();
                 
-                log("Setting up WebDriver...");
+                logger.info("Setze WebDriver auf...");
                 WebDriverManager webDriverManager = new WebDriverManager(configManager.getDownloadPath());
                 currentDriver = webDriverManager.initializeDriver();
 
-                log("Starting download process...");
+                logger.info("Starte Download Prozess...");
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
                 downloader.setProgressCallback(count -> updateCounter(version, count));
@@ -236,7 +265,7 @@ public class MqlDownloaderGui extends JFrame {
 
                 if (!stopRequested) {
                     SwingUtilities.invokeLater(() -> {
-                        log(version + " download completed successfully");
+                        log(version + " Download erfolgreich beendet");
                         JOptionPane.showMessageDialog(this,
                             version + " Download erfolgreich beendet",
                             "Download Status",
@@ -246,7 +275,7 @@ public class MqlDownloaderGui extends JFrame {
                 }
             } catch (Exception e) {
                 if (!stopRequested) {
-                    log("Error during " + version + " download: " + e.getMessage());
+                    log("Fehler während " + version + " Download: " + e.getMessage());
                     logger.error("Download error", e);
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(this,
@@ -258,7 +287,7 @@ public class MqlDownloaderGui extends JFrame {
                 }
             } finally {
                 if (currentDriver != null) {
-                    log("Closing WebDriver...");
+                    logger.info("Schließe WebDriver...");
                     currentDriver.quit();
                     currentDriver = null;
                 }
@@ -269,7 +298,7 @@ public class MqlDownloaderGui extends JFrame {
     }
 
     private void handleStopButton() {
-        log("Stopping download process...");
+        log("Stoppe Download Prozess...");
         stopRequested = true;
         stopButton.setEnabled(false);
         
@@ -282,26 +311,26 @@ public class MqlDownloaderGui extends JFrame {
         new Thread(() -> {
             try {
                 if (currentDriver != null) {
-                    log("Closing WebDriver...");
+                    logger.info("Schließe WebDriver...");
                     currentDriver.quit();
                     currentDriver = null;
                 }
                 if (downloadThread != null && downloadThread.isAlive()) {
-                    log("Interrupting download thread...");
+                    logger.info("Unterbreche Download Thread...");
                     downloadThread.interrupt();
                 }
                 
                 SwingUtilities.invokeLater(() -> {
                     stopDialog.dispose();
                     resetButtons();
-                    log("Download process stopped");
+                    log("Download Prozess gestoppt");
                     JOptionPane.showMessageDialog(this,
                         "Download wurde gestoppt",
                         "Download Status",
                         JOptionPane.INFORMATION_MESSAGE);
                 });
             } catch (Exception e) {
-                log("Error while stopping download: " + e.getMessage());
+                log("Fehler beim Stoppen des Downloads: " + e.getMessage());
                 logger.error("Stop error", e);
             }
         }).start();
