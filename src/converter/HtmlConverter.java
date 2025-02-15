@@ -96,7 +96,7 @@ public class HtmlConverter {
 
     private void convertHtmlFile(Path htmlFile) throws IOException {
         String htmlFileName = htmlFile.toString();
-        String txtFileName = htmlFileName.replace("_root.html", ".txt");
+        String txtFileName = htmlFileName.replace("_root.html", "_root.txt");
         Path txtFile = Paths.get(txtFileName);
 
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
@@ -141,7 +141,7 @@ public class HtmlConverter {
         }
         output.append("\n");
         output.append("********************************\n\n");
-
+        /*
         // Growth Chart Section
         output.append("Growth Chart Data=\n");
         if (!growthData.isEmpty()) {
@@ -161,7 +161,7 @@ public class HtmlConverter {
             output.append(balanceValues);
         }
         output.append("\n********************************\n\n");
-
+       
         // Equity Chart Section
         output.append("Equity Chart Data=\n");
         if (!equityData.isEmpty()) {
@@ -181,7 +181,7 @@ public class HtmlConverter {
             output.append(drawdownValues);
         }
         output.append("\n********************************\n\n");
-
+*/
         // Last 3 Months Section
         output.append("Last 3 Months Details=\n");
         for (String month : lastMonths) {
