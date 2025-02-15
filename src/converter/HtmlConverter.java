@@ -4,7 +4,13 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
@@ -49,9 +55,11 @@ public class HtmlConverter {
         
         updateProgress(100, "Konvertierung abgeschlossen");
     }
+
     public void setProgressCallback(ConversionProgress callback) {
         this.progressCallback = callback;
     }
+
     private int processDirectory(Path directory, int currentFile, int totalFiles) {
         try {
             if (!Files.exists(directory)) {
@@ -75,11 +83,13 @@ public class HtmlConverter {
         }
         return currentFile;
     }
+
     private void updateProgress(int percentage, String message) {
         if (progressCallback != null) {
             progressCallback.onProgress(percentage, message);
         }
     }
+
     private int countHtmlFiles(Path directory) throws IOException {
         if (!Files.exists(directory)) {
             return 0;
@@ -88,6 +98,7 @@ public class HtmlConverter {
             .filter(path -> path.toString().endsWith("_root.html"))
             .count();
     }
+
     private void convertFilesInDirectory(Path directory) {
         try {
             if (!Files.exists(directory)) {
@@ -117,8 +128,8 @@ public class HtmlConverter {
 
     private void convertHtmlFile(Path htmlFile) throws IOException {
         String htmlFileName = htmlFile.toString();
-        String txtFileName = htmlFileName.replace(".html", ".txt");
-        Path txtFile = htmlFile.getParent().resolve(txtFileName);
+        String txtFileName = htmlFileName.replace("_root.html", ".txt");
+        Path txtFile = Paths.get(txtFileName);
 
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
 
@@ -127,6 +138,7 @@ public class HtmlConverter {
         double equityDrawdown = htmlParser.getEquityDrawdown(htmlFileName);
         double avgProfit = htmlParser.getAvr3MonthProfit(htmlFileName);
         List<String> lastMonths = htmlParser.getLastThreeMonthsDetails(htmlFileName);
+        List<String> allMonths = htmlParser.getAllMonthsDetails(htmlFileName);
         double stability = htmlParser.getStabilitaetswert(htmlFileName);
         StabilityResult stabilityResult = htmlParser.getStabilitaetswertDetails(htmlFileName);
         String stabilityDetails = stabilityResult != null ? stabilityResult.getDetails() : null;
@@ -137,6 +149,21 @@ public class HtmlConverter {
         output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n");
         output.append("Average3MonthProfit=").append(String.format("%.2f", avgProfit)).append("\n");
         output.append("StabilityValue=").append(String.format("%.2f", stability)).append("\n");
+        
+        // Add monthly profits with dates
+        output.append("MonthProfitProz=");
+        if (!allMonths.isEmpty()) {
+            String monthValues = allMonths.stream()
+                .map(month -> {
+                    String[] parts = month.split(":");
+                    String date = parts[0];  // Format ist bereits "YYYY/MM"
+                    String value = parts[1].trim();
+                    return date + "=" + value;
+                })
+                .collect(Collectors.joining(","));
+            output.append(monthValues);
+        }
+        output.append("\n");
         output.append("********************************\n\n");
         
         output.append("Last 3 Months Details=\n");
@@ -159,4 +186,5 @@ public class HtmlConverter {
         Files.writeString(txtFile, output.toString());
         logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName());
     }
+ 
 }

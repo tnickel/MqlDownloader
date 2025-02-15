@@ -6,6 +6,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -292,5 +293,64 @@ public class HtmlParser {
 
   public double getStabilitaetswert(String csvFileName) {
       return getStabilitaetswertDetails(csvFileName).getValue();
+  }
+  public List<String> getAllMonthsDetails(String csvFileName) {
+      List<String> allMonths = new ArrayList<>();
+      Set<String> seenDates = new HashSet<>();
+      
+      try {
+          String htmlContent = getHtmlContent(csvFileName);
+          if (htmlContent == null) return allMonths;
+
+          Pattern yearRowPattern = Pattern.compile(
+              "<tr>\\s*<td[^>]*>(\\d{4})</td>\\s*" +
+              "((?:<td[^>]*>([^<]*)</td>\\s*){12})"
+          );
+          
+          Matcher rowMatcher = yearRowPattern.matcher(htmlContent);
+          boolean foundDuplicate = false;
+          
+          while (rowMatcher.find() && !foundDuplicate) {
+              String year = rowMatcher.group(1);
+              String monthsContent = rowMatcher.group(2);
+              
+              Pattern valuePattern = Pattern.compile("<td[^>]*>([^<]*)</td>");
+              Matcher valueMatcher = valuePattern.matcher(monthsContent);
+              
+              int monthIndex = 0;
+              while (valueMatcher.find() && monthIndex < 12) {
+                  String value = valueMatcher.group(1).trim();
+                  if (!value.isEmpty()) {
+                      try {
+                          value = value.replace(",", ".")
+                                     .replace("−", "-")
+                                     .replaceAll("[^0-9.\\-]", "");
+                          if (!value.isEmpty()) {
+                              String date = year + "/" + String.format("%02d", monthIndex + 1);
+                              
+                              if (seenDates.contains(date)) {
+                                  foundDuplicate = true;
+                                  break;
+                              }
+                              
+                              seenDates.add(date);
+                              allMonths.add(date + ":" + value);
+                          }
+                      } catch (NumberFormatException e) {
+                          LOGGER.warning("Could not parse value for " + year + "/" + (monthIndex + 1));
+                      }
+                  }
+                  monthIndex++;
+              }
+          }
+          
+          // Sortiere die Monate chronologisch
+          Collections.sort(allMonths);
+          
+      } catch (Exception e) {
+          LOGGER.severe("Error processing HTML for " + csvFileName + ": " + e.getMessage());
+      }
+      
+      return allMonths;
   }
 }
