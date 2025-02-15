@@ -4,19 +4,14 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import utils.HtmlParser;
+import utils.ChartPoint;
 import utils.StabilityResult;
 
 public class HtmlConverter {
@@ -99,33 +94,6 @@ public class HtmlConverter {
             .count();
     }
 
-    private void convertFilesInDirectory(Path directory) {
-        try {
-            if (!Files.exists(directory)) {
-                logger.warn("Directory does not exist: " + directory);
-                return;
-            }
-
-            logger.info("Searching for HTML files in: " + directory);
-            List<Path> htmlFiles = Files.walk(directory)
-                    .filter(path -> path.toString().endsWith("_root.html"))
-                    .collect(Collectors.toList());
-
-            logger.info("Found " + htmlFiles.size() + " HTML files in " + directory);
-
-            for (Path htmlFile : htmlFiles) {
-                try {
-                    logger.info("Converting file: " + htmlFile);
-                    convertHtmlFile(htmlFile);
-                } catch (Exception e) {
-                    logger.error("Error converting file: " + htmlFile, e);
-                }
-            }
-        } catch (IOException e) {
-            logger.error("Error accessing directory: " + directory, e);
-        }
-    }
-
     private void convertHtmlFile(Path htmlFile) throws IOException {
         String htmlFileName = htmlFile.toString();
         String txtFileName = htmlFileName.replace("_root.html", ".txt");
@@ -143,20 +111,28 @@ public class HtmlConverter {
         StabilityResult stabilityResult = htmlParser.getStabilitaetswertDetails(htmlFileName);
         String stabilityDetails = stabilityResult != null ? stabilityResult.getDetails() : null;
 
+        // Get chart data
+        List<ChartPoint> growthData = htmlParser.getGrowthChartData(htmlFileName);
+        List<ChartPoint> balanceData = htmlParser.getBalanceChartData(htmlFileName);
+        List<ChartPoint> equityData = htmlParser.getEquityChartData(htmlFileName);
+        List<ChartPoint> drawdownData = htmlParser.getDrawdownChartData(htmlFileName);
+
         // Build output string
         StringBuilder output = new StringBuilder();
+        
+        // Basic Data Section
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
         output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n");
         output.append("Average3MonthProfit=").append(String.format("%.2f", avgProfit)).append("\n");
         output.append("StabilityValue=").append(String.format("%.2f", stability)).append("\n");
         
-        // Add monthly profits with dates
+        // Monthly Profits Section
         output.append("MonthProfitProz=");
         if (!allMonths.isEmpty()) {
             String monthValues = allMonths.stream()
                 .map(month -> {
                     String[] parts = month.split(":");
-                    String date = parts[0];  // Format ist bereits "YYYY/MM"
+                    String date = parts[0];
                     String value = parts[1].trim();
                     return date + "=" + value;
                 })
@@ -165,20 +141,62 @@ public class HtmlConverter {
         }
         output.append("\n");
         output.append("********************************\n\n");
-        
+
+        // Growth Chart Section
+        output.append("Growth Chart Data=\n");
+        if (!growthData.isEmpty()) {
+            String growthValues = growthData.stream()
+                .map(ChartPoint::toString)
+                .collect(Collectors.joining(","));
+            output.append(growthValues);
+        }
+        output.append("\n********************************\n\n");
+
+        // Balance Chart Section
+        output.append("Balance Chart Data=\n");
+        if (!balanceData.isEmpty()) {
+            String balanceValues = balanceData.stream()
+                .map(ChartPoint::toString)
+                .collect(Collectors.joining(","));
+            output.append(balanceValues);
+        }
+        output.append("\n********************************\n\n");
+
+        // Equity Chart Section
+        output.append("Equity Chart Data=\n");
+        if (!equityData.isEmpty()) {
+            String equityValues = equityData.stream()
+                .map(ChartPoint::toString)
+                .collect(Collectors.joining(","));
+            output.append(equityValues);
+        }
+        output.append("\n********************************\n\n");
+
+        // Drawdown Chart Section
+        output.append("Drawdown Chart Data=\n");
+        if (!drawdownData.isEmpty()) {
+            String drawdownValues = drawdownData.stream()
+                .map(ChartPoint::toString)
+                .collect(Collectors.joining(","));
+            output.append(drawdownValues);
+        }
+        output.append("\n********************************\n\n");
+
+        // Last 3 Months Section
         output.append("Last 3 Months Details=\n");
         for (String month : lastMonths) {
             output.append(month).append("\n");
         }
         output.append("********************************\n\n");
         
+        // Stability Details Section
         output.append("Stability Details=\n");
         if (stabilityDetails != null && !stabilityDetails.trim().isEmpty()) {
             String cleanDetails = stabilityDetails.replace("<br>", "\n").replace("- ", " - ")
                     .replaceAll("\\s*:\\s*", ": ").trim();
             output.append(cleanDetails).append("\n");
         } else {
-            output.append("Nicht genügend Daten verfügbar für detaillierte Stabilitätsanalyse\n");
+            output.append("Nicht genÃ¼gend Daten verfÃ¼gbar fÃ¼r detaillierte StabilitÃ¤tsanalyse\n");
         }
         output.append("********************************");
 
@@ -186,5 +204,4 @@ public class HtmlConverter {
         Files.writeString(txtFile, output.toString());
         logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName());
     }
- 
 }
