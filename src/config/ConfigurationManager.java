@@ -27,9 +27,13 @@ public class ConfigurationManager {
     private static final String KEY_MQL_VERSION = "mqlVersion";
     private static final String KEY_MIN_WAIT = "minWaitTime";
     private static final String KEY_MAX_WAIT = "maxWaitTime";
+    private static final String KEY_MQL4_LIMIT = "mql4Limit";
+    private static final String KEY_MQL5_LIMIT = "mql5Limit";
     
     private static final int DEFAULT_MIN_WAIT = 10000; // 10 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
+    private static final int DEFAULT_MQL4_LIMIT = 1000;
+    private static final int DEFAULT_MQL5_LIMIT = 1000;
 
     public ConfigurationManager(String rootDirPath) {
         this.rootDirPath = rootDirPath;
@@ -115,6 +119,36 @@ public class ConfigurationManager {
         return Integer.parseInt(props.getProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT)));
     }
 
+    public int getMql4Limit() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT)));
+    }
+
+    public void setMql4Limit(int limit) {
+        if (limit < 1 || limit > 5000) {
+            throw new IllegalArgumentException("MQL4 Limit muss zwischen 1 und 5000 liegen");
+        }
+        Properties props = loadProperties();
+        props.setProperty(KEY_MQL4_LIMIT, String.valueOf(limit));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("MQL4 Limit aktualisiert auf: " + limit);
+    }
+
+    public int getMql5Limit() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT)));
+    }
+
+    public void setMql5Limit(int limit) {
+        if (limit < 1 || limit > 5000) {
+            throw new IllegalArgumentException("MQL5 Limit muss zwischen 1 und 5000 liegen");
+        }
+        Properties props = loadProperties();
+        props.setProperty(KEY_MQL5_LIMIT, String.valueOf(limit));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("MQL5 Limit aktualisiert auf: " + limit);
+    }
+
     public void initializeDirectories() {
         createDirectory(configDirPath);
         createDirectory(logDirPath);
@@ -132,6 +166,8 @@ public class ConfigurationManager {
             props.setProperty(KEY_PASSWORD, "");
             props.setProperty(KEY_MIN_WAIT, String.valueOf(DEFAULT_MIN_WAIT));
             props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
+            props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
+            props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
             saveProperties(props, "MQL Downloader Standard-Konfiguration");
             logger.info("Standard-Konfigurationsdatei erstellt: " + mqlConfigFilePath);
         }
@@ -181,6 +217,8 @@ public class ConfigurationManager {
         props.setProperty(KEY_PASSWORD, "");
         props.setProperty(KEY_MIN_WAIT, String.valueOf(DEFAULT_MIN_WAIT));
         props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
+        props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
+        props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
         saveProperties(props, "MQL Downloader Konfiguration - Zurückgesetzt auf Standardwerte");
         
         logger.info("Konfiguration wurde auf Standardwerte zurückgesetzt");
