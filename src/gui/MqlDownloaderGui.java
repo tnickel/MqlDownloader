@@ -1,9 +1,24 @@
 package gui;
 
-import javax.swing.*;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
+import java.io.File;
+
+import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+
 import config.ConfigurationManager;
 
 public class MqlDownloaderGui extends JFrame {
@@ -82,23 +97,65 @@ public class MqlDownloaderGui extends JFrame {
         
         Thread allProcessesThread = new Thread(() -> {
             try {
-                // MQL4 Download
+                // Hole den konfigurierten Download-Pfad
+                String downloadPath = configManager.getDownloadPath();
+                
+                // Zeige Bestätigungsdialog mit den zu löschenden Verzeichnissen
+                String confirmMessage = String.format(
+                    "Folgende Verzeichnisse werden geleert:\n" +
+                    "%s\\mql4\n" +
+                    "%s\\mql5\n\n" +
+                    "Sind Sie sicher?", downloadPath, downloadPath);
+                
+                int result = JOptionPane.showConfirmDialog(
+                    this,
+                    confirmMessage,
+                    "Verzeichnisse leeren",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE
+                );
+                
+                if (result != JOptionPane.YES_OPTION) {
+                    logHandler.log("Löschvorgang durch Benutzer abgebrochen.");
+                    SwingUtilities.invokeLater(this::enableAllButtons);
+                    return;
+                }
+                
+                // Sicherheitscheck für den Download-Pfad
+                if (!isPathSafe(downloadPath)) {
+                    throw new SecurityException(
+                        "Sicherheitswarnung: Download-Verzeichnispfad enthält nicht 'forex'.\n" +
+                        "Aktueller Pfad: " + downloadPath
+                    );
+                }
+                
+                logHandler.log("Leere MQL4 und MQL5 Download-Verzeichnisse...");
+                clearMqlDirectories(downloadPath);
+                
+                // Rest des Prozesses...
                 logHandler.log("Starte MQL4 Download...");
                 downloadManager.startDownload("MQL4");
                 downloadManager.waitForDownloadCompletion();
                 
-                // MQL5 Download
                 logHandler.log("Starte MQL5 Download...");
                 downloadManager.startDownload("MQL5");
                 downloadManager.waitForDownloadCompletion();
                 
-                // Konvertierung
                 logHandler.log("Starte Konvertierung...");
                 conversionManager.startConversion();
                 conversionManager.waitForConversionCompletion();
                 
                 SwingUtilities.invokeLater(() -> {
                     logHandler.log("Gesamtprozess erfolgreich abgeschlossen!");
+                    enableAllButtons();
+                });
+            } catch (SecurityException se) {
+                logHandler.logError("Sicherheitsfehler: " + se.getMessage(), se);
+                SwingUtilities.invokeLater(() -> {
+                    JOptionPane.showMessageDialog(this,
+                        se.getMessage(),
+                        "Sicherheitswarnung",
+                        JOptionPane.WARNING_MESSAGE);
                     enableAllButtons();
                 });
             } catch (Exception e) {
@@ -108,6 +165,71 @@ public class MqlDownloaderGui extends JFrame {
         });
         
         allProcessesThread.start();
+    }
+
+    private boolean isPathSafe(String path) {
+        if (path == null) return false;
+        
+        // Normalisiere den Pfad (Groß-/Kleinschreibung ignorieren)
+        String normalizedPath = path.toLowerCase();
+        
+        // Prüfe ob "forex" im Pfad enthalten ist
+        if (!normalizedPath.contains("forex")) {
+            return false;
+        }
+        
+        // Prüfe ob der Pfad im konfigurierten Basis-Verzeichnis liegt
+        String configuredRoot = configManager.getRootDirPath().toLowerCase();
+        return normalizedPath.startsWith(configuredRoot);
+    }
+
+    private void clearMqlDirectories(String baseDownloadPath) throws SecurityException {
+        // Erstelle die Verzeichnis-Objekte
+        File mql4Dir = new File(baseDownloadPath + "\\mql4");
+        File mql5Dir = new File(baseDownloadPath + "\\mql5");
+        
+        // Prüfe beide Verzeichnispfade
+        if (!isPathSafe(mql4Dir.getAbsolutePath()) || !isPathSafe(mql5Dir.getAbsolutePath())) {
+            throw new SecurityException(
+                "Sicherheitswarnung: MQL-Verzeichnispfade liegen außerhalb des erlaubten Bereichs.\n" +
+                "MQL4: " + mql4Dir.getAbsolutePath() + "\n" +
+                "MQL5: " + mql5Dir.getAbsolutePath()
+            );
+        }
+        
+        int filesDeleted = 0;
+        
+        // Leere MQL4 Verzeichnis
+        if (mql4Dir.exists()) {
+            File[] mql4Files = mql4Dir.listFiles();
+            if (mql4Files != null) {
+                for (File file : mql4Files) {
+                    if (file.isFile() && file.delete()) {
+                        filesDeleted++;
+                    } else {
+                        logHandler.log("Konnte Datei nicht löschen: " + file.getName());
+                    }
+                }
+            }
+            logHandler.log("MQL4 Download-Verzeichnis geleert");
+        }
+        
+        // Leere MQL5 Verzeichnis
+        if (mql5Dir.exists()) {
+            File[] mql5Files = mql5Dir.listFiles();
+            if (mql5Files != null) {
+                for (File file : mql5Files) {
+                    if (file.isFile() && file.delete()) {
+                        filesDeleted++;
+                    } else {
+                        logHandler.log("Konnte Datei nicht löschen: " + file.getName());
+                    }
+                }
+            }
+            logHandler.log("MQL5 Download-Verzeichnis geleert");
+        }
+        
+        logHandler.log(String.format("Insgesamt %d Dateien gelöscht", filesDeleted));
     }
 
     private void disableAllButtons() {
