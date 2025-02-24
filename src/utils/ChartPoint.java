@@ -1,25 +1,20 @@
 package utils;
 
 public class ChartPoint {
-    private final String date;
-    private final double value;
-    
+    private String date;
+    private double value; // The drawdown percentage
+
     public ChartPoint(String date, double value) {
         this.date = date;
         this.value = value;
     }
-    
-    @Override
-    public String toString() {
-        return date + "=" + String.format("%.2f", value);
+
+    public String getDate() {
+        return date;
     }
 
-    public String getDate() { 
-        return date; 
-    }
-    
-    public double getValue() { 
-        return value; 
+    public double getValue() {
+        return value;
     }
 }
 

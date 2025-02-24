@@ -89,7 +89,8 @@ public class HtmlConverter {
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
         
         double balance = htmlParser.getBalance(htmlFileName);
-        double equityDrawdown = htmlParser.getEquityDrawdown(htmlFileName);
+        double equityDrawdownGraphic = htmlParser.getEquityDrawdownGraphic(htmlFileName);
+        double equityDrawdown = htmlParser.getEquityDrawdown(htmlFileName); // Neue Zeile: Direkte Extraktion des Drawdowns
         double avgProfit = htmlParser.getAvr3MonthProfit(htmlFileName);
         List<String> lastMonths = htmlParser.getLastThreeMonthsDetails(htmlFileName);
         List<String> allMonths = htmlParser.getAllMonthsDetails(htmlFileName);
@@ -101,7 +102,8 @@ public class HtmlConverter {
         
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
-        output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n");
+        output.append("MaxDDGraphic=").append(String.format("%.2f", equityDrawdownGraphic)).append("\n");
+        output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n"); // Neue Zeile: Speichern des Drawdowns
         output.append("Average3MonthProfit=").append(String.format("%.2f", avgProfit)).append("\n");
         output.append("StabilityValue=").append(String.format("%.2f", stability)).append("\n");
         output.append("MonthProfitProz=");

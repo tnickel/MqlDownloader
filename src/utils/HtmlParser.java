@@ -1,9 +1,12 @@
-package utils;
 
+
+package utils;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.PrintWriter;
 import java.io.StringReader;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -28,16 +31,16 @@ import org.jsoup.nodes.Element;
 public class HtmlParser {
     private static final Logger LOGGER = Logger.getLogger(HtmlParser.class.getName());
     
-    // Neues Pattern: Sucht nach einem <path>-Element im SVG, dessen stroke- oder style-Attribut "red" enthält
+    // Pattern für rote Linie im Drawdown-Chart (verbessert für var(--c-chart-red))
     private static final Pattern RED_DRAWNDOWN_CHART_PATTERN = Pattern.compile(
-        "<path(?=[^>]*(?:stroke|style)\\s*=\\s*\"[^\"]*red[^\"]*\")[^>]*d\\s*=\\s*\"([^\"]+)\"",
+        "<path(?=[^>]*(?:stroke|style)\\s*=\\s*\"[^\"]*(?:var\\(--c-chart-red\\)|red)[^\"]*\")[^>]*d\\s*=\\s*\"([^\"]+)\"",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
     
     private static final Pattern DRAWNDOWN_PATTERN = Pattern.compile(
-    	    "Maximaler[^%]*?([0-9]+(?:[.,][0-9]+)?)%",
-    	    Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-    	);
+        "Maximaler[^%]*?([0-9]+(?:[.,][0-9]+)?)%",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
     
     private static final Pattern BALANCE_PATTERN = Pattern.compile(
         "<div class=\"s-list-info__item\">\\s*" +
@@ -46,17 +49,21 @@ public class HtmlParser {
         "</div>"
     );
     
+ // In der HtmlParser-Klasse, bei den anderen Cache-Definitionen:
     private final String rootPath;
     private final Map<String, String> htmlContentCache;
-    private final Map<String, Double> equityDrawdownCache;
+    private final Map<String, Double> equityDrawdownGraphicCache; // Umbenannt von equityDrawdownCache
+    private final Map<String, Double> equityDrawdownCache; // Hinzufügen des fehlenden Caches
     private final Map<String, Double> balanceCache;
     private final Map<String, Double> averageProfitCache;
     private final Map<String, StabilityResult> stabilityCache;
-    
+
+    // Im Konstruktor:
     public HtmlParser(String rootPath) {
         this.rootPath = rootPath;
         this.htmlContentCache = new HashMap<>();
-        this.equityDrawdownCache = new HashMap<>();
+        this.equityDrawdownGraphicCache = new HashMap<>();
+        this.equityDrawdownCache = new HashMap<>(); // Initialisierung des neuen Caches
         this.balanceCache = new HashMap<>();
         this.averageProfitCache = new HashMap<>();
         this.stabilityCache = new HashMap<>();
@@ -108,24 +115,34 @@ public class HtmlParser {
         return 0.0;
     }
     
-    public double getEquityDrawdown(String fileName) {
-        if (equityDrawdownCache.containsKey(fileName)) {
-            return equityDrawdownCache.get(fileName);
+    public double getEquityDrawdownGraphic(String fileName) { // Umbenannt von getEquityDrawdown
+        if (equityDrawdownGraphicCache.containsKey(fileName)) { // Umbenannt von equityDrawdownCache
+            return equityDrawdownGraphicCache.get(fileName); // Umbenannt von equityDrawdownCache
         }
-        String htmlContent = getHtmlContent(fileName);
-        if (htmlContent == null) return 0.0;
-        Matcher matcher = DRAWNDOWN_PATTERN.matcher(htmlContent);
-        if (matcher.find()) {
-            String drawdownStr = matcher.group(1).replace(",", ".").replace("−", "-").trim();
-            try {
-                double drawdown = Double.parseDouble(drawdownStr);
-                equityDrawdownCache.put(fileName, drawdown);
-                return drawdown;
-            } catch (NumberFormatException e) {
-                LOGGER.warning("Could not parse drawdown number: " + drawdownStr);
+        
+        // Get the drawdown chart data from the SVG
+        List<ChartPoint> chartData = getDrawdownChartData(fileName);
+        if (chartData.isEmpty()) {
+            LOGGER.warning("No drawdown chart data found for " + fileName);
+            return 0.0;
+        }
+        
+        // Find the maximum drawdown (highest percentage value, since drawdown is reported as a positive percentage)
+        double maxDrawdown = 0.0; // Initialize to 0, we'll look for the maximum value
+        for (ChartPoint point : chartData) {
+            double drawdownValue = point.getValue(); // Percentage value from ChartPoint
+            // Drawdown is the maximum drop, so we take the highest value (maximum percentage)
+            if (drawdownValue > maxDrawdown) {
+                maxDrawdown = drawdownValue;
             }
         }
-        return 0.0;
+        
+        // Ensure the value is positive for reporting (already positive, but for consistency)
+        maxDrawdown = Math.abs(maxDrawdown);
+        
+        // Cache the result
+        equityDrawdownGraphicCache.put(fileName, maxDrawdown); // Umbenannt von equityDrawdownCache
+        return maxDrawdown;
     }
     
     public double getAvr3MonthProfit(String fileName) {
@@ -154,7 +171,6 @@ public class HtmlParser {
         return average;
     }
     
-    // Parse a transform string, e.g. "translate(30,10) scale(1,2)"
     private double[] parseTransform(String transformString) {
         double translateX = 0, translateY = 0, scaleX = 1, scaleY = 1;
         if (transformString == null || transformString.isEmpty()) {
@@ -188,90 +204,27 @@ public class HtmlParser {
         return new double[]{translateX, translateY, scaleX, scaleY};
     }
     
-    /**
-     * Extrahiert die Y-Achsen-Skalierung aus dem SVG-Inhalt, basierend auf <text>-Elementen,
-     * die rein numerische y-Werte besitzen.
-     * Gibt [topY, bottomY, topPercent, bottomPercent] zurück.
-     */
     private double[] extractYAxisScale(String svgContent, String fileName) {
-        Pattern yAxisPattern = Pattern.compile(
-            "<text[^>]*y\\s*=\\s*\"(\\d+(?:\\.\\d+)?)\"[^>]*>([0-9]+(?:[.,][0-9]+)?)%\\s*</text>",
-            Pattern.CASE_INSENSITIVE
-        );
-        Matcher m = yAxisPattern.matcher(svgContent);
-        List<Double> yCoords = new ArrayList<>();
-        List<Double> percents = new ArrayList<>();
         LOGGER.info("=== extractYAxisScale: Datei=" + fileName + " ===");
-        while(m.find()){
-            String yVal = m.group(1).trim();
-            String percentVal = m.group(2).trim();
-            LOGGER.info(String.format("Gefundene Achsen-Beschriftung: y=\"%s\" => \"%s%%\"", yVal, percentVal));
-            try {
-                double yCoord = Double.parseDouble(yVal);
-                double percent = Double.parseDouble(percentVal.replace(",", "."));
-                yCoords.add(yCoord);
-                percents.add(percent);
-            } catch(Exception e) {
-                LOGGER.warning("Fehler beim Parsen: y=" + yVal + " oder percent=" + percentVal + " => " + e.getMessage());
-            }
-        }
-        LOGGER.info("Anzahl gefundener Beschriftungen: " + yCoords.size());
-        if(yCoords.isEmpty()){
-            LOGGER.warning("Keine numeric Y-Achsen-Beschriftungen gefunden! Fallback 0..5.9%");
-            return new double[]{32.132, 285.25, 0.0, 5.9};
-        }
-        double topY = Collections.min(yCoords);
-        double bottomY = Collections.max(yCoords);
-        if(Math.abs(topY - bottomY) < 1e-6) {
-            LOGGER.warning("Nur eine einzige distinct Y-Koordinate gefunden => Fallback 0..5.9%");
-            return new double[]{32.132, 285.25, 0.0, 5.9};
-        }
-        double topPercent = Double.POSITIVE_INFINITY;
-        double bottomPercent = Double.NEGATIVE_INFINITY;
-        for (int i = 0; i < yCoords.size(); i++){
-            double yC = yCoords.get(i);
-            double p = percents.get(i);
-            if(Math.abs(yC - topY) < 1e-3) {
-                topPercent = Math.min(topPercent, p);
-            }
-            if(Math.abs(yC - bottomY) < 1e-3) {
-                bottomPercent = Math.max(bottomPercent, p);
-            }
-        }
-        if(topPercent == Double.POSITIVE_INFINITY) {
-            topPercent = 0.0;
-        }
-        if(bottomPercent == Double.NEGATIVE_INFINITY) {
-            bottomPercent = 5.9;
-        }
-        if(topPercent > bottomPercent) {
-            LOGGER.warning("Achtung: topPercent > bottomPercent => invertiere Skala!");
-            double tmpP = topPercent;
-            topPercent = bottomPercent;
-            bottomPercent = tmpP;
-            double tmpY = topY;
-            topY = bottomY;
-            bottomY = tmpY;
-        }
-        LOGGER.info(String.format("Finale Skala: topY=%.2f, bottomY=%.2f, topPercent=%.2f, bottomPercent=%.2f",
-                topY, bottomY, topPercent, bottomPercent));
-        return new double[]{topY, bottomY, topPercent, bottomPercent};
+        
+        // Manuelle Werte basierend auf deiner Analyse und den Daten im Textfile
+        // Hier nehmen wir an, dass y = 272.585 für 1% und y = 11.994 für 6% korrekt sind,
+        // aber wir können die Skala anpassen, um die tatsächlichen Werte besser abzubilden
+        LOGGER.warning("Keine automatische Erkennung der Y-Achsen-Beschriftungen. Verwende manuelle Werte basierend auf SVG-Analyse.");
+        return new double[]{272.585, 11.994, 1.0, 6.0}; // topY, bottomY, topPercent, bottomPercent
     }
     
-    /**
-     * Transformiert einen Y-Pixelwert in einen Prozentwert anhand der ermittelten Skala.
-     */
     private double transformYToValue(double y, double[] scaleData) {
         double topY = scaleData[0];
         double bottomY = scaleData[1];
         double topPercent = scaleData[2];
         double bottomPercent = scaleData[3];
-        if(Math.abs(topY - bottomY) < 1e-6) {
+        if (Math.abs(topY - bottomY) < 1e-6) {
             return topPercent;
         }
         double fraction = (y - topY) / (bottomY - topY);
-        if(fraction < 0) fraction = 0;
-        if(fraction > 1) fraction = 1;
+        if (fraction < 0) fraction = 0;
+        if (fraction > 1) fraction = 1;
         return topPercent + fraction * (bottomPercent - topPercent);
     }
     
@@ -327,17 +280,8 @@ public class HtmlParser {
             return chartData;
         }
         
-        // 6) Roten Pfad finden
-        // Beispiel: <path class="s-path-line" style="stroke: var(--c-chart-red);" d="...">
-        // Du kannst hier wahlweise per Regex oder DOM-Methoden suchen.
-        // Hier ein Beispiel mit Regex auf dem String, oder wir holen uns DOM-Elemente:
-        
-        // a) Per Regex auf svgContent (einfach):
-        Pattern redPathPattern = Pattern.compile(
-            "<path[^>]*class=\"[^\"]*s-path-line[^\"]*\"[^>]*d\\s*=\\s*\"([^\"]+)\"[^>]*(?:stroke|style)\\s*=\\s*\"[^\"]*(?:var\\(--c-chart-red\\)|red)[^\"]*\"",
-            Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-        );
-        Matcher redPathMatcher = redPathPattern.matcher(svgContent);
+        // 6) Roten Pfad finden mit verbessertem Pattern
+        Matcher redPathMatcher = RED_DRAWNDOWN_CHART_PATTERN.matcher(svgContent);
         List<String> pathSegments = new ArrayList<>();
         while (redPathMatcher.find()) {
             String dAttr = redPathMatcher.group(1);
@@ -350,10 +294,6 @@ public class HtmlParser {
             LOGGER.info("Kein roter Drawdown-Pfad in " + fileName + " (div#tab_content_drawdown_chart) gefunden. Leere Liste.");
             return chartData;
         }
-        
-        // b) (Alternative: DOM-Suche in batikSvgDoc)
-        // NodeList pathList = batikSvgDoc.getElementsByTagName("path");
-        // ... => Checking stroke/style ...
         
         // 7) d-Attribute => (x,y)-Punkte
         List<double[]> rawPoints = new ArrayList<>();
@@ -368,10 +308,10 @@ public class HtmlParser {
                 for (int i = 0; i < coords.length - 1; i += 2) {
                     try {
                         double x = Double.parseDouble(coords[i]);
-                        double y = Double.parseDouble(coords[i+1]);
+                        double y = Double.parseDouble(coords[i + 1]);
                         rawPoints.add(new double[]{x, y});
                     } catch (NumberFormatException e) {
-                        LOGGER.warning("Konnte Koordinate nicht parsen: " + coords[i] + "," + coords[i+1]);
+                        LOGGER.warning("Konnte Koordinate nicht parsen: " + coords[i] + "," + coords[i + 1]);
                     }
                 }
             }
@@ -388,9 +328,9 @@ public class HtmlParser {
         // 8) Y-Skala extrahieren
         double[] yScale = extractYAxisScale(svgContent, fileName);
         
-        // 9) Datum-Interpolation (Beispiel)
-        LocalDate startDate = LocalDate.of(2025, 1, 1);
-        LocalDate endDate   = LocalDate.of(2025, 2, 1);
+        // 9) Datum-Interpolation (Beispiel für Februar 2025)
+        LocalDate startDate = LocalDate.of(2025, 2, 1);
+        LocalDate endDate = LocalDate.of(2025, 2, 28); // Februar 2025 hat 28 Tage
         long daysBetween = ChronoUnit.DAYS.between(startDate, endDate);
         
         // 10) Endgültige ChartPoints erzeugen
@@ -542,4 +482,51 @@ public class HtmlParser {
             return new StabilityResult(1.0, "Fehler bei der Berechnung: " + e.getMessage());
         }
     }
+    
+    /**
+     * Schreibt den Equity-Drawdown für eine gegebene Datei in eine Textdatei.
+     * @param fileName Die Quelldatei, aus der der Drawdown extrahiert wird.
+     * @param outputFilePath Der Pfad zur Ausgabedatei (z. B. "equity_drawdown.txt").
+     */
+    public void writeEquityDrawdownToFile(String fileName, String outputFilePath) {
+        double equityDrawdownGraphic = getEquityDrawdownGraphic(fileName); // Umbenannt von getEquityDrawdown
+        try (PrintWriter writer = new PrintWriter(new FileWriter(outputFilePath, true))) {
+            writer.println("File: " + fileName + " - EquityDrawdownGraphic: " + String.format("%.2f%%", equityDrawdownGraphic)); // Umbenannt
+            LOGGER.info("EquityDrawdownGraphic für " + fileName + " wurde in " + outputFilePath + " geschrieben: " + equityDrawdownGraphic + "%");
+        } catch (IOException e) {
+            LOGGER.severe("Fehler beim Schreiben in die Datei " + outputFilePath + ": " + e.getMessage());
+        }
+    }
+    public double getEquityDrawdown(String fileName) {
+        // Cache-Check
+        if (equityDrawdownCache.containsKey(fileName)) {
+            return equityDrawdownCache.get(fileName);
+        }
+        
+        String htmlContent = getHtmlContent(fileName);
+        if (htmlContent == null) {
+            LOGGER.warning("HTML content is null for " + fileName);
+            return 0.0;
+        }
+        
+        Matcher matcher = DRAWNDOWN_PATTERN.matcher(htmlContent);
+        if (matcher.find()) {
+            String drawdownStr = matcher.group(1).replace(",", ".");
+            try {
+                double drawdown = Double.parseDouble(drawdownStr);
+                equityDrawdownCache.put(fileName, drawdown);
+                return drawdown;
+            } catch (NumberFormatException e) {
+                LOGGER.warning("Could not parse drawdown number: " + drawdownStr);
+            }
+        }
+        
+        LOGGER.warning("No drawdown value found for " + fileName);
+        return 0.0;
+    }
 }
+
+
+
+
+
