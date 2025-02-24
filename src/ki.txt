@@ -1,0 +1,65 @@
+Antworte immer auf Deutsch.
+Baue nicht einfach neue Klassen sondern frage mich erst wenn du neue bauen möchtest. 
+Schaue erst nach welche klassen da sind und erweitere die Klassen. 
+Ich habe dir 2 Graphiken mit der Klassenübersicht angefügt. Da kannst du sehen welche Klassen schon da sind.
+Wenn du mir änderungen zeigst dann zeige mir immer die ganzen Funktionen, 
+nicht nur irgendwelche Codeschnippel und sage mir auch zu welcher Klasse die Funktionen gehören.
+
+Default Package:
+
+StartDownloader.java
+
+
+browser Package:
+
+WebDriverManager.java
+
+
+config Package:
+
+ConfigurationManager.java
+Credentials.java
+
+
+converter Package:
+
+ConversionProgress.java
+HtmlConverter.java
+package-info.java
+
+
+downloader Package:
+
+ProgressCallback.java
+SignalDownloader.java
+
+
+gui Package:
+
+ButtonPanelManager.java
+ConversionManager.java
+DownloadManager.java
+LogHandler.java
+MqlDownloaderGui.java
+package-info.java
+SetupDialog.java
+
+
+logging Package:
+
+LoggerManager.java
+
+
+main Package:
+
+MqlDownloaderApp.java
+package-info.java
+
+
+utils Package:
+
+ChartPoint.java
+FileUtils.java
+HtmlParser.java
+package-info.java
+StabilityResult.java

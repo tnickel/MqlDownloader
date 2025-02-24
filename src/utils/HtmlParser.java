@@ -35,12 +35,9 @@ public class HtmlParser {
     );
     
     private static final Pattern DRAWNDOWN_PATTERN = Pattern.compile(
-        "<text[^>]*>\\s*" +
-        "<tspan[^>]*>Maximaler\\s*R(?:[üue])ckgang:?</tspan>\\s*" +
-        "<tspan[^>]*>([-−]?[0-9]+[.,][0-9]+)%</tspan>\\s*" +
-        "</text>",
-        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
-    );
+    	    "Maximaler[^%]*?([0-9]+(?:[.,][0-9]+)?)%",
+    	    Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    	);
     
     private static final Pattern BALANCE_PATTERN = Pattern.compile(
         "<div class=\"s-list-info__item\">\\s*" +
