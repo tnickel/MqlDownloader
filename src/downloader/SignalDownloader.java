@@ -241,7 +241,7 @@ public class SignalDownloader {
             }
             
             logger.info("Provider #{} - Root page downloaded for {} (ID: {}): {}", 
-            	    providerCount+1, providerName, cleanProviderId, htmlFile.getAbsolutePath());
+            	    providerCount, providerName, cleanProviderId, htmlFile.getAbsolutePath());
                 
         } catch (Exception e) {
             if (!stopRequested) {
