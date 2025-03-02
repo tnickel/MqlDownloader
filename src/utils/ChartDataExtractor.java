@@ -7,18 +7,19 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.batik.anim.dom.SAXSVGDocumentFactory;
 import org.apache.batik.util.XMLResourceDescriptor;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 public class ChartDataExtractor {
-    private static final Logger LOGGER = Logger.getLogger(ChartDataExtractor.class.getName());
+    private static final Logger logger = LogManager.getLogger(ChartDataExtractor.class);
     
     // Pattern für rote Linie im Drawdown-Chart (verbessert für var(--c-chart-red))
     private static final Pattern RED_DRAWNDOWN_CHART_PATTERN = Pattern.compile(
@@ -36,7 +37,7 @@ public class ChartDataExtractor {
         List<ChartPoint> chartData = new ArrayList<>();
         String html = contentCache.getHtmlContent(fileName);
         if (html == null) {
-            LOGGER.warning("HTML content is null for " + fileName);
+            logger.warn("HTML content is null for " + fileName);
             return chartData;
         }
         
@@ -46,14 +47,14 @@ public class ChartDataExtractor {
         // 2) Suche das DIV mit id="tab_content_drawdown_chart"
         Element drawdownDiv = jsoupDoc.selectFirst("div#tab_content_drawdown_chart");
         if (drawdownDiv == null) {
-            LOGGER.warning("Kein DIV mit id='tab_content_drawdown_chart' gefunden in " + fileName);
+            logger.warn("Kein DIV mit id='tab_content_drawdown_chart' gefunden in " + fileName);
             return chartData;
         }
         
         // 3) Darin das erste <svg> suchen
         Element svgElement = drawdownDiv.selectFirst("svg");
         if (svgElement == null) {
-            LOGGER.warning("Kein <svg> in div#tab_content_drawdown_chart gefunden in " + fileName);
+            logger.warn("Kein <svg> in div#tab_content_drawdown_chart gefunden in " + fileName);
             return chartData;
         }
         
@@ -62,7 +63,7 @@ public class ChartDataExtractor {
         
         // Falls Namespace fehlt, ergänzen
         if (!svgContent.contains("xmlns=")) {
-            LOGGER.info("SVG enthält keinen Namespace. Füge xmlns=\"http://www.w3.org/2000/svg\" hinzu.");
+            logger.info("SVG enthält keinen Namespace. Füge xmlns=\"http://www.w3.org/2000/svg\" hinzu.");
             svgContent = svgContent.replaceFirst("<svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"");
         }
         
@@ -74,7 +75,7 @@ public class ChartDataExtractor {
             batikSvgDoc = factory.createDocument("http://www.w3.org/2000/svg",
                                                  new StringReader(svgContent));
         } catch (IOException e) {
-            LOGGER.severe("Fehler beim Parsen des SVG-Inhalts: " + e.getMessage());
+            logger.error("Fehler beim Parsen des SVG-Inhalts: " + e.getMessage(), e);
             return chartData;
         }
         
@@ -89,7 +90,7 @@ public class ChartDataExtractor {
         }
         
         if (pathSegments.isEmpty()) {
-            LOGGER.info("Kein roter Drawdown-Pfad in " + fileName + " (div#tab_content_drawdown_chart) gefunden. Leere Liste.");
+            logger.info("Kein roter Drawdown-Pfad in " + fileName + " (div#tab_content_drawdown_chart) gefunden. Leere Liste.");
             return chartData;
         }
         
@@ -109,19 +110,19 @@ public class ChartDataExtractor {
                         double y = Double.parseDouble(coords[i + 1]);
                         rawPoints.add(new double[]{x, y});
                     } catch (NumberFormatException e) {
-                        LOGGER.warning("Konnte Koordinate nicht parsen: " + coords[i] + "," + coords[i + 1]);
+                        logger.warn("Konnte Koordinate nicht parsen: " + coords[i] + "," + coords[i + 1]);
                     }
                 }
             }
         }
         if (rawPoints.isEmpty()) {
-            LOGGER.warning("Keine (x,y)-Koordinaten im roten Drawdown-Pfad gefunden: " + fileName);
+            logger.warn("Keine (x,y)-Koordinaten im roten Drawdown-Pfad gefunden: " + fileName);
             return chartData;
         }
         
         double minX = rawPoints.stream().mapToDouble(p -> p[0]).min().orElse(0.0);
         double maxX = rawPoints.stream().mapToDouble(p -> p[0]).max().orElse(0.0);
-        LOGGER.info(String.format("Nach SVG-Parsing: minX=%.2f, maxX=%.2f", minX, maxX));
+        logger.info(String.format("Nach SVG-Parsing: minX=%.2f, maxX=%.2f", minX, maxX));
         
         // 8) Y-Skala extrahieren
         double[] yScale = extractYAxisScale(svgContent, fileName);
@@ -145,17 +146,17 @@ public class ChartDataExtractor {
             chartData.add(new ChartPoint(date, ddValue));
         }
         
-        LOGGER.info("Roter Drawdown-Pfad: " + chartData.size() + " Punkte gefunden.");
+        logger.info("Roter Drawdown-Pfad: " + chartData.size() + " Punkte gefunden.");
         return chartData;
     }
     
     private double[] extractYAxisScale(String svgContent, String fileName) {
-        LOGGER.info("=== extractYAxisScale: Datei=" + fileName + " ===");
+        logger.info("=== extractYAxisScale: Datei=" + fileName + " ===");
         
         // Manuelle Werte basierend auf deiner Analyse und den Daten im Textfile
         // Hier nehmen wir an, dass y = 272.585 für 1% und y = 11.994 für 6% korrekt sind,
         // aber wir können die Skala anpassen, um die tatsächlichen Werte besser abzubilden
-        LOGGER.warning("Keine automatische Erkennung der Y-Achsen-Beschriftungen. Verwende manuelle Werte basierend auf SVG-Analyse.");
+        logger.warn("Keine automatische Erkennung der Y-Achsen-Beschriftungen. Verwende manuelle Werte basierend auf SVG-Analyse.");
         return new double[]{272.585, 11.994, 1.0, 6.0}; // topY, bottomY, topPercent, bottomPercent
     }
     
@@ -185,7 +186,7 @@ public class ChartDataExtractor {
                 translateX = Double.parseDouble(translateMatcher.group(1).trim());
                 translateY = Double.parseDouble(translateMatcher.group(2).trim());
             } catch (NumberFormatException e) {
-                LOGGER.warning("Fehler beim Parsen von translate: " + e.getMessage());
+                logger.warn("Fehler beim Parsen von translate: " + e.getMessage());
             }
         }
         Pattern scalePattern = Pattern.compile("scale\\(([^,\\)]+)(?:,\\s*([^\\)]+))?\\)");
@@ -200,7 +201,7 @@ public class ChartDataExtractor {
                     scaleY = scaleX;
                 }
             } catch (NumberFormatException e) {
-                LOGGER.warning("Fehler beim Parsen von scale: " + e.getMessage());
+                logger.warn("Fehler beim Parsen von scale: " + e.getMessage());
             }
         }
         return new double[]{translateX, translateY, scaleX, scaleY};

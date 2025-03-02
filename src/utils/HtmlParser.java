@@ -5,10 +5,13 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
-import java.util.logging.Logger;
+
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class HtmlParser {
-    private static final Logger LOGGER = Logger.getLogger(HtmlParser.class.getName());
+    private static final Logger Logger =  LogManager.getLogger(HtmlContentCache.class);
+   
     
     private final String rootPath;
     private final HtmlContentCache contentCache;

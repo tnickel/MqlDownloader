@@ -5,12 +5,15 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class MonthDetailsExtractor {
-    private static final Logger LOGGER = Logger.getLogger(MonthDetailsExtractor.class.getName());
+    
+    private static final Logger logger = LogManager.getLogger(MonthDetailsExtractor.class);
     private final HtmlContentCache contentCache;
     
     public MonthDetailsExtractor(HtmlContentCache contentCache) {
@@ -62,7 +65,7 @@ public class MonthDetailsExtractor {
                 }
             }
         } catch (Exception e) {
-            LOGGER.severe("Error processing HTML for " + fileName + ": " + e.getMessage());
+        	logger.error("Error processing HTML for " + fileName + ": " + e.getMessage());
         }
         return details;
     }
@@ -105,7 +108,7 @@ public class MonthDetailsExtractor {
             }
             Collections.sort(allMonths);
         } catch (Exception e) {
-            LOGGER.severe("Error processing HTML for " + fileName + ": " + e.getMessage());
+        	logger.error("Error processing HTML for " + fileName + ": " + e.getMessage());
         }
         return allMonths;
     }

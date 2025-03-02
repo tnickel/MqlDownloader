@@ -23,7 +23,7 @@ import logging.LoggerManager;
 import java.io.IOException;
 
 public class StartDownloader {
-    private static final Logger logger = LogManager.getLogger(StartDownloader.class);
+	private static final Logger logger = LogManager.getLogger(StartDownloader.class);
     private final ConfigurationManager configManager;
     private final WebDriver driver;
     private SignalDownloader downloader;

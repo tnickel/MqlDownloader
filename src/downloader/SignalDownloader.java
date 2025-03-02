@@ -240,8 +240,8 @@ public class SignalDownloader {
                 writer.write(pageSource);
             }
             
-            logger.info("Provider root page downloaded for " + providerName + 
-                " (ID: " + cleanProviderId + "): " + htmlFile.getAbsolutePath());
+            logger.info("Provider #{} - Root page downloaded for {} (ID: {}): {}", 
+            	    providerCount+1, providerName, cleanProviderId, htmlFile.getAbsolutePath());
                 
         } catch (Exception e) {
             if (!stopRequested) {
@@ -291,14 +291,14 @@ public class SignalDownloader {
                 Files.move(downloadedFile.toPath(), targetFile.toPath(), 
                     StandardCopyOption.REPLACE_EXISTING);
                     
-                logger.info("Datei heruntergeladen für " + providerName + 
-                    " (ID: " + originalId + "): " + targetFile.getAbsolutePath());
+                logger.info("Provider #{} - Datei heruntergeladen für {} (ID: {}): {}", 
+                	    providerCount, providerName, originalId, targetFile.getAbsolutePath());
             } else {
-                logger.warn("Keine heruntergeladene Datei gefunden für Provider: " + providerName);
+                logger.warn("Keine heruntergeladene Datei gefunden für Provider: " + providerName+"Count="+providerCount);
             }
         } catch (Exception e) {
             if (!stopRequested) {
-                logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName, e);
+                logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName+"Count="+providerCount, e);
             }
         }
     }

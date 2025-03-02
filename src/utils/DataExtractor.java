@@ -4,12 +4,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.List;
-import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 public class DataExtractor {
-    private static final Logger LOGGER = Logger.getLogger(DataExtractor.class.getName());
+    private static final Logger logger = LogManager.getLogger(DataExtractor.class);
     
     private static final Pattern BALANCE_PATTERN = Pattern.compile(
         "<div class=\"s-list-info__item\">\\s*" +
@@ -45,10 +47,10 @@ public class DataExtractor {
                 contentCache.cacheBalance(fileName, balance);
                 return balance;
             } catch (NumberFormatException e) {
-                LOGGER.warning("Could not parse balance number: " + balanceStr);
+                logger.warn("Could not parse balance number: " + balanceStr);
             }
         }
-        LOGGER.warning("No balance value found for " + fileName);
+        logger.warn("No balance value found for " + fileName);
         return 0.0;
     }
     
@@ -60,7 +62,7 @@ public class DataExtractor {
         // Get the drawdown chart data from the SVG
         List<ChartPoint> chartData = chartExtractor.getDrawdownChartData(fileName);
         if (chartData.isEmpty()) {
-            LOGGER.warning("No drawdown chart data found for " + fileName);
+            logger.warn("No drawdown chart data found for " + fileName);
             return 0.0;
         }
         
@@ -90,7 +92,7 @@ public class DataExtractor {
         
         String htmlContent = contentCache.getHtmlContent(fileName);
         if (htmlContent == null) {
-            LOGGER.warning("HTML content is null for " + fileName);
+            logger.warn("HTML content is null for " + fileName);
             return 0.0;
         }
         
@@ -102,11 +104,11 @@ public class DataExtractor {
                 contentCache.cacheEquityDrawdown(fileName, drawdown);
                 return drawdown;
             } catch (NumberFormatException e) {
-                LOGGER.warning("Could not parse drawdown number: " + drawdownStr);
+                logger.warn("Could not parse drawdown number: " + drawdownStr);
             }
         }
         
-        LOGGER.warning("No drawdown value found for " + fileName);
+        logger.warn("No drawdown value found for " + fileName);
         return 0.0;
     }
     
@@ -127,7 +129,7 @@ public class DataExtractor {
                 sum += profit;
                 count++;
             } catch (NumberFormatException e) {
-                LOGGER.warning("Error parsing profit value from: " + detail);
+                logger.warn("Error parsing profit value from: " + detail);
             }
         }
         if (count == 0) return 0.0;
@@ -140,9 +142,9 @@ public class DataExtractor {
         double equityDrawdownGraphic = getEquityDrawdownGraphic(fileName);
         try (PrintWriter writer = new PrintWriter(new FileWriter(outputFilePath, true))) {
             writer.println("File: " + fileName + " - EquityDrawdownGraphic: " + String.format("%.2f%%", equityDrawdownGraphic));
-            LOGGER.info("EquityDrawdownGraphic für " + fileName + " wurde in " + outputFilePath + " geschrieben: " + equityDrawdownGraphic + "%");
+            logger.info("EquityDrawdownGraphic für " + fileName + " wurde in " + outputFilePath + " geschrieben: " + equityDrawdownGraphic + "%");
         } catch (IOException e) {
-            LOGGER.severe("Fehler beim Schreiben in die Datei " + outputFilePath + ": " + e.getMessage());
+            logger.error("Fehler beim Schreiben in die Datei " + outputFilePath + ": " + e.getMessage(), e);
         }
     }
 }

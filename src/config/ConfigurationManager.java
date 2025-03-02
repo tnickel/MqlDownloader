@@ -186,7 +186,7 @@ public class ConfigurationManager {
     }
 
     public String getLogConfigPath() {
-        return rootDirPath + "\\log4j2.xml";
+        return rootDirPath + "\\config\\log4j2.xml";
     }
 
     public String getDownloadPath() {
