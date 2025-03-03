@@ -83,6 +83,13 @@ public class SignalDownloader {
                 logger.error("Fehler im Download-Prozess", e);
                 throw e;
             }
+        } finally {
+            // Forciere Log-Flush
+            if (providerCount > 0) {
+                org.apache.logging.log4j.LogManager.shutdown();
+                // Reinitialisiere den Logger, da shutdown() ihn schlieﬂt
+                org.apache.logging.log4j.LogManager.getLogger(SignalDownloader.class);
+            }
         }
     }
 

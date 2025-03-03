@@ -6,12 +6,16 @@ import org.apache.logging.log4j.Logger;
 import config.ConfigurationManager;
 import gui.MqlDownloaderGui;
 import logging.LoggerManager;
+import utils.LogTest;
 
 public class MqlDownloaderApp {
     private static final Logger logger = LogManager.getLogger(MqlDownloaderApp.class);
 
     public static void main(String[] args) {
         try {
+        	
+        	LogTest lt=new LogTest();
+        	
             // Zuerst ConfigurationManager initialisieren
             ConfigurationManager configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
             configManager.initializeDirectories();
@@ -21,6 +25,8 @@ public class MqlDownloaderApp {
             
             // Jetzt loggen
             logger.info("MqlDownloaderApp wird gestartet");
+            
+        
             
             javax.swing.SwingUtilities.invokeLater(() -> {
                 try {

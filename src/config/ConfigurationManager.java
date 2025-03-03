@@ -37,7 +37,7 @@ public class ConfigurationManager {
 
     public ConfigurationManager(String rootDirPath) {
         this.rootDirPath = rootDirPath;
-        this.configDirPath = rootDirPath + "\\config";
+        this.configDirPath = rootDirPath+"\\config";
         this.mqlConfigFilePath = configDirPath + "\\MqldownloaderConfig.txt";
         this.logDirPath = rootDirPath + "\\logs";
         this.downloadPath = rootDirPath + "\\download";
