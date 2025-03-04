@@ -33,6 +33,7 @@ public class ChartDataExtractor {
         this.contentCache = contentCache;
     }
     
+ // In der Klasse ChartDataExtractor
     public List<ChartPoint> getDrawdownChartData(String fileName) {
         List<ChartPoint> chartData = new ArrayList<>();
         String html = contentCache.getHtmlContent(fileName);
@@ -67,6 +68,12 @@ public class ChartDataExtractor {
             svgContent = svgContent.replaceFirst("<svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"");
         }
         
+        // Hier xlink-Namespace hinzufügen, wenn er fehlt aber xlink:href verwendet wird
+        if (svgContent.contains("xlink:href") && !svgContent.contains("xmlns:xlink=")) {
+            logger.info("SVG verwendet xlink:href ohne Namespace-Deklaration. Füge xmlns:xlink=\"http://www.w3.org/1999/xlink\" hinzu.");
+            svgContent = svgContent.replaceFirst("<svg", "<svg xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+        }
+        
         // 5) Mit Batik parsen
         org.w3c.dom.Document batikSvgDoc;
         try {
@@ -79,6 +86,7 @@ public class ChartDataExtractor {
             return chartData;
         }
         
+        // Rest der Methode bleibt unverändert
         // 6) Roten Pfad finden mit verbessertem Pattern
         Matcher redPathMatcher = RED_DRAWNDOWN_CHART_PATTERN.matcher(svgContent);
         List<String> pathSegments = new ArrayList<>();
@@ -148,6 +156,7 @@ public class ChartDataExtractor {
         
         logger.info("Roter Drawdown-Pfad: " + chartData.size() + " Punkte gefunden.");
         return chartData;
+    
     }
     
     private double[] extractYAxisScale(String svgContent, String fileName) {

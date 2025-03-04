@@ -1,14 +1,19 @@
 package gui;
 
-import browser.WebDriverManager;
-import config.ConfigurationManager;
-import downloader.SignalDownloader;
+import java.awt.Color;
+import java.io.IOException;
+
+import javax.swing.JButton;
+import javax.swing.JOptionPane;
+import javax.swing.SwingUtilities;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.openqa.selenium.WebDriver;
 
-import javax.swing.*;
-import java.awt.*;
+import browser.WebDriverManager;
+import config.ConfigurationManager;
+import downloader.SignalDownloader;
 
 public class DownloadManager {
     private static final Logger logger = LogManager.getLogger(DownloadManager.class);
@@ -34,6 +39,15 @@ public class DownloadManager {
         String downloadPath = configManager.getRootDirPath() + "\\download\\" + version.toLowerCase();
         logHandler.log("Download Pfad: " + downloadPath);
         configManager.setDownloadPath(downloadPath);
+        
+        // MQL-Version auf mt4 oder mt5 setzen
+        String mqlVersion = version.equals("MQL4") ? "mt4" : "mt5";
+        try {
+            configManager.setMqlVersion(mqlVersion);
+            logHandler.log("MQL-Version gesetzt auf: " + mqlVersion + " mit URL: " + configManager.getBaseUrl());
+        } catch (IOException e) {
+            logHandler.logError("Fehler beim Setzen der MQL-Version: " + e.getMessage(), e);
+        }
         
         downloadThread = new Thread(() -> {
             try {

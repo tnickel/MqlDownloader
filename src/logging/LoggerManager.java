@@ -14,12 +14,25 @@ import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
 
 public class LoggerManager {
     private static final Logger logger = LogManager.getLogger(LoggerManager.class);
-
+    private static boolean isInitialized = false;
+    
     public static void initializeLogger(String configPath) {
-        // Ausgabe zum Debuggen vor dem Logger-Setup
+    	
+    	if (isInitialized) {
+            logger.warn("LoggerManager is already initialized. Skipping re-initialization.");
+            System.out.println("Warn:LoggerManager already initialized, I go on");
+            return;
+        }
+        isInitialized = true;
+    	
+        System.out.println("Übergebener configPath: " + configPath);
+        System.out.println("Arbeitsverzeichnis: " + System.getProperty("user.dir"));
+        File log4jConfigFile = new File(configPath);
+        System.out.println("Absoluter Pfad der Konfigurationsdatei: " + log4jConfigFile.getAbsolutePath());
+        System.out.println("Datei existiert: " + log4jConfigFile.exists());
         System.out.println("Versuche Log4j zu initialisieren mit Konfigurationsdatei: " + configPath);
         
-        File log4jConfigFile = new File(configPath);
+      
         if (log4jConfigFile.exists()) {
             try {
                 System.out.println("Log4j-Konfigurationsdatei gefunden: " + log4jConfigFile.getAbsolutePath());

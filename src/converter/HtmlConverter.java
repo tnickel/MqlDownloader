@@ -10,6 +10,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import utils.HtmlParser;
 import utils.ChartPoint;
+import utils.FileUtils;
 import utils.StabilityResult;
 
 public class HtmlConverter {
@@ -26,6 +27,16 @@ public class HtmlConverter {
     
     public void convertAllHtmlFiles() {
         logger.info("Starting conversion process...");
+        
+        // Zuerst die Dateinummern korrigieren
+        List<String> correctedFiles = FileUtils.correctAllDirectories(downloadPath);
+        if (!correctedFiles.isEmpty()) {
+            logger.info("Dateinummern wurden korrigiert: {} Dateien", correctedFiles.size());
+            for (String message : correctedFiles) {
+                logger.info(message);
+            }
+        }
+        
         int totalFiles = 0;
         try {
             totalFiles += countHtmlFiles(Paths.get(downloadPath, "mql4"));
