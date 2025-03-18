@@ -2,10 +2,11 @@ package utils;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class StabilityCalculator {
-    private static final Logger LOGGER = Logger.getLogger(StabilityCalculator.class.getName());
+    private static final Logger logger = LogManager.getLogger(StabilityCalculator.class);
     private final MonthDetailsExtractor monthExtractor;
     private final HtmlContentCache contentCache;
     
@@ -19,8 +20,8 @@ public class StabilityCalculator {
     }
     
     public StabilityResult getStabilitaetswertDetails(String fileName) {
-        if (contentCache.hasStabilityResult(fileName)) {
-            return contentCache.getStabilityResultFromCache(fileName);
+        if (contentCache.hasStabilityResultCache(fileName)) {
+            return contentCache.getCachedStabilityResult(fileName);
         }
         
         StringBuilder details = new StringBuilder();
@@ -57,6 +58,7 @@ public class StabilityCalculator {
             contentCache.cacheStabilityResult(fileName, result);
             return result;
         } catch (Exception e) {
+            logger.error("Fehler bei der Stabilitätsberechnung für " + fileName, e);
             StabilityResult result = new StabilityResult(1.0, "Fehler bei der Berechnung: " + e.getMessage());
             contentCache.cacheStabilityResult(fileName, result);
             return result;
