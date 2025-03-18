@@ -30,7 +30,7 @@ public class ConfigurationManager {
     private static final String KEY_MQL4_LIMIT = "mql4Limit";
     private static final String KEY_MQL5_LIMIT = "mql5Limit";
     
-    private static final int DEFAULT_MIN_WAIT = 10000; // 10 seconds
+    private static final int DEFAULT_MIN_WAIT = 4000; // 10 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
     private static final int DEFAULT_MQL4_LIMIT = 1000;
     private static final int DEFAULT_MQL5_LIMIT = 1000;
@@ -95,8 +95,8 @@ public class ConfigurationManager {
     }
 
     public void setWaitTimes(int minWait, int maxWait) {
-        if (minWait < 2000) { // Minimum 2 seconds
-            minWait = 2000;
+        if (minWait < 4000) { // Minimum 2 seconds
+            minWait = 4000;
         }
         if (maxWait <= minWait) {
             maxWait = minWait + 1000; // Ensure max is always greater than min

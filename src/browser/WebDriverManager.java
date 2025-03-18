@@ -1,9 +1,5 @@
 package browser;
 
-
-
-
-
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.logging.log4j.LogManager;
@@ -21,7 +17,8 @@ public class WebDriverManager {
     }
 
     public WebDriver initializeDriver() {
-        System.setProperty("webdriver.chrome.driver", "C:\\Forex\\MqlAnalyzer\\tools\\chromedriver.exe");
+        // WebDriverManager wird automatisch den passenden ChromeDriver herunterladen
+        io.github.bonigarcia.wdm.WebDriverManager.chromedriver().setup();
         
         ChromeOptions options = createChromeOptions();
         WebDriver driver = new ChromeDriver(options);

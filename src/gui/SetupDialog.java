@@ -43,7 +43,7 @@ public class SetupDialog extends JDialog {
 
         SpinnerNumberModel minModel = new SpinnerNumberModel(
             configManager.getMinWaitTime() / 1000, // current
-            2,                                     // minimum
+            4,                                     // minimum
             120,                                   // maximum
             1                                      // step
         );
