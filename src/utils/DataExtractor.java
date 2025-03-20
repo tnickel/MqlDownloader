@@ -34,23 +34,75 @@ public class DataExtractor {
         this.drawdownChartData = new ArrayList<>();
     }
     
-    // Getter für Balance
     public double getBalance(String fileName) {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
-            if (htmlContent == null) return 0.0;
+            if (htmlContent == null) {
+                String errorMessage = "HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName;
+                logger.error(errorMessage);
+                showErrorAndExit(errorMessage);
+                return 0.0; // Diese Zeile wird nie erreicht
+            }
             
-            Pattern pattern = Pattern.compile("Balance:\\s*(?:€|\\$)?\\s*([\\d,.]+)");
-            Matcher matcher = pattern.matcher(htmlContent);
-            if (matcher.find()) {
-                String balanceStr = matcher.group(1).replaceAll("[^\\d.]", "");
+            // HTML mit JSoup parsen
+            org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(htmlContent);
+            
+            // Nach dem Element mit dem Label "Kontostand:" suchen
+            org.jsoup.select.Elements elements = doc.select("div.s-list-info__item:contains(Kontostand:) .s-list-info__value");
+            
+            if (!elements.isEmpty()) {
+                String balanceStr = elements.first().text();
+                logger.info("Extrahierter Kontostand: " + balanceStr);
+                
+                // Verbesserte Bereinigung des Werts
+                balanceStr = balanceStr.replaceAll("[^0-9.,]", "").trim().replace(",", ".");
+                // Entfernt auch Leerzeichen zwischen Zahlen
+                balanceStr = balanceStr.replaceAll("\\s+", "");
+                
                 balance = Double.parseDouble(balanceStr);
                 return balance;
+            } else {
+                // Alternative Suche nach "Balance:" falls "Kontostand:" nicht gefunden wurde
+                elements = doc.select("div.s-list-info__item:contains(Balance:) .s-list-info__value");
+                
+                if (!elements.isEmpty()) {
+                    String balanceStr = elements.first().text();
+                    logger.info("Extrahierter Balance: " + balanceStr);
+                    
+                    // Verbesserte Bereinigung des Werts
+                    balanceStr = balanceStr.replaceAll("[^0-9.,]", "").trim().replace(",", ".");
+                    // Entfernt auch Leerzeichen zwischen Zahlen
+                    balanceStr = balanceStr.replaceAll("\\s+", "");
+                    
+                    balance = Double.parseDouble(balanceStr);
+                    return balance;
+                } else {
+                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden für Datei: " + fileName;
+                    logger.error(errorMessage);
+                    showErrorAndExit(errorMessage);
+                    return.0; // Diese Zeile wird nie erreicht
+                }
             }
         } catch (Exception e) {
-            logger.error("Fehler beim Extrahieren der Balance für " + fileName, e);
+            String errorMessage = "Fehler beim Extrahieren der Balance für " + fileName + ": " + e.getMessage();
+            logger.error(errorMessage, e);
+            showErrorAndExit(errorMessage);
+            return 0.0; // Diese Zeile wird nie erreicht
         }
-        return 0.0;
+    }
+
+    // Hilfsmethode zum Anzeigen einer Fehlermeldung und Beenden des Programms
+    private void showErrorAndExit(String errorMessage) {
+        // Popup-Fenster anzeigen (blockierend)
+        javax.swing.JOptionPane.showMessageDialog(
+            null,
+            errorMessage,
+            "Extraktionsfehler",
+            javax.swing.JOptionPane.ERROR_MESSAGE
+        );
+        
+        // Prozess beenden
+        System.exit(1);
     }
     
     // Getter für Equity Drawdown aus der Grafik
@@ -71,23 +123,76 @@ public class DataExtractor {
         return 0.0;
     }
     
-    // Getter für Equity Drawdown aus der Texttabelle
     public double getEquityDrawdown(String fileName) {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) return 0.0;
-            
-            Pattern pattern = Pattern.compile("Drawdown(?:\\(%\\))?:?\\s*([\\d,.]+)");
+
+            // Angepasster Ausdruck, der sowohl Werte mit als auch ohne Dezimalstellen erfasst
+            Pattern pattern = Pattern.compile("Maximaler Rückgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
             Matcher matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1);
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert: " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Noch flexiblerer Ausdruck für ähnliche Formate
+            pattern = Pattern.compile("Maximaler Rückgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
+            matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");
                 equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (mit allgemeinerem Pattern): " + equityDrawdown);
                 return equityDrawdown;
             }
+            
+            // Debug-Ausgabe für Fehlerbehebung
+            logger.debug("HTML-Inhalt um 'Maximaler Rückgang': " + extractContextAroundKeyword(htmlContent, "Maximaler Rückgang"));
+            
+            // Wenn kein Equity Drawdown gefunden wurde
+            String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
+            logger.error(errorMessage);
+            
+            // Popup-Fenster anzeigen (blockierend)
+            javax.swing.JOptionPane.showMessageDialog(
+                null,
+                errorMessage,
+                "Equity Drawdown Extraktionsfehler",
+                javax.swing.JOptionPane.ERROR_MESSAGE
+            );
+            
+            // Prozess beenden
+            System.exit(1);
+            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
         } catch (Exception e) {
-            logger.error("Fehler beim Extrahieren des Equity Drawdown für " + fileName, e);
+            String errorMessage = "Fehler beim Extrahieren des Equity Drawdown für " + fileName + ": " + e.getMessage();
+            logger.error(errorMessage, e);
+            
+            // Popup-Fenster anzeigen (blockierend)
+            javax.swing.JOptionPane.showMessageDialog(
+                null,
+                errorMessage,
+                "Equity Drawdown Extraktionsfehler",
+                javax.swing.JOptionPane.ERROR_MESSAGE
+            );
+            
+            // Prozess beenden
+            System.exit(1);
+            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
         }
-        return 0.0;
+    }
+
+    // Hilfsmethode zum Extrahieren des Kontexts um ein Schlüsselwort
+    private String extractContextAroundKeyword(String content, String keyword) {
+        int index = content.indexOf(keyword);
+        if (index != -1) {
+            int start = Math.max(0, index - 50);
+            int end = Math.min(content.length(), index + keyword.length() + 100);
+            return content.substring(start, end);
+        }
+        return "Schlüsselwort nicht gefunden";
     }
     
     // Getter für durchschnittlichen 3-Monats-Profit
