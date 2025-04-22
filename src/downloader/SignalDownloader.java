@@ -183,6 +183,49 @@ public class SignalDownloader {
         }
     }
 
+    /**
+     * Prüft, ob die Dateien für einen bestimmten Provider kürzlich heruntergeladen wurden.
+     * 
+     * @param providerId Die ID des Providers
+     * @param providerName Der Name des Providers
+     * @return true, wenn die Dateien innerhalb der letzten 5 Tage heruntergeladen wurden
+     */
+    private boolean isFileRecentlyDownloaded(String providerId, String providerName) {
+        String targetPath = configManager.getCurrentDownloadPath();
+        String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
+        
+        // Überprüfe die HTML-Datei
+        String htmlFileName = String.format("%s_%s_root.html", safeProviderName, providerId);
+        File htmlFile = new File(targetPath, htmlFileName);
+        
+        // Überprüfe die CSV-Datei (könnte mehrere Dateien mit diesem Präfix geben)
+        File[] csvFiles = new File(targetPath).listFiles((dir, name) -> 
+            name.startsWith(safeProviderName) && name.endsWith(".csv"));
+        
+        // Wenn beide Dateien existieren, prüfe ihr Alter
+        if (htmlFile.exists() && csvFiles != null && csvFiles.length > 0) {
+            long currentTime = System.currentTimeMillis();
+            long fiveDaysInMillis = 5 * 24 * 60 * 60 * 1000L; // 5 Tage in Millisekunden
+            
+            long htmlFileAge = currentTime - htmlFile.lastModified();
+            
+            // Finde die jüngste CSV-Datei
+            long youngestCsvFileAge = Long.MAX_VALUE;
+            for (File csvFile : csvFiles) {
+                long age = currentTime - csvFile.lastModified();
+                if (age < youngestCsvFileAge) {
+                    youngestCsvFileAge = age;
+                }
+            }
+            
+            // Wenn beide Dateien jünger als 5 Tage sind
+            return (htmlFileAge < fiveDaysInMillis && youngestCsvFileAge < fiveDaysInMillis);
+        }
+        
+        // Wenn eine der Dateien nicht existiert, muss heruntergeladen werden
+        return false;
+    }
+
     private void processSignalProvider(String pageUrl, int index) {
         if (stopRequested) return;
 
@@ -201,6 +244,14 @@ public class SignalDownloader {
             String providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
             if (providerId.contains("?")) {
                 providerId = providerId.substring(0, providerId.indexOf("?"));
+            }
+
+            // Prüfe, ob Dateien kürzlich heruntergeladen wurden
+            if (isFileRecentlyDownloaded(providerId, providerName)) {
+                logger.info("Provider #{} - {} (ID: {}) wurde kürzlich heruntergeladen, überspringe", 
+                    providerCount + 1, providerName, providerId);
+                updateProgress(); // Aktualisiere den Fortschritt auch für übersprungene Provider
+                return;
             }
 
             downloadProviderRootPage(providerUrl, providerId, providerName);

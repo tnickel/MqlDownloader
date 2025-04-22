@@ -38,7 +38,7 @@ public class DataExtractor {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) {
-                String errorMessage = "HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName;
+                String errorMessage = "HTML-Inhalt konnte nicht geladen werden fÃ¼r Datei: " + fileName;
                 logger.error(errorMessage);
                 showErrorAndExit(errorMessage);
                 return 0.0; // Diese Zeile wird nie erreicht
@@ -77,14 +77,14 @@ public class DataExtractor {
                     balance = Double.parseDouble(balanceStr);
                     return balance;
                 } else {
-                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden für Datei: " + fileName;
+                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden fÃ¼r Datei: " + fileName;
                     logger.error(errorMessage);
                     showErrorAndExit(errorMessage);
                     return.0; // Diese Zeile wird nie erreicht
                 }
             }
         } catch (Exception e) {
-            String errorMessage = "Fehler beim Extrahieren der Balance für " + fileName + ": " + e.getMessage();
+            String errorMessage = "Fehler beim Extrahieren der Balance fÃ¼r " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             showErrorAndExit(errorMessage);
             return 0.0; // Diese Zeile wird nie erreicht
@@ -105,7 +105,7 @@ public class DataExtractor {
         System.exit(1);
     }
     
-    // Getter für Equity Drawdown aus der Grafik
+    // Getter fÃ¼r Equity Drawdown aus der Grafik
     public double getEquityDrawdownGraphic(String fileName) {
         try {
             List<ChartPoint> data = chartExtractor.getDrawdownChartData(fileName);
@@ -129,7 +129,7 @@ public class DataExtractor {
             if (htmlContent == null) return 0.0;
 
             // Angepasster Ausdruck, der sowohl Werte mit als auch ohne Dezimalstellen erfasst
-            Pattern pattern = Pattern.compile("Maximaler Rückgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
+            Pattern pattern = Pattern.compile("Maximaler RÃ¼ckgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
             Matcher matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1);
@@ -138,8 +138,8 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Noch flexiblerer Ausdruck für ähnliche Formate
-            pattern = Pattern.compile("Maximaler Rückgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
+            // Noch flexiblerer Ausdruck fÃ¼r Ã¤hnliche Formate
+            pattern = Pattern.compile("Maximaler RÃ¼ckgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");
@@ -148,11 +148,21 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Debug-Ausgabe für Fehlerbehebung
-            logger.debug("HTML-Inhalt um 'Maximaler Rückgang': " + extractContextAroundKeyword(htmlContent, "Maximaler Rückgang"));
+            // Dritter Versuch: Suche nach verkrÃ¼ppeltem Format "Maximaler...RÃ¼g: XX.X%"
+            pattern = Pattern.compile("Maximaler[^<]*</tspan><tspan[^>]*>R.g:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1).replace(",", ".");
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (mit Pattern fÃ¼r verkrÃ¼ppeltes Format): " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Debug-Ausgabe fÃ¼r Fehlerbehebung
+            logger.debug("HTML-Inhalt um 'Maximaler': " + extractContextAroundKeyword(htmlContent, "Maximaler"));
             
             // Wenn kein Equity Drawdown gefunden wurde
-            String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
+            String errorMessage = "Equity Drawdown konnte nicht extrahiert werden fÃ¼r Datei: " + fileName;
             logger.error(errorMessage);
             
             // Popup-Fenster anzeigen (blockierend)
@@ -165,9 +175,9 @@ public class DataExtractor {
             
             // Prozess beenden
             System.exit(1);
-            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig fÃ¼r die Kompilierung
         } catch (Exception e) {
-            String errorMessage = "Fehler beim Extrahieren des Equity Drawdown für " + fileName + ": " + e.getMessage();
+            String errorMessage = "Fehler beim Extrahieren des Equity Drawdown fÃ¼r " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             
             // Popup-Fenster anzeigen (blockierend)
@@ -180,11 +190,11 @@ public class DataExtractor {
             
             // Prozess beenden
             System.exit(1);
-            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig fÃ¼r die Kompilierung
         }
     }
 
-    // Hilfsmethode zum Extrahieren des Kontexts um ein Schlüsselwort
+    // Hilfsmethode zum Extrahieren des Kontexts um ein SchlÃ¼sselwort
     private String extractContextAroundKeyword(String content, String keyword) {
         int index = content.indexOf(keyword);
         if (index != -1) {
@@ -192,10 +202,10 @@ public class DataExtractor {
             int end = Math.min(content.length(), index + keyword.length() + 100);
             return content.substring(start, end);
         }
-        return "Schlüsselwort nicht gefunden";
+        return "SchlÃ¼sselwort nicht gefunden";
     }
     
-    // Getter für durchschnittlichen 3-Monats-Profit
+    // Getter fÃ¼r durchschnittlichen 3-Monats-Profit
     public double getAvr3MonthProfit(String fileName, MonthDetailsExtractor monthExtractor) {
         try {
             List<String> lastMonths = monthExtractor.getLastThreeMonthsDetails(fileName);
@@ -209,14 +219,14 @@ public class DataExtractor {
                     try {
                         sum += Double.parseDouble(valueStr);
                     } catch (NumberFormatException e) {
-                        logger.warn("Ungültiger Monatswert: " + valueStr);
+                        logger.warn("UngÃ¼ltiger Monatswert: " + valueStr);
                     }
                 }
             }
             avr3MonthProfit = lastMonths.isEmpty() ? 0.0 : sum / lastMonths.size();
             return avr3MonthProfit;
         } catch (Exception e) {
-            logger.error("Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits für " + fileName, e);
+            logger.error("Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits fÃ¼r " + fileName, e);
         }
         return 0.0;
     }
@@ -233,7 +243,7 @@ public class DataExtractor {
         }
     }
     
-    // Getter und Setter für Eigenschaften
+    // Getter und Setter fÃ¼r Eigenschaften
     public void setBalance(double balance) {
         this.balance = balance;
     }
