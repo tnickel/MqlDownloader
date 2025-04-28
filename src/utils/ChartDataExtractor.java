@@ -17,13 +17,32 @@ import org.apache.logging.log4j.Logger;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 
 public class ChartDataExtractor {
     private static final Logger logger = LogManager.getLogger(ChartDataExtractor.class);
     
-    // Pattern für rote Linie im Drawdown-Chart (verbessert für var(--c-chart-red))
+    // Verbesserte Pattern für rote Linie im Drawdown-Chart
     private static final Pattern RED_DRAWNDOWN_CHART_PATTERN = Pattern.compile(
-        "<path(?=[^>]*(?:stroke|style)\\s*=\\s*\"[^\"]*(?:var\\(--c-chart-red\\)|red)[^\"]*\")[^>]*d\\s*=\\s*\"([^\"]+)\"",
+        "<path[^>]*class=\"s-path-line[^\"]*\"[^>]*d=\"([^\"]+)\"[^>]*style=\"[^\"]*stroke:\\s*var\\(--c-chart-red\\)[^\"]*\"",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+    
+    // Alternative Muster für die rote Linie
+    private static final Pattern ALT_RED_LINE_PATTERN = Pattern.compile(
+        "<path[^>]*class=\"s-path-line c-1906qq7\"[^>]*d=\"([^\"]+)\"",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+    
+    // Muster für Y-Achsenbeschriftungen (Drawdown-Prozentwerte)
+    private static final Pattern Y_AXIS_TICK_PATTERN = Pattern.compile(
+        "<g class=\"s-tick[^\"]*\"[^>]*transform=\"translate\\(0,\\s*([\\d.]+)\\)\"[^>]*>\\s*<text[^>]*>([\\d.]+)%</text>",
+        Pattern.CASE_INSENSITIVE | Pattern.DOTALL
+    );
+    
+    // Muster für X-Achsenbeschriftungen (Datumswerte)
+    private static final Pattern X_AXIS_TICK_PATTERN = Pattern.compile(
+        "<g class=\"s-tick[^\"]*\"[^>]*transform=\"translate\\(([\\d.]+),\\s*320\\)\"[^>]*>\\s*<text[^>]*>([A-Za-z]+)\\s+(\\d{4})</text>",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
     
@@ -33,7 +52,6 @@ public class ChartDataExtractor {
         this.contentCache = contentCache;
     }
     
- // In der Klasse ChartDataExtractor
     public List<ChartPoint> getDrawdownChartData(String fileName) {
         List<ChartPoint> chartData = new ArrayList<>();
         String html = contentCache.getHtmlContent(fileName);
@@ -42,177 +60,349 @@ public class ChartDataExtractor {
             return chartData;
         }
         
-        // 1) HTML mit JSoup parsen
+        // HTML mit JSoup parsen
         Document jsoupDoc = Jsoup.parse(html);
         
-        // 2) Suche das DIV mit id="tab_content_drawdown_chart"
+        // Suche das DIV mit id="tab_content_drawdown_chart"
         Element drawdownDiv = jsoupDoc.selectFirst("div#tab_content_drawdown_chart");
         if (drawdownDiv == null) {
             logger.warn("Kein DIV mit id='tab_content_drawdown_chart' gefunden in " + fileName);
             return chartData;
         }
         
-        // 3) Darin das erste <svg> suchen
+        // SVG-Element extrahieren
         Element svgElement = drawdownDiv.selectFirst("svg");
         if (svgElement == null) {
             logger.warn("Kein <svg> in div#tab_content_drawdown_chart gefunden in " + fileName);
             return chartData;
         }
         
-        // 4) Das reine SVG als String extrahieren
+        // SVG als String extrahieren
         String svgContent = svgElement.outerHtml();
         
-        // Falls Namespace fehlt, ergänzen
-        if (!svgContent.contains("xmlns=")) {
-            logger.info("SVG enthält keinen Namespace. Füge xmlns=\"http://www.w3.org/2000/svg\" hinzu.");
-            svgContent = svgContent.replaceFirst("<svg", "<svg xmlns=\"http://www.w3.org/2000/svg\"");
+        // Y-Achsen-Ticks extrahieren (für die Skala)
+        double[] yScale = extractYAxisScale(svgContent);
+        if (yScale == null) {
+            logger.warn("Konnte keine Y-Achsen-Skala aus dem SVG extrahieren");
+            // Fallback-Werte verwenden
+            yScale = new double[]{32.132, 249.41, 0.0, 40.0}; // topY, bottomY, topPercent, bottomPercent
+            logger.info("Verwende Fallback-Y-Achsen-Skala");
         }
         
-        // Hier xlink-Namespace hinzufügen, wenn er fehlt aber xlink:href verwendet wird
-        if (svgContent.contains("xlink:href") && !svgContent.contains("xmlns:xlink=")) {
-            logger.info("SVG verwendet xlink:href ohne Namespace-Deklaration. Füge xmlns:xlink=\"http://www.w3.org/1999/xlink\" hinzu.");
-            svgContent = svgContent.replaceFirst("<svg", "<svg xmlns:xlink=\"http://www.w3.org/1999/xlink\"");
+        // X-Achsen-Daten extrahieren (für die Datumswerte)
+        LocalDate[] dateRange = extractXAxisDates(svgContent);
+        if (dateRange == null) {
+            logger.warn("Konnte keinen Datumsbereich aus dem SVG extrahieren");
+            // Fallback-Werte verwenden (Februar 2025)
+            dateRange = new LocalDate[]{
+                LocalDate.of(2025, 2, 1),
+                LocalDate.of(2025, 2, 28)
+            };
+            logger.info("Verwende Fallback-Datumsbereich: " + dateRange[0] + " bis " + dateRange[1]);
         }
         
-        // 5) Mit Batik parsen
-        org.w3c.dom.Document batikSvgDoc;
-        try {
-            String parser = XMLResourceDescriptor.getXMLParserClassName();
-            SAXSVGDocumentFactory factory = new SAXSVGDocumentFactory(parser);
-            batikSvgDoc = factory.createDocument("http://www.w3.org/2000/svg",
-                                                 new StringReader(svgContent));
-        } catch (IOException e) {
-            logger.error("Fehler beim Parsen des SVG-Inhalts: " + e.getMessage(), e);
+        // Roten Pfad mit verbessertem Pattern extrahieren
+        String pathData = extractRedPathData(svgContent);
+        if (pathData == null) {
+            logger.warn("Konnte keinen roten Pfad im SVG finden");
             return chartData;
         }
         
-        // Rest der Methode bleibt unverändert
-        // 6) Roten Pfad finden mit verbessertem Pattern
-        Matcher redPathMatcher = RED_DRAWNDOWN_CHART_PATTERN.matcher(svgContent);
-        List<String> pathSegments = new ArrayList<>();
-        while (redPathMatcher.find()) {
-            String dAttr = redPathMatcher.group(1);
-            if (dAttr != null && !dAttr.isEmpty()) {
-                pathSegments.add(dAttr);
+        // Pfad in Punkte umwandeln
+        List<double[]> pathPoints = parsePathData(pathData);
+        if (pathPoints.isEmpty()) {
+            logger.warn("Keine Punkte aus dem Pfad extrahiert");
+            return chartData;
+        }
+        
+        // Bereichsgrenzen für X-Koordinaten bestimmen
+        double minX = Double.MAX_VALUE;
+        double maxX = Double.MIN_VALUE;
+        for (double[] point : pathPoints) {
+            minX = Math.min(minX, point[0]);
+            maxX = Math.max(maxX, point[0]);
+        }
+        
+        logger.info(String.format("X-Bereich: minX=%.2f, maxX=%.2f", minX, maxX));
+        
+        // Tagesabstand berechnen
+        long daysBetween = ChronoUnit.DAYS.between(dateRange[0], dateRange[1]);
+        
+        // Punkte in ChartPoint-Objekte umwandeln
+        for (double[] point : pathPoints) {
+            double x = point[0];
+            double y = point[1];
+            
+            // X-Koordinate in Datum umwandeln
+            double fractionX = (x - minX) / (maxX - minX);
+            fractionX = Math.min(1.0, Math.max(0.0, fractionX)); // Auf [0,1] begrenzen
+            long daysToAdd = Math.round(fractionX * daysBetween);
+            LocalDate date = dateRange[0].plusDays(daysToAdd);
+            String dateStr = date.format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
+            
+            // Y-Koordinate in Drawdown-Prozent umwandeln
+            double drawdownPercent = transformYToValue(y, yScale);
+            
+            chartData.add(new ChartPoint(dateStr, drawdownPercent));
+        }
+        
+        logger.info("Extrahierte Punkte: " + chartData.size());
+        return chartData;
+    }
+    
+    private String extractRedPathData(String svgContent) {
+        // Primäres Pattern versuchen
+        Matcher matcher = RED_DRAWNDOWN_CHART_PATTERN.matcher(svgContent);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+        
+        // Alternative Pattern versuchen
+        matcher = ALT_RED_LINE_PATTERN.matcher(svgContent);
+        if (matcher.find()) {
+            // Überprüfen, ob es sich um die rote Linie handelt (anhand des style-Attributs)
+            String fullMatch = matcher.group(0);
+            if (fullMatch.contains("stroke: var(--c-chart-red)") || 
+                fullMatch.contains("stroke:var(--c-chart-red)")) {
+                return matcher.group(1);
             }
         }
         
-        if (pathSegments.isEmpty()) {
-            logger.info("Kein roter Drawdown-Pfad in " + fileName + " (div#tab_content_drawdown_chart) gefunden. Leere Liste.");
-            return chartData;
+        // Direktes Suchen des Pfades mit der Klasse und dem Style
+        Document doc = Jsoup.parse(svgContent);
+        Elements paths = doc.select("path[style*=stroke:var(--c-chart-red)], path[style*=stroke: var(--c-chart-red)]");
+        if (!paths.isEmpty()) {
+            return paths.first().attr("d");
         }
         
-        // 7) d-Attribute => (x,y)-Punkte
-        List<double[]> rawPoints = new ArrayList<>();
-        for (String d : pathSegments) {
-            String[] segments = d.split("(?=[MLCQAZmlcqa])");
-            for (String seg : segments) {
-                seg = seg.trim();
-                if (seg.isEmpty()) continue;
-                seg = seg.substring(1).trim();  // Befehl entfernen
-                if (seg.isEmpty()) continue;
-                String[] coords = seg.split("[,\\s]+");
-                for (int i = 0; i < coords.length - 1; i += 2) {
+        return null;
+    }
+    
+    private List<double[]> parsePathData(String pathData) {
+        List<double[]> points = new ArrayList<>();
+        
+        // SVG-Pfad-Befehle: M (move to), L (line to), C (curve to), etc.
+        String[] segments = pathData.split("(?=[MLCQAZHVmlcqazhv])");
+        
+        for (String segment : segments) {
+            if (segment.isEmpty()) continue;
+            
+            char command = segment.charAt(0);
+            String params = segment.substring(1).trim();
+            
+            if (command == 'M' || command == 'L') {
+                // Format: M x,y or L x,y
+                String[] coords = params.split("[,\\s]+");
+                if (coords.length >= 2) {
                     try {
-                        double x = Double.parseDouble(coords[i]);
-                        double y = Double.parseDouble(coords[i + 1]);
-                        rawPoints.add(new double[]{x, y});
+                        double x = Double.parseDouble(coords[0]);
+                        double y = Double.parseDouble(coords[1]);
+                        points.add(new double[]{x, y});
                     } catch (NumberFormatException e) {
-                        logger.warn("Konnte Koordinate nicht parsen: " + coords[i] + "," + coords[i + 1]);
+                        logger.warn("Fehler beim Parsen der Koordinaten: " + params);
                     }
                 }
             }
         }
-        if (rawPoints.isEmpty()) {
-            logger.warn("Keine (x,y)-Koordinaten im roten Drawdown-Pfad gefunden: " + fileName);
-            return chartData;
-        }
         
-        double minX = rawPoints.stream().mapToDouble(p -> p[0]).min().orElse(0.0);
-        double maxX = rawPoints.stream().mapToDouble(p -> p[0]).max().orElse(0.0);
-        logger.info(String.format("Nach SVG-Parsing: minX=%.2f, maxX=%.2f", minX, maxX));
-        
-        // 8) Y-Skala extrahieren
-        double[] yScale = extractYAxisScale(svgContent, fileName);
-        
-        // 9) Datum-Interpolation (Beispiel für Februar 2025)
-        LocalDate startDate = LocalDate.of(2025, 2, 1);
-        LocalDate endDate = LocalDate.of(2025, 2, 28); // Februar 2025 hat 28 Tage
-        long daysBetween = ChronoUnit.DAYS.between(startDate, endDate);
-        
-        // 10) Endgültige ChartPoints erzeugen
-        for (double[] pt : rawPoints) {
-            double xVal = pt[0];
-            double yVal = pt[1];
-            
-            double fractionX = (maxX - minX == 0) ? 0 : (xVal - minX) / (maxX - minX);
-            fractionX = Math.max(0, Math.min(1, fractionX));
-            long daysToAdd = Math.round(fractionX * daysBetween);
-            String date = startDate.plusDays(daysToAdd).format(DateTimeFormatter.ofPattern("yyyy-MM-dd"));
-            
-            double ddValue = transformYToValue(yVal, yScale);
-            chartData.add(new ChartPoint(date, ddValue));
-        }
-        
-        logger.info("Roter Drawdown-Pfad: " + chartData.size() + " Punkte gefunden.");
-        return chartData;
-    
+        return points;
     }
     
-    private double[] extractYAxisScale(String svgContent, String fileName) {
-        logger.info("=== extractYAxisScale: Datei=" + fileName + " ===");
+    private double[] extractYAxisScale(String svgContent) {
+        // Muster: Y-Achsenbeschriftungen mit Prozentwerten extrahieren
+        Matcher matcher = Y_AXIS_TICK_PATTERN.matcher(svgContent);
         
-        // Manuelle Werte basierend auf deiner Analyse und den Daten im Textfile
-        // Hier nehmen wir an, dass y = 272.585 für 1% und y = 11.994 für 6% korrekt sind,
-        // aber wir können die Skala anpassen, um die tatsächlichen Werte besser abzubilden
-        logger.warn("Keine automatische Erkennung der Y-Achsen-Beschriftungen. Verwende manuelle Werte basierend auf SVG-Analyse.");
-        return new double[]{272.585, 11.994, 1.0, 6.0}; // topY, bottomY, topPercent, bottomPercent
-    }
-    
-    private double transformYToValue(double y, double[] scaleData) {
-        double topY = scaleData[0];
-        double bottomY = scaleData[1];
-        double topPercent = scaleData[2];
-        double bottomPercent = scaleData[3];
-        if (Math.abs(topY - bottomY) < 1e-6) {
-            return topPercent;
-        }
-        double fraction = (y - topY) / (bottomY - topY);
-        if (fraction < 0) fraction = 0;
-        if (fraction > 1) fraction = 1;
-        return topPercent + fraction * (bottomPercent - topPercent);
-    }
-    
-    private double[] parseTransform(String transformString) {
-        double translateX = 0, translateY = 0, scaleX = 1, scaleY = 1;
-        if (transformString == null || transformString.isEmpty()) {
-            return new double[]{translateX, translateY, scaleX, scaleY};
-        }
-        Pattern translatePattern = Pattern.compile("translate\\(([^,]+),\\s*([^\\)]+)\\)");
-        Matcher translateMatcher = translatePattern.matcher(transformString);
-        if (translateMatcher.find()) {
+        double topY = -1;
+        double topPercent = -1;
+        double bottomY = -1;
+        double bottomPercent = -1;
+        
+        while (matcher.find()) {
             try {
-                translateX = Double.parseDouble(translateMatcher.group(1).trim());
-                translateY = Double.parseDouble(translateMatcher.group(2).trim());
-            } catch (NumberFormatException e) {
-                logger.warn("Fehler beim Parsen von translate: " + e.getMessage());
-            }
-        }
-        Pattern scalePattern = Pattern.compile("scale\\(([^,\\)]+)(?:,\\s*([^\\)]+))?\\)");
-        Matcher scaleMatcher = scalePattern.matcher(transformString);
-        if (scaleMatcher.find()) {
-            try {
-                scaleX = Double.parseDouble(scaleMatcher.group(1).trim());
-                String sy = scaleMatcher.group(2);
-                if (sy != null && !sy.isEmpty()) {
-                    scaleY = Double.parseDouble(sy.trim());
-                } else {
-                    scaleY = scaleX;
+                double y = Double.parseDouble(matcher.group(1));
+                double percent = Double.parseDouble(matcher.group(2));
+                
+                if (topY == -1 || y < topY) {
+                    topY = y;
+                    topPercent = percent;
+                }
+                
+                if (bottomY == -1 || y > bottomY) {
+                    bottomY = y;
+                    bottomPercent = percent;
                 }
             } catch (NumberFormatException e) {
-                logger.warn("Fehler beim Parsen von scale: " + e.getMessage());
+                logger.warn("Fehler beim Parsen der Y-Achsen-Ticks: " + e.getMessage());
             }
         }
-        return new double[]{translateX, translateY, scaleX, scaleY};
+        
+        if (topY != -1 && bottomY != -1) {
+            logger.info(String.format("Y-Skala extrahiert: topY=%.2f (%.2f%%), bottomY=%.2f (%.2f%%)",
+                    topY, topPercent, bottomY, bottomPercent));
+            return new double[]{topY, bottomY, topPercent, bottomPercent};
+        }
+        
+        // Direktes Extrahieren mit JSoup
+        try {
+            Document doc = Jsoup.parse(svgContent);
+            Elements ticks = doc.select("g.s-tick text");
+            
+            if (!ticks.isEmpty()) {
+                for (Element tick : ticks) {
+                    String text = tick.text();
+                    if (text.endsWith("%")) {
+                        Element parent = tick.parent();
+                        String transform = parent.attr("transform");
+                        if (transform.startsWith("translate(0, ")) {
+                            String yStr = transform.substring("translate(0, ".length(), transform.indexOf(")"));
+                            double y = Double.parseDouble(yStr);
+                            double percent = Double.parseDouble(text.replace("%", ""));
+                            
+                            if (topY == -1 || y < topY) {
+                                topY = y;
+                                topPercent = percent;
+                            }
+                            
+                            if (bottomY == -1 || y > bottomY) {
+                                bottomY = y;
+                                bottomPercent = percent;
+                            }
+                        }
+                    }
+                }
+                
+                if (topY != -1 && bottomY != -1) {
+                    logger.info(String.format("Y-Skala mit JSoup extrahiert: topY=%.2f (%.2f%%), bottomY=%.2f (%.2f%%)",
+                            topY, topPercent, bottomY, bottomPercent));
+                    return new double[]{topY, bottomY, topPercent, bottomPercent};
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Fehler bei JSoup-Extraktion der Y-Achsen-Skala: " + e.getMessage());
+        }
+        
+        return null;
+    }
+    
+    private LocalDate[] extractXAxisDates(String svgContent) {
+        Matcher matcher = X_AXIS_TICK_PATTERN.matcher(svgContent);
+        
+        LocalDate startDate = null;
+        LocalDate endDate = null;
+        double startX = -1;
+        double endX = -1;
+        
+        while (matcher.find()) {
+            try {
+                double x = Double.parseDouble(matcher.group(1));
+                String month = matcher.group(2);
+                int year = Integer.parseInt(matcher.group(3));
+                
+                int monthNum = getMonthNumber(month);
+                if (monthNum > 0) {
+                    LocalDate date = LocalDate.of(year, monthNum, 1);
+                    
+                    if (startDate == null || x < startX) {
+                        startDate = date;
+                        startX = x;
+                    }
+                    
+                    if (endDate == null || x > endX) {
+                        endDate = date.plusMonths(1).minusDays(1); // Letzter Tag des Monats
+                        endX = x;
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Fehler beim Parsen der X-Achsen-Ticks: " + e.getMessage());
+            }
+        }
+        
+        if (startDate != null && endDate != null) {
+            logger.info("Datumsbereich extrahiert: " + startDate + " bis " + endDate);
+            return new LocalDate[]{startDate, endDate};
+        }
+        
+        // Direktes Extrahieren mit JSoup
+        try {
+            Document doc = Jsoup.parse(svgContent);
+            Elements ticks = doc.select("g.s-tick text");
+            
+            for (Element tick : ticks) {
+                String text = tick.text();
+                if (text.matches("[A-Za-z]+\\s+\\d{4}")) {
+                    String[] parts = text.split("\\s+");
+                    String month = parts[0];
+                    int year = Integer.parseInt(parts[1]);
+                    
+                    Element parent = tick.parent();
+                    String transform = parent.attr("transform");
+                    if (transform.startsWith("translate(")) {
+                        String xStr = transform.substring("translate(".length(), transform.indexOf(","));
+                        double x = Double.parseDouble(xStr);
+                        
+                        int monthNum = getMonthNumber(month);
+                        if (monthNum > 0) {
+                            LocalDate date = LocalDate.of(year, monthNum, 1);
+                            
+                            if (startDate == null || x < startX) {
+                                startDate = date;
+                                startX = x;
+                            }
+                            
+                            if (endDate == null || x > endX) {
+                                endDate = date.plusMonths(1).minusDays(1);
+                                endX = x;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (startDate != null && endDate != null) {
+                logger.info("Datumsbereich mit JSoup extrahiert: " + startDate + " bis " + endDate);
+                return new LocalDate[]{startDate, endDate};
+            }
+        } catch (Exception e) {
+            logger.warn("Fehler bei JSoup-Extraktion des Datumsbereichs: " + e.getMessage());
+        }
+        
+        return null;
+    }
+    
+    private int getMonthNumber(String monthName) {
+        monthName = monthName.toLowerCase();
+        switch (monthName) {
+            case "jan": return 1;
+            case "feb": return 2;
+            case "mar": return 3;
+            case "apr": return 4;
+            case "may": return 5;
+            case "jun": return 6;
+            case "jul": return 7;
+            case "aug": return 8;
+            case "sep": return 9;
+            case "oct": return 10;
+            case "nov": return 11;
+            case "dec": return 12;
+            default: return -1;
+        }
+    }
+    
+    private double transformYToValue(double y, double[] yScale) {
+        double topY = yScale[0];
+        double bottomY = yScale[1];
+        double topPercent = yScale[2];
+        double bottomPercent = yScale[3];
+        
+        if (Math.abs(bottomY - topY) < 0.001) {
+            return topPercent;
+        }
+        
+        // Normalisieren der Y-Position
+        double fraction = (y - topY) / (bottomY - topY);
+        fraction = Math.min(1.0, Math.max(0.0, fraction)); // Auf [0,1] begrenzen
+        
+        // Lineares Mapping auf den Prozentwertbereich
+        return topPercent + fraction * (bottomPercent - topPercent);
     }
 }
