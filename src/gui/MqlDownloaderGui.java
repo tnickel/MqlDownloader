@@ -6,6 +6,7 @@ import java.awt.GridLayout;
 import java.io.File;
 
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
@@ -28,6 +29,7 @@ public class MqlDownloaderGui extends JFrame {
     private final ButtonPanelManager buttonManager;
     private final DownloadManager downloadManager;
     private final ConversionManager conversionManager;
+    private JButton statisticsButton;  // Neuer Button für Statistiken
 
     public MqlDownloaderGui() {
         configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
@@ -58,11 +60,17 @@ public class MqlDownloaderGui extends JFrame {
         topPanel.add(createCenteredPanel(buttonManager.getStopButton()));
         topPanel.add(createCenteredPanel(buttonManager.getDoAllButton()));
 
+        // Statistik-Button (rechts neben dem Log-Panel)
+        statisticsButton = createStatisticsButton();
+        JPanel statisticsButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        statisticsButtonPanel.add(statisticsButton);
+
         // Main Panel zusammenbauen
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         mainPanel.add(topPanel, BorderLayout.NORTH);
         mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER);
+        mainPanel.add(statisticsButtonPanel, BorderLayout.EAST);  // Statistik-Button auf der rechten Seite
         mainPanel.add(buttonManager.createProgressPanel(), BorderLayout.SOUTH);
 
         // Zum Frame hinzufügen
@@ -78,6 +86,17 @@ public class MqlDownloaderGui extends JFrame {
         logHandler.log("Anwendung gestartet. Bereit für Operationen.");
     }
 
+    private JButton createStatisticsButton() {
+        JButton button = new JButton("Show Download Statistics");
+        button.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 12));
+        button.setBackground(new java.awt.Color(255, 215, 0)); // Gold color
+        button.setForeground(java.awt.Color.BLACK);
+        button.setFocusPainted(false);
+        button.setBorderPainted(true);
+        button.setToolTipText("Zeigt eine Statistik über das Alter der heruntergeladenen Dateien an");
+        return button;
+    }
+
     private JPanel createCenteredPanel(JComponent component) {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panel.add(component);
@@ -90,6 +109,15 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getStopButton().addActionListener(e -> downloadManager.stopDownload());
         buttonManager.getConvertButton().addActionListener(e -> conversionManager.startConversion());
         buttonManager.getDoAllButton().addActionListener(e -> handleDoAllButton());
+        
+        // Neuer Event-Handler für den Statistik-Button
+        statisticsButton.addActionListener(e -> showStatisticsDialog());
+    }
+    
+    private void showStatisticsDialog() {
+        logHandler.log("Zeige Download-Statistik an...");
+        StatisticsDialog dialog = new StatisticsDialog(this, configManager);
+        dialog.setVisible(true);
     }
 
     private void handleDoAllButton() {
@@ -133,11 +161,13 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getMql4LimitField().setEnabled(false);
         buttonManager.getMql5LimitField().setEnabled(false);
         buttonManager.getDownloadDaysField().setEnabled(false);
+        statisticsButton.setEnabled(false);  // Auch den Statistik-Button deaktivieren
     }
 
     private void enableAllButtons() {
         buttonManager.resetButtons();
         buttonManager.getDoAllButton().setEnabled(true);
+        statisticsButton.setEnabled(true);  // Statistik-Button wieder aktivieren
     }
 
     private JMenuBar createMenuBar() {
@@ -147,7 +177,11 @@ public class MqlDownloaderGui extends JFrame {
         JMenuItem setupItem = new JMenuItem("Setup");
         setupItem.addActionListener(e -> showSetupDialog());
         
+        JMenuItem statsItem = new JMenuItem("Download Statistics");
+        statsItem.addActionListener(e -> showStatisticsDialog());
+        
         fileMenu.add(setupItem);
+        fileMenu.add(statsItem);  // Auch im Menü zugänglich machen
         menuBar.add(fileMenu);
         
         return menuBar;

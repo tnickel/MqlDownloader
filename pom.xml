@@ -93,6 +93,11 @@
     <artifactId>jsoup</artifactId>
     <version>1.15.3</version> <!-- oder eine andere aktuelle Version -->
 </dependency>
+<dependency>
+    <groupId>org.jfree</groupId>
+    <artifactId>jfreechart</artifactId>
+    <version>1.5.4</version>
+</dependency>
 
     </dependencies>
 </project>
