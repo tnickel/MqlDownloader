@@ -29,11 +29,13 @@ public class ConfigurationManager {
     private static final String KEY_MAX_WAIT = "maxWaitTime";
     private static final String KEY_MQL4_LIMIT = "mql4Limit";
     private static final String KEY_MQL5_LIMIT = "mql5Limit";
+    private static final String KEY_DOWNLOAD_DAYS = "downloadDays";
     
-    private static final int DEFAULT_MIN_WAIT = 4000; // 10 seconds
+    private static final int DEFAULT_MIN_WAIT = 4000; // 4 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
     private static final int DEFAULT_MQL4_LIMIT = 1000;
     private static final int DEFAULT_MQL5_LIMIT = 1000;
+    private static final int DEFAULT_DOWNLOAD_DAYS = 5;
 
     public ConfigurationManager(String rootDirPath) {
         this.rootDirPath = rootDirPath;
@@ -95,7 +97,7 @@ public class ConfigurationManager {
     }
 
     public void setWaitTimes(int minWait, int maxWait) {
-        if (minWait < 4000) { // Minimum 2 seconds
+        if (minWait < 4000) { // Minimum 4 seconds
             minWait = 4000;
         }
         if (maxWait <= minWait) {
@@ -148,6 +150,23 @@ public class ConfigurationManager {
         saveProperties(props, "MQL Downloader Konfiguration");
         logger.info("MQL5 Limit aktualisiert auf: " + limit);
     }
+    
+    // Neuer Getter für Download Days
+    public int getDownloadDays() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS)));
+    }
+    
+    // Neuer Setter für Download Days mit Validierung
+    public void setDownloadDays(int days) {
+        if (days < 0 || days > 20) {
+            throw new IllegalArgumentException("Download Tage müssen zwischen 0 und 20 liegen");
+        }
+        Properties props = loadProperties();
+        props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(days));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("Download Tage aktualisiert auf: " + days);
+    }
 
     public void initializeDirectories() {
         createDirectory(configDirPath);
@@ -168,6 +187,7 @@ public class ConfigurationManager {
             props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
             props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
             props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
+            props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS));
             saveProperties(props, "MQL Downloader Standard-Konfiguration");
             logger.info("Standard-Konfigurationsdatei erstellt: " + mqlConfigFilePath);
         }
@@ -219,6 +239,7 @@ public class ConfigurationManager {
         props.setProperty(KEY_MAX_WAIT, String.valueOf(DEFAULT_MAX_WAIT));
         props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
         props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
+        props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS));
         saveProperties(props, "MQL Downloader Konfiguration - Zurückgesetzt auf Standardwerte");
         
         logger.info("Konfiguration wurde auf Standardwerte zurückgesetzt");

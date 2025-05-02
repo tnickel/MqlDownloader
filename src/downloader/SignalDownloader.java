@@ -184,11 +184,12 @@ public class SignalDownloader {
     }
 
     /**
-     * Prüft, ob die Dateien für einen bestimmten Provider kürzlich heruntergeladen wurden.
+     * Prüft, ob die Dateien für einen bestimmten Provider kürzlich heruntergeladen wurden
+     * basierend auf dem konfigurierten Alter in Tagen.
      * 
      * @param providerId Die ID des Providers
      * @param providerName Der Name des Providers
-     * @return true, wenn die Dateien innerhalb der letzten 5 Tage heruntergeladen wurden
+     * @return true, wenn die Dateien innerhalb der konfigurierten Tage heruntergeladen wurden
      */
     private boolean isFileRecentlyDownloaded(String providerId, String providerName) {
         String targetPath = configManager.getCurrentDownloadPath();
@@ -204,8 +205,17 @@ public class SignalDownloader {
         
         // Wenn beide Dateien existieren, prüfe ihr Alter
         if (htmlFile.exists() && csvFiles != null && csvFiles.length > 0) {
+            // Konfigurierte Tage aus den Einstellungen abrufen
+            int configuredDays = configManager.getDownloadDays();
+            
+            // Wenn 0 Tage konfiguriert sind, immer neu herunterladen
+            if (configuredDays == 0) {
+                logger.debug("Konfigurierte Tage ist 0, lade Dateien für Provider {} neu herunter", providerName);
+                return false;
+            }
+            
             long currentTime = System.currentTimeMillis();
-            long fiveDaysInMillis = 5 * 24 * 60 * 60 * 1000L; // 5 Tage in Millisekunden
+            long configuredDaysInMillis = configuredDays * 24 * 60 * 60 * 1000L; // Konfigurierte Tage in Millisekunden
             
             long htmlFileAge = currentTime - htmlFile.lastModified();
             
@@ -218,11 +228,20 @@ public class SignalDownloader {
                 }
             }
             
-            // Wenn beide Dateien jünger als 5 Tage sind
-            return (htmlFileAge < fiveDaysInMillis && youngestCsvFileAge < fiveDaysInMillis);
+            // Wenn beide Dateien jünger als die konfigurierten Tage sind
+            boolean result = (htmlFileAge < configuredDaysInMillis && youngestCsvFileAge < configuredDaysInMillis);
+            if (result) {
+                logger.debug("Provider {} Dateien sind jünger als {} Tage, überspringe", 
+                    providerName, configuredDays);
+            } else {
+                logger.debug("Provider {} Dateien sind älter als {} Tage, lade neu herunter", 
+                    providerName, configuredDays);
+            }
+            return result;
         }
         
         // Wenn eine der Dateien nicht existiert, muss heruntergeladen werden
+        logger.debug("Eine oder beide Dateien für Provider {} existieren nicht, lade herunter", providerName);
         return false;
     }
 

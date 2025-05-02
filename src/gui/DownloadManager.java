@@ -120,6 +120,7 @@ public class DownloadManager {
         
         buttonManager.getMql4LimitField().setEnabled(false);
         buttonManager.getMql5LimitField().setEnabled(false);
+        buttonManager.getDownloadDaysField().setEnabled(false);
         
         activeButton.setBackground(new Color(144, 238, 144));
         activeButton.setEnabled(false);
@@ -144,6 +145,7 @@ public class DownloadManager {
             buttonManager.resetButtons();
             buttonManager.getMql4LimitField().setEnabled(true);
             buttonManager.getMql5LimitField().setEnabled(true);
+            buttonManager.getDownloadDaysField().setEnabled(true);
         });
     }
 

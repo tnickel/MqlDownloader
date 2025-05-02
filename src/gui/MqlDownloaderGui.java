@@ -47,12 +47,13 @@ public class MqlDownloaderGui extends JFrame {
         setSize(800, 600);
 
         // Top panel für Buttons
-        JPanel topPanel = new JPanel(new GridLayout(5, 1, 5, 5));
+        JPanel topPanel = new JPanel(new GridLayout(6, 1, 5, 5)); // Erhöht auf 6 Reihen für das neue Feld
         topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
         // Panels zum Top Panel hinzufügen
         topPanel.add(buttonManager.createMql4Panel());
         topPanel.add(buttonManager.createMql5Panel());
+        topPanel.add(buttonManager.createDownloadDaysPanel()); // Neues Panel für Download Days
         topPanel.add(createCenteredPanel(buttonManager.getConvertButton()));
         topPanel.add(createCenteredPanel(buttonManager.getStopButton()));
         topPanel.add(createCenteredPanel(buttonManager.getDoAllButton()));
@@ -131,6 +132,7 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getConvertButton().setEnabled(false);
         buttonManager.getMql4LimitField().setEnabled(false);
         buttonManager.getMql5LimitField().setEnabled(false);
+        buttonManager.getDownloadDaysField().setEnabled(false);
     }
 
     private void enableAllButtons() {
