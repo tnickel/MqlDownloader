@@ -14,12 +14,14 @@ import org.openqa.selenium.WebDriver;
 import browser.WebDriverManager;
 import config.ConfigurationManager;
 import downloader.SignalDownloader;
+import utils.MqlDownloadProtokoll;
 
 public class DownloadManager {
     private static final Logger logger = LogManager.getLogger(DownloadManager.class);
     private final ConfigurationManager configManager;
     private final LogHandler logHandler;
     private final ButtonPanelManager buttonManager;
+    private final MqlDownloadProtokoll downloadProtokoll;
     private WebDriver currentDriver;
     private volatile boolean stopRequested;
     private Thread downloadThread;
@@ -28,6 +30,7 @@ public class DownloadManager {
         this.configManager = configManager;
         this.logHandler = logHandler;
         this.buttonManager = buttonManager;
+        this.downloadProtokoll = new MqlDownloadProtokoll(configManager.getRootDirPath() + "\\download");
     }
 
     public void startDownload(String version) {
@@ -39,6 +42,11 @@ public class DownloadManager {
         String downloadPath = configManager.getRootDirPath() + "\\download\\" + version.toLowerCase();
         logHandler.log("Download Pfad: " + downloadPath);
         configManager.setDownloadPath(downloadPath);
+        
+        // Protokoll für die aktuelle MQL-Version zurücksetzen
+        String mqlVersionProtokoll = version.toLowerCase();
+        downloadProtokoll.resetProtokoll(mqlVersionProtokoll);
+        downloadProtokoll.log(mqlVersionProtokoll, "Download-Prozess gestartet");
         
         // MQL-Version auf mt4 oder mt5 setzen
         String mqlVersion = version.equals("MQL4") ? "mt4" : "mt5";
@@ -61,6 +69,7 @@ public class DownloadManager {
                 logger.info("Starte Download Prozess...");
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
+                downloader.setDownloadProtokoll(downloadProtokoll);
                 downloader.setProgressCallback(count -> {
                     buttonManager.updateCounter(version, count);
                     int limit = version.equals("MQL4") ? 
@@ -70,6 +79,7 @@ public class DownloadManager {
                         stopRequested = true;
                         SwingUtilities.invokeLater(() -> {
                             logHandler.log(version + " Download erfolgreich beendet. Limit von " + limit + " erreicht.");
+                            downloadProtokoll.log(mqlVersionProtokoll, "Download abgeschlossen - Limit von " + limit + " erreicht");
                             cleanupDownload();
                         });
                     }
@@ -80,6 +90,7 @@ public class DownloadManager {
             } catch (Exception e) {
                 if (!stopRequested) {
                     logHandler.logError("Fehler während " + version + " Download: " + e.getMessage(), e);
+                    downloadProtokoll.log(mqlVersionProtokoll, "Download mit Fehler beendet: " + e.getMessage());
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(null,
                             "Fehler beim Download: " + e.getMessage(),
@@ -102,6 +113,12 @@ public class DownloadManager {
         
         new Thread(() -> {
             try {
+                // Bestimme die aktuelle MQL-Version
+                String mqlVersionProtokoll = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                
+                // Protokolliere den manuellen Stop
+                downloadProtokoll.log(mqlVersionProtokoll, "Download-Prozess manuell gestoppt");
+                
                 cleanupDownload();
                 SwingUtilities.invokeLater(() -> {
                     logHandler.log("Download Prozess manuell gestoppt");

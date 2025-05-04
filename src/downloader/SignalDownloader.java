@@ -20,6 +20,7 @@ import org.openqa.selenium.support.ui.WebDriverWait;
 
 import config.ConfigurationManager;
 import config.Credentials;
+import utils.MqlDownloadProtokoll;
 
 public class SignalDownloader {
     private final WebDriver driver;
@@ -33,6 +34,7 @@ public class SignalDownloader {
     private ProgressCallback progressCallback;
     private int consecutiveErrors = 0;
     private static final int MAX_CONSECUTIVE_ERRORS = 2;
+    private MqlDownloadProtokoll downloadProtokoll;
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
         this.driver = driver;
@@ -53,6 +55,10 @@ public class SignalDownloader {
 
     public void setProgressCallback(ProgressCallback callback) {
         this.progressCallback = callback;
+    }
+    
+    public void setDownloadProtokoll(MqlDownloadProtokoll protokoll) {
+        this.downloadProtokoll = protokoll;
     }
 
     private void updateProgress() {
@@ -233,6 +239,13 @@ public class SignalDownloader {
             if (result) {
                 logger.debug("Provider {} Dateien sind jünger als {} Tage, überspringe", 
                     providerName, configuredDays);
+                
+                // Protokolliere das Überspringen
+                if (downloadProtokoll != null) {
+                    String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                    downloadProtokoll.logSkipped(mqlVersion, providerName, 
+                        "Dateien sind jünger als " + configuredDays + " Tage");
+                }
             } else {
                 logger.debug("Provider {} Dateien sind älter als {} Tage, lade neu herunter", 
                     providerName, configuredDays);
@@ -248,6 +261,9 @@ public class SignalDownloader {
     private void processSignalProvider(String pageUrl, int index) {
         if (stopRequested) return;
 
+        String providerName = "Unbekannt";
+        String providerId = "0";
+        
         try {
             List<WebElement> providerLinks = driver.findElements(By.cssSelector(".signal a[href*='/signals/']"));
             if (index >= providerLinks.size() || stopRequested) {
@@ -257,12 +273,20 @@ public class SignalDownloader {
 
             WebElement link = providerLinks.get(index);
             String providerUrl = link.getAttribute("href");
-            String providerName = link.getText().trim();
+            providerName = link.getText().trim();
             
             // Provider ID extrahieren und bereinigen
-            String providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
+            providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
             if (providerId.contains("?")) {
                 providerId = providerId.substring(0, providerId.indexOf("?"));
+            }
+
+            // Bestimme die aktuelle MQL-Version für das Protokoll
+            String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+            
+            // Protokolliere den Versuch
+            if (downloadProtokoll != null) {
+                downloadProtokoll.logAttempt(mqlVersion, providerName, providerId, index);
             }
 
             // Prüfe, ob Dateien kürzlich heruntergeladen wurden
@@ -270,6 +294,12 @@ public class SignalDownloader {
                 logger.info("Provider #{} - {} (ID: {}) wurde kürzlich heruntergeladen, überspringe", 
                     providerCount + 1, providerName, providerId);
                 updateProgress(); // Aktualisiere den Fortschritt auch für übersprungene Provider
+                
+                // Protokolliere das Überspringen mit Index
+                if (downloadProtokoll != null) {
+                    downloadProtokoll.logSkipped(mqlVersion, providerName, 
+                        "Dateien sind jünger als " + configManager.getDownloadDays() + " Tage", index);
+                }
                 return;
             }
 
@@ -278,6 +308,11 @@ public class SignalDownloader {
             if (!stopRequested) {
                 downloadTradeHistory(providerUrl, providerName);
                 updateProgress();
+                
+                // Protokolliere den erfolgreichen Download mit Index
+                if (downloadProtokoll != null) {
+                    downloadProtokoll.logSuccess(mqlVersion, providerName, index);
+                }
             }
             
             if (!stopRequested) {
@@ -286,10 +321,15 @@ public class SignalDownloader {
         } catch (Exception e) {
             if (!stopRequested) {
                 logger.error("Fehler beim Verarbeiten von Provider " + index + " auf Seite " + pageUrl, e);
+                
+                // Protokolliere den Fehlschlag mit Index
+                if (downloadProtokoll != null) {
+                    String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                    downloadProtokoll.logFailure(mqlVersion, providerName, e.getMessage(), index);
+                }
             }
         }
     }
-
     private void downloadProviderRootPage(String providerUrl, String providerId, String providerName) {
         if (stopRequested) return;
 
@@ -318,11 +358,18 @@ public class SignalDownloader {
             }
             
             logger.info("Provider #{} - Root page downloaded for {} (ID: {}): {}", 
-            	    providerCount, providerName, cleanProviderId, htmlFile.getAbsolutePath());
+                    providerCount, providerName, cleanProviderId, htmlFile.getAbsolutePath());
                 
         } catch (Exception e) {
             if (!stopRequested) {
                 logger.error("Error downloading root page for provider: " + providerName, e);
+                
+                // Protokolliere den Fehlschlag
+                if (downloadProtokoll != null) {
+                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, 
+                        "Fehler beim Herunterladen der Root-Seite: " + e.getMessage());
+                }
             }
         }
     }
@@ -339,6 +386,12 @@ public class SignalDownloader {
         List<WebElement> exportLinks = driver.findElements(By.xpath("//*[text()='History']"));
         if (exportLinks.isEmpty()) {
             logger.warn("Kein Export-Link gefunden für Provider: " + providerName);
+            
+            // Protokolliere die fehlende History
+            if (downloadProtokoll != null) {
+                String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Kein Export-Link für die Trading History gefunden");
+            }
             return;
         }
 
@@ -369,13 +422,26 @@ public class SignalDownloader {
                     StandardCopyOption.REPLACE_EXISTING);
                     
                 logger.info("Provider #{} - Datei heruntergeladen für {} (ID: {}): {}", 
-                	    providerCount, providerName, originalId, targetFile.getAbsolutePath());
+                        providerCount, providerName, originalId, targetFile.getAbsolutePath());
             } else {
                 logger.warn("Keine heruntergeladene Datei gefunden für Provider: " + providerName+"Count="+providerCount);
+                
+                // Protokolliere den fehlenden Download
+                if (downloadProtokoll != null) {
+                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Keine CSV-Datei heruntergeladen");
+                }
             }
         } catch (Exception e) {
             if (!stopRequested) {
                 logger.error("Fehler beim Verarbeiten der heruntergeladenen Datei für " + providerName+"Count="+providerCount, e);
+                
+                // Protokolliere den Fehler beim Dateihandling
+                if (downloadProtokoll != null) {
+                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, 
+                        "Fehler beim Verarbeiten der CSV-Datei: " + e.getMessage());
+                }
             }
         }
     }
@@ -420,9 +486,21 @@ public class SignalDownloader {
                     logger.error("Fehler beim Verarbeiten der Seite " + currentPage + 
                                " (Fehler " + consecutiveErrors + " von " + MAX_CONSECUTIVE_ERRORS + ")", e);
                     
+                    // Protokolliere den Fehler bei der Seitenverarbeitung
+                    if (downloadProtokoll != null) {
+                        String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                        downloadProtokoll.log(mqlVersionForLog, "Fehler bei Seite " + currentPage + 
+                            ": " + e.getMessage());
+                    }
+                    
                     if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                         logger.error("Zu viele aufeinanderfolgende Fehler (" + MAX_CONSECUTIVE_ERRORS + 
                                    "). Beende Download-Prozess.");
+                        
+                        if (downloadProtokoll != null) {
+                            String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                            downloadProtokoll.log(mqlVersionForLog, "Download-Prozess wegen zu vieler Fehler beendet.");
+                        }
                         throw e;
                     }
                     
@@ -434,6 +512,13 @@ public class SignalDownloader {
                     continue;
                 }
             }
+        }
+        
+        // Protokolliere das Ende des Prozesses
+        if (downloadProtokoll != null) {
+            String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+            downloadProtokoll.log(mqlVersionForLog, "Download-Prozess erfolgreich beendet. " + 
+                providerCount + " Provider verarbeitet.");
         }
     }
 }
