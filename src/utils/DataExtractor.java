@@ -40,8 +40,13 @@ public class DataExtractor {
             if (htmlContent == null) {
                 String errorMessage = "HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName;
                 logger.error(errorMessage);
-                showErrorAndExit(errorMessage);
-                return 0.0; // Diese Zeile wird nie erreicht
+                if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                    return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+                } else {
+                    // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                    System.exit(1);
+                    return 0.0;  // Diese Zeile wird nie erreicht
+                }
             }
             
             // HTML mit JSoup parsen
@@ -79,30 +84,104 @@ public class DataExtractor {
                 } else {
                     String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden für Datei: " + fileName;
                     logger.error(errorMessage);
-                    showErrorAndExit(errorMessage);
-                    return.0; // Diese Zeile wird nie erreicht
+                    if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                        return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+                    } else {
+                        // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                        System.exit(1);
+                        return 0.0;  // Diese Zeile wird nie erreicht
+                    }
                 }
             }
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren der Balance für " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            showErrorAndExit(errorMessage);
-            return 0.0; // Diese Zeile wird nie erreicht
+            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+            } else {
+                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                System.exit(1);
+                return 0.0;  // Diese Zeile wird nie erreicht
+            }
         }
     }
 
-    // Hilfsmethode zum Anzeigen einer Fehlermeldung und Beenden des Programms
-    private void showErrorAndExit(String errorMessage) {
-        // Popup-Fenster anzeigen (blockierend)
-        javax.swing.JOptionPane.showMessageDialog(
+    // Ersetzte Methode: Zeigt Fehlermeldung und fragt, ob die Datei gelöscht werden soll
+    private boolean showErrorAndAskForDeletion(String errorMessage, String fileName) {
+        // Optionen für den Dialog
+        String[] options = {"Datei löschen und fortfahren", "Abbrechen"};
+        
+        // Dialog anzeigen und Auswahl des Benutzers erhalten
+        int choice = javax.swing.JOptionPane.showOptionDialog(
             null,
-            errorMessage,
+            errorMessage + "\n\nSoll die Datei gelöscht und mit der Konvertierung fortgefahren werden?",
             "Extraktionsfehler",
-            javax.swing.JOptionPane.ERROR_MESSAGE
+            javax.swing.JOptionPane.YES_NO_OPTION,
+            javax.swing.JOptionPane.ERROR_MESSAGE,
+            null,
+            options,
+            options[1]  // Standardauswahl ist "Abbrechen"
         );
         
-        // Prozess beenden
-        System.exit(1);
+        // Wenn Benutzer "Datei löschen und fortfahren" wählt
+        if (choice == 0) {
+            if (deleteRelatedFiles(fileName)) {
+                logger.info("Dateien wurden gelöscht, Konvertierung wird fortgesetzt.");
+                return true;
+            } else {
+                logger.error("Fehler beim Löschen der Dateien.");
+                return false;
+            }
+        }
+        
+        // Benutzer hat abgebrochen
+        return false;
+    }
+    
+    // Neue Methode: Löscht die zugehörigen Dateien (root.html, .csv und .txt)
+    private boolean deleteRelatedFiles(String fileName) {
+        try {
+            Path htmlPath = Paths.get(fileName);
+            
+            // Pfade für entsprechende CSV- und TXT-Dateien erzeugen
+            String baseName = fileName.replace("_root.html", "");
+            Path csvPath = Paths.get(baseName + ".csv");
+            Path txtPath = Paths.get(baseName + "_root.txt");
+            
+            // Dateien löschen, wenn sie existieren
+            boolean success = true;
+            
+            if (Files.exists(htmlPath)) {
+                Files.delete(htmlPath);
+                logger.info("Gelöscht: " + htmlPath);
+            }
+            
+            if (Files.exists(csvPath)) {
+                Files.delete(csvPath);
+                logger.info("Gelöscht: " + csvPath);
+            }
+            
+            if (Files.exists(txtPath)) {
+                Files.delete(txtPath);
+                logger.info("Gelöscht: " + txtPath);
+            }
+            
+            return success;
+        } catch (IOException e) {
+            logger.error("Fehler beim Löschen der Dateien: " + e.getMessage(), e);
+            return false;
+        }
+    }
+    
+    // Hilfsmethode zum Extrahieren des Kontexts um ein Schlüsselwort
+    private String extractContextAroundKeyword(String content, String keyword) {
+        int index = content.indexOf(keyword);
+        if (index != -1) {
+            int start = Math.max(0, index - 50);
+            int end = Math.min(content.length(), index + keyword.length() + 100);
+            return content.substring(start, end);
+        }
+        return "Schlüsselwort nicht gefunden";
     }
     
     // Getter für Equity Drawdown aus der Grafik
@@ -165,44 +244,27 @@ public class DataExtractor {
             String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
             logger.error(errorMessage);
             
-            // Popup-Fenster anzeigen (blockierend)
-            javax.swing.JOptionPane.showMessageDialog(
-                null,
-                errorMessage,
-                "Equity Drawdown Extraktionsfehler",
-                javax.swing.JOptionPane.ERROR_MESSAGE
-            );
-            
-            // Prozess beenden
-            System.exit(1);
-            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            // Anstatt sofort zu beenden, fragen wir den Benutzer
+            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+            } else {
+                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                System.exit(1);
+                return 0.0;  // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            }
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren des Equity Drawdown für " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             
-            // Popup-Fenster anzeigen (blockierend)
-            javax.swing.JOptionPane.showMessageDialog(
-                null,
-                errorMessage,
-                "Equity Drawdown Extraktionsfehler",
-                javax.swing.JOptionPane.ERROR_MESSAGE
-            );
-            
-            // Prozess beenden
-            System.exit(1);
-            return 0.0; // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            // Anstatt sofort zu beenden, fragen wir den Benutzer
+            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+            } else {
+                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                System.exit(1);
+                return 0.0;  // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
+            }
         }
-    }
-
-    // Hilfsmethode zum Extrahieren des Kontexts um ein Schlüsselwort
-    private String extractContextAroundKeyword(String content, String keyword) {
-        int index = content.indexOf(keyword);
-        if (index != -1) {
-            int start = Math.max(0, index - 50);
-            int end = Math.min(content.length(), index + keyword.length() + 100);
-            return content.substring(start, end);
-        }
-        return "Schlüsselwort nicht gefunden";
     }
     
     // Getter für durchschnittlichen 3-Monats-Profit
@@ -226,9 +288,16 @@ public class DataExtractor {
             avr3MonthProfit = lastMonths.isEmpty() ? 0.0 : sum / lastMonths.size();
             return avr3MonthProfit;
         } catch (Exception e) {
-            logger.error("Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits für " + fileName, e);
+            String errorMessage = "Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits für " + fileName + ": " + e.getMessage();
+            logger.error(errorMessage, e);
+            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
+                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
+            } else {
+                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
+                System.exit(1);
+                return 0.0;  // Diese Zeile wird nie erreicht
+            }
         }
-        return 0.0;
     }
     
     // Methode zum Schreiben des Equity Drawdown in eine Datei
