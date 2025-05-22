@@ -6,22 +6,36 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
+
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import utils.HtmlParser;
+
+import calculators.MPDDCalculator;
+import utils.BasicDataProvider;
 import utils.ChartPoint;
+import utils.FileDataReader;
 import utils.FileUtils;
+import utils.HtmlDatabase;
+import utils.HtmlParser;
 import utils.StabilityResult;
 
 public class HtmlConverter {
     private static final Logger logger = LogManager.getLogger(HtmlConverter.class);
     private final String downloadPath;
     private final HtmlParser htmlParser;
+    private final HtmlDatabase htmlDatabase;
+    private final FileDataReader fileDataReader;
+    private final BasicDataProvider basicDataProvider;
+    private final MPDDCalculator mpddCalculator;
     private ConversionProgress progressCallback;
     
     public HtmlConverter(String downloadPath) {
         this.downloadPath = downloadPath;
         this.htmlParser = new HtmlParser(downloadPath);
+        this.htmlDatabase = new HtmlDatabase(htmlParser);
+        this.fileDataReader = new FileDataReader(downloadPath);
+        this.basicDataProvider = new BasicDataProvider(fileDataReader);
+        this.mpddCalculator = new MPDDCalculator(htmlDatabase);
         logger.info("HtmlConverter initialized with path: " + downloadPath);
     }
     
@@ -111,6 +125,7 @@ public class HtmlConverter {
         
         List<ChartPoint> drawdownPoints = htmlParser.getDrawdownChartData(htmlFileName);
         
+        // Erstelle zuerst die .txt-Datei ohne 3MPDD
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
         output.append("MaxDDGraphic=").append(String.format("%.2f", equityDrawdownGraphic)).append("\n");
@@ -129,7 +144,19 @@ public class HtmlConverter {
                 .collect(Collectors.joining(","));
             output.append(monthValues);
         }
-        output.append("\n********************************\n\n");
+        output.append("\n");
+        
+        // Schreibe die Basisdaten zuerst
+        Files.writeString(txtFile, output.toString());
+        
+        // Berechne 3MPDD basierend auf der .txt-Datei
+        double mpdd3 = calculate3MPDD(txtFileName);
+        
+        // Füge 3MPDD zur Ausgabe hinzu
+        output.append("3MPDD=").append(String.format("%.4f", mpdd3)).append("\n");
+        
+        // Füge den Rest hinzu
+        output.append("********************************\n\n");
         output.append("Drawdown Chart Data=\n");
         if (drawdownPoints.isEmpty()) {
             output.append("Keine roten Drawdown-Pfad-Daten gefunden\n");
@@ -160,7 +187,45 @@ public class HtmlConverter {
         }
         output.append("********************************");
         
+        // Schreibe die vollständige Datei mit 3MPDD
         Files.writeString(txtFile, output.toString());
-        logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName());
+        logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName() + " with 3MPDD: " + String.format("%.4f", mpdd3));
+    }
+    
+    /**
+     * Berechnet den 3MPDD-Wert für eine .txt-Datei
+     * 
+     * @param txtFileName Pfad zur .txt-Datei
+     * @return 3MPDD-Wert
+     */
+    private double calculate3MPDD(String txtFileName) {
+        try {
+            // Konvertiere .txt-Dateinamen zurück zu HTML-Dateinamen für die Berechnung
+            String htmlFileName = txtFileName.replace("_root.txt", "_root.html");
+            
+            // Verwende den MPDDCalculator um 3MPDD zu berechnen
+            double mpdd = mpddCalculator.calculate3MPDD(htmlFileName);
+            
+            logger.info("3MPDD berechnet für " + htmlFileName + ": " + String.format("%.4f", mpdd));
+            return mpdd;
+            
+        } catch (Exception e) {
+            logger.error("Fehler beim Berechnen von 3MPDD für " + txtFileName + ": " + e.getMessage(), e);
+            return 0.0;
+        }
+    }
+    
+    /**
+     * Getter für den MPDDCalculator (für externe Verwendung)
+     */
+    public MPDDCalculator getMPDDCalculator() {
+        return mpddCalculator;
+    }
+    
+    /**
+     * Getter für den BasicDataProvider (für externe Verwendung)
+     */
+    public BasicDataProvider getBasicDataProvider() {
+        return basicDataProvider;
     }
 }
