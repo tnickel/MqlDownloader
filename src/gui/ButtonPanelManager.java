@@ -113,6 +113,32 @@ public class ButtonPanelManager {
         return panel;
     }
 
+    /**
+     * Neues Panel für Convert-Button mit Hinweistext
+     */
+    public JPanel createConvertPanel() {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        
+        // Convert Button zentriert
+        JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        buttonPanel.add(convertButton);
+        panel.add(buttonPanel);
+        
+        // Hinweistext unter dem Button
+        JLabel hinweisLabel = new JLabel("<html><i>Hinweis: Provider mit 3MPDD &lt; 0.5 werden automatisch gelöscht</i></html>");
+        hinweisLabel.setFont(hinweisLabel.getFont().deriveFont(Font.ITALIC, 11f));
+        hinweisLabel.setForeground(Color.GRAY);
+        hinweisLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        hinweisLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        
+        JPanel hinweisPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        hinweisPanel.add(hinweisLabel);
+        panel.add(hinweisPanel);
+        
+        return panel;
+    }
+
     public JPanel createProgressPanel() {
         JPanel panel = new JPanel(new BorderLayout(5, 5));
         panel.add(convertProgress, BorderLayout.CENTER);

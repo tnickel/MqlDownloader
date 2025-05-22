@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.stream.Collectors;
-
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -28,6 +27,9 @@ public class HtmlConverter {
     private final BasicDataProvider basicDataProvider;
     private final MPDDCalculator mpddCalculator;
     private ConversionProgress progressCallback;
+    private Path conversionLogPath;
+    private int deletedProvidersCount = 0;
+    private int processedProvidersCount = 0;
     
     public HtmlConverter(String downloadPath) {
         this.downloadPath = downloadPath;
@@ -36,11 +38,19 @@ public class HtmlConverter {
         this.fileDataReader = new FileDataReader(downloadPath);
         this.basicDataProvider = new BasicDataProvider(fileDataReader);
         this.mpddCalculator = new MPDDCalculator(htmlDatabase);
+        this.conversionLogPath = Paths.get(downloadPath, "conversionLog.txt");
         logger.info("HtmlConverter initialized with path: " + downloadPath);
     }
     
     public void convertAllHtmlFiles() {
         logger.info("Starting conversion process...");
+        
+        // Konvertierungs-Log initialisieren
+        initializeConversionLog();
+        
+        // Zähler zurücksetzen
+        deletedProvidersCount = 0;
+        processedProvidersCount = 0;
         
         // Zuerst die Dateinummern korrigieren
         List<String> correctedFiles = FileUtils.correctAllDirectories(downloadPath);
@@ -63,7 +73,11 @@ public class HtmlConverter {
         currentFile = processDirectory(mql4Path, currentFile, totalFiles);
         Path mql5Path = Paths.get(downloadPath, "mql5");
         currentFile = processDirectory(mql5Path, currentFile, totalFiles);
-        updateProgress(100, "Konvertierung abgeschlossen");
+        
+        // Abschließende Log-Einträge
+        finalizeConversionLog();
+        
+        updateProgress(100, "Konvertierung abgeschlossen - " + processedProvidersCount + " Provider verarbeitet, " + deletedProvidersCount + " Provider gelöscht (3MPDD < 0.5)");
     }
     
     public void setProgressCallback(ConversionProgress callback) {
@@ -111,7 +125,27 @@ public class HtmlConverter {
         String htmlFileName = htmlFile.toString();
         String txtFileName = htmlFileName.replace("_root.html", "_root.txt");
         Path txtFile = Paths.get(txtFileName);
+        
+        // Provider-Name aus Dateiname extrahieren
+        String providerName = extractProviderName(htmlFileName);
+        
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
+        
+        // OPTIMIERUNG: Zuerst 3MPDD berechnen und prüfen ob < 0.5
+        double mpdd3 = calculate3MPDD(htmlFileName);
+        
+        if (mpdd3 < 0.5) {
+            logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) für " + htmlFileName + " - Dateien werden gelöscht");
+            deleteRelatedFiles(htmlFileName);
+            
+            // Log-Eintrag für gelöschten Provider
+            logProviderAction(providerName, mpdd3, "GELÖSCHT - 3MPDD < 0.5");
+            deletedProvidersCount++;
+            
+            return; // Keine weitere Verarbeitung
+        }
+        
+        logger.info("3MPDD OK (" + String.format("%.4f", mpdd3) + " >= 0.5) für " + htmlFileName + " - Vollständige Verarbeitung");
         
         double balance = htmlParser.getBalance(htmlFileName);
         double equityDrawdownGraphic = htmlParser.getEquityDrawdownGraphic(htmlFileName);
@@ -125,7 +159,7 @@ public class HtmlConverter {
         
         List<ChartPoint> drawdownPoints = htmlParser.getDrawdownChartData(htmlFileName);
         
-        // Erstelle zuerst die .txt-Datei ohne 3MPDD
+        // Erstelle die vollständige .txt-Datei
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
         output.append("MaxDDGraphic=").append(String.format("%.2f", equityDrawdownGraphic)).append("\n");
@@ -146,13 +180,7 @@ public class HtmlConverter {
         }
         output.append("\n");
         
-        // Schreibe die Basisdaten zuerst
-        Files.writeString(txtFile, output.toString());
-        
-        // Berechne 3MPDD basierend auf der .txt-Datei
-        double mpdd3 = calculate3MPDD(txtFileName);
-        
-        // Füge 3MPDD zur Ausgabe hinzu
+        // Füge 3MPDD hinzu (bereits berechnet)
         output.append("3MPDD=").append(String.format("%.4f", mpdd3)).append("\n");
         
         // Füge den Rest hinzu
@@ -189,20 +217,22 @@ public class HtmlConverter {
         
         // Schreibe die vollständige Datei mit 3MPDD
         Files.writeString(txtFile, output.toString());
+        
+        // Log-Eintrag für verarbeiteten Provider
+        logProviderAction(providerName, mpdd3, "OK - Vollständig verarbeitet");
+        processedProvidersCount++;
+        
         logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName() + " with 3MPDD: " + String.format("%.4f", mpdd3));
     }
     
     /**
-     * Berechnet den 3MPDD-Wert für eine .txt-Datei
+     * Berechnet den 3MPDD-Wert für eine HTML-Datei
      * 
-     * @param txtFileName Pfad zur .txt-Datei
+     * @param htmlFileName Pfad zur HTML-Datei
      * @return 3MPDD-Wert
      */
-    private double calculate3MPDD(String txtFileName) {
+    private double calculate3MPDD(String htmlFileName) {
         try {
-            // Konvertiere .txt-Dateinamen zurück zu HTML-Dateinamen für die Berechnung
-            String htmlFileName = txtFileName.replace("_root.txt", "_root.html");
-            
             // Verwende den MPDDCalculator um 3MPDD zu berechnen
             double mpdd = mpddCalculator.calculate3MPDD(htmlFileName);
             
@@ -210,8 +240,50 @@ public class HtmlConverter {
             return mpdd;
             
         } catch (Exception e) {
-            logger.error("Fehler beim Berechnen von 3MPDD für " + txtFileName + ": " + e.getMessage(), e);
+            logger.error("Fehler beim Berechnen von 3MPDD für " + htmlFileName + ": " + e.getMessage(), e);
             return 0.0;
+        }
+    }
+    
+    /**
+     * Löscht alle zugehörigen Dateien eines Signalproviders (.html, .csv, .txt)
+     * 
+     * @param htmlFileName Pfad zur HTML-Datei
+     */
+    private void deleteRelatedFiles(String htmlFileName) {
+        try {
+            Path htmlPath = Paths.get(htmlFileName);
+            
+            // Pfade für entsprechende CSV- und TXT-Dateien erzeugen
+            String baseName = htmlFileName.replace("_root.html", "");
+            Path csvPath = Paths.get(baseName + ".csv");
+            Path txtPath = Paths.get(baseName + "_root.txt");
+            
+            // Dateien löschen, wenn sie existieren
+            int deletedCount = 0;
+            
+            if (Files.exists(htmlPath)) {
+                Files.delete(htmlPath);
+                logger.info("Gelöscht: " + htmlPath);
+                deletedCount++;
+            }
+            
+            if (Files.exists(csvPath)) {
+                Files.delete(csvPath);
+                logger.info("Gelöscht: " + csvPath);
+                deletedCount++;
+            }
+            
+            if (Files.exists(txtPath)) {
+                Files.delete(txtPath);
+                logger.info("Gelöscht: " + txtPath);
+                deletedCount++;
+            }
+            
+            logger.info("Signalprovider mit schlechtem 3MPDD entfernt: " + deletedCount + " Dateien gelöscht für " + baseName);
+            
+        } catch (IOException e) {
+            logger.error("Fehler beim Löschen der Dateien für " + htmlFileName + ": " + e.getMessage(), e);
         }
     }
     
@@ -227,5 +299,106 @@ public class HtmlConverter {
      */
     public BasicDataProvider getBasicDataProvider() {
         return basicDataProvider;
+    }
+    
+    /**
+     * Initialisiert das Konvertierungs-Logfile
+     */
+    private void initializeConversionLog() {
+        try {
+            StringBuilder logHeader = new StringBuilder();
+            logHeader.append("=".repeat(80)).append("\n");
+            logHeader.append("CONVERSION LOG - ").append(java.time.LocalDateTime.now().toString()).append("\n");
+            logHeader.append("=".repeat(80)).append("\n");
+            logHeader.append("HINWEIS: Provider mit 3MPDD < 0.5 werden automatisch gelöscht\n");
+            logHeader.append("=".repeat(80)).append("\n");
+            logHeader.append(String.format("%-50s | %-10s | %s\n", "PROVIDER NAME", "3MPDD", "AKTION"));
+            logHeader.append("-".repeat(80)).append("\n");
+            
+            Files.writeString(conversionLogPath, logHeader.toString());
+            logger.info("Conversion log initialisiert: " + conversionLogPath);
+            
+        } catch (IOException e) {
+            logger.error("Fehler beim Initialisieren des Conversion Logs: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Schreibt einen Eintrag in das Konvertierungs-Logfile
+     */
+    private void logProviderAction(String providerName, double mpdd3, String action) {
+        try {
+            String logEntry = String.format("%-50s | %-10.4f | %s\n", 
+                                          providerName.length() > 50 ? providerName.substring(0, 47) + "..." : providerName,
+                                          mpdd3, 
+                                          action);
+            
+            Files.writeString(conversionLogPath, logEntry, java.nio.file.StandardOpenOption.APPEND);
+            
+        } catch (IOException e) {
+            logger.error("Fehler beim Schreiben ins Conversion Log: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Schreibt die abschließenden Statistiken in das Logfile
+     */
+    private void finalizeConversionLog() {
+        try {
+            StringBuilder logFooter = new StringBuilder();
+            logFooter.append("-".repeat(80)).append("\n");
+            logFooter.append("ZUSAMMENFASSUNG:\n");
+            logFooter.append("Provider verarbeitet: ").append(processedProvidersCount).append("\n");
+            logFooter.append("Provider gelöscht: ").append(deletedProvidersCount).append(" (3MPDD < 0.5)\n");
+            logFooter.append("Gesamt Provider: ").append(processedProvidersCount + deletedProvidersCount).append("\n");
+            logFooter.append("=".repeat(80)).append("\n");
+            
+            Files.writeString(conversionLogPath, logFooter.toString(), java.nio.file.StandardOpenOption.APPEND);
+            logger.info("Conversion log finalisiert mit " + (processedProvidersCount + deletedProvidersCount) + " Providern");
+            
+        } catch (IOException e) {
+            logger.error("Fehler beim Finalisieren des Conversion Logs: " + e.getMessage(), e);
+        }
+    }
+    
+    /**
+     * Extrahiert den Provider-Namen aus dem Dateinamen
+     */
+    private String extractProviderName(String htmlFileName) {
+        try {
+            Path path = Paths.get(htmlFileName);
+            String fileName = path.getFileName().toString();
+            
+            // Entferne "_root.html" und eventuelle Nummer am Ende
+            String providerName = fileName.replace("_root.html", "");
+            
+            // Entferne Nummer am Ende (z.B. "_123456")
+            if (providerName.matches(".*_\\d+$")) {
+                int lastUnderscore = providerName.lastIndexOf('_');
+                if (lastUnderscore > 0) {
+                    providerName = providerName.substring(0, lastUnderscore);
+                }
+            }
+            
+            return providerName;
+            
+        } catch (Exception e) {
+            logger.warn("Fehler beim Extrahieren des Provider-Namens aus " + htmlFileName + ": " + e.getMessage());
+            return "UNKNOWN_PROVIDER";
+        }
+    }
+    
+    /**
+     * Getter für die Anzahl der gelöschten Provider
+     */
+    public int getDeletedProvidersCount() {
+        return deletedProvidersCount;
+    }
+    
+    /**
+     * Getter für die Anzahl der verarbeiteten Provider
+     */
+    public int getProcessedProvidersCount() {
+        return processedProvidersCount;
     }
 }

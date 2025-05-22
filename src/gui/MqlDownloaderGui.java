@@ -48,17 +48,27 @@ public class MqlDownloaderGui extends JFrame {
         setLayout(new BorderLayout(10, 10));
         setSize(800, 600);
 
-        // Top panel für Buttons
-        JPanel topPanel = new JPanel(new GridLayout(6, 1, 5, 5)); // Erhöht auf 6 Reihen für das neue Feld
-        topPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        // Top panel für Buttons - KOMPAKTER LAYOUT
+        JPanel topPanel = new JPanel(new GridLayout(3, 1, 5, 5)); // NUR 3 Zeilen statt 6!
+        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Kleinere Padding
 
-        // Panels zum Top Panel hinzufügen
-        topPanel.add(buttonManager.createMql4Panel());
-        topPanel.add(buttonManager.createMql5Panel());
-        topPanel.add(buttonManager.createDownloadDaysPanel()); // Neues Panel für Download Days
-        topPanel.add(createCenteredPanel(buttonManager.getConvertButton()));
-        topPanel.add(createCenteredPanel(buttonManager.getStopButton()));
-        topPanel.add(createCenteredPanel(buttonManager.getDoAllButton()));
+        // Erste Zeile: MQL4 und MQL5 horizontal nebeneinander
+        JPanel downloadPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        downloadPanel.add(buttonManager.createMql4Panel());
+        downloadPanel.add(buttonManager.createMql5Panel());
+        topPanel.add(downloadPanel);
+
+        // Zweite Zeile: Download Days und Convert Panel horizontal nebeneinander
+        JPanel configPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        configPanel.add(buttonManager.createDownloadDaysPanel());
+        configPanel.add(buttonManager.createConvertPanel());
+        topPanel.add(configPanel);
+
+        // Dritte Zeile: Stop und Do All Buttons horizontal nebeneinander
+        JPanel actionPanel = new JPanel(new GridLayout(1, 2, 10, 0));
+        actionPanel.add(createCenteredPanel(buttonManager.getStopButton()));
+        actionPanel.add(createCenteredPanel(buttonManager.getDoAllButton()));
+        topPanel.add(actionPanel);
 
         // Statistik-Button (rechts neben dem Log-Panel)
         statisticsButton = createStatisticsButton();
@@ -69,8 +79,8 @@ public class MqlDownloaderGui extends JFrame {
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         mainPanel.add(topPanel, BorderLayout.NORTH);
-        mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER);
-        mainPanel.add(statisticsButtonPanel, BorderLayout.EAST);  // Statistik-Button auf der rechten Seite
+        mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER); // Bekommt jetzt VIEL mehr Platz!
+        mainPanel.add(statisticsButtonPanel, BorderLayout.EAST);
         mainPanel.add(buttonManager.createProgressPanel(), BorderLayout.SOUTH);
 
         // Zum Frame hinzufügen
