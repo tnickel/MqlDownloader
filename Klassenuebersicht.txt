@@ -1,0 +1,69 @@
+# MqlDownloader - Klassenübersicht
+# Generated: 2025-05-30
+# Version: 1.0.0
+#
+# PROJECT DESCRIPTION:
+# MqlDownloader ist eine Java-Desktop-Anwendung für automatisiertes Herunterladen und Analysieren von MQL4/MQL5 Signal-Provider-Daten. Nutzt Selenium WebDriver für Web-Scraping, extrahiert Finanz-Kennzahlen und führt MPDD-Analysen durch.
+#
+# HAUPTFUNKTIONEN:
+# - Automatisiertes Herunterladen von MQL4/MQL5 Signal-Provider-Daten mit Selenium WebDriver
+# - HTML-Parsing und Extraktion von Finanz-Kennzahlen (Balance, Drawdown, monatliche Profite)
+# - MPDD-Berechnungen (3/6/9/12-Monate) für Provider-Qualitätsbewertung
+# - Automatisches Filtering und Löschen von Providern mit MPDD < 0.5
+# - Konvertierung von HTML-Daten in strukturierte TXT-Dateien
+# - GUI mit Download-Management, Konvertierung und Setup-Dialogen
+#
+# TECHNOLOGY STACK:
+# - Java 11+ mit Swing GUI
+# - Selenium WebDriver (Chrome) für Web-Scraping
+# - JSoup für HTML-Parsing
+# - Apache Log4j2 für Logging
+# - Regex-basierte Datenextraktion
+#
+# ARCHITECTURE HIGHLIGHTS:
+# - Modular aufgebaut mit klarer Package-Struktur
+# - Calculator-Pattern für MPDD-Berechnungen
+# - Observer-Pattern für Fortschritts-Callbacks
+# - Robuste Fehlerbehandlung mit automatischem Cleanup
+# 
+# Format: <Package>.<Class> | <Description>
+# ========================================================================
+## Default Package
+StartDownloader | Hauptklasse für Initialisierung. Orchestriert WebDriver, ConfigurationManager, Credentials und SignalDownloader.
+## Browser Package
+browser.WebDriverManager | WebDriver-Management für Selenium Chrome-Automatisierung. Konfiguriert Download-Verzeichnisse und Browser-Optionen.
+## Config Package  
+config.ConfigurationManager | Zentrale Konfigurationsverwaltung für Pfade, Verzeichnisse und Anwendungseinstellungen.
+config.Credentials | Datenklasse für Benutzeranmeldedaten (Username/Passwort).
+## Converter Package
+converter.ConversionProgress | Interface für Fortschritts-Callbacks während HTML-zu-TXT Konvertierungen.
+converter.HtmlConverter | Hauptkonverter für HTML-zu-TXT Transformation. Führt MPDD-Filtering durch und löscht schlechte Provider.
+## Downloader Package
+downloader.ProgressCallback | Interface für Download-Fortschritts-Tracking.
+downloader.SignalDownloader | Hauptdownloader für Signal-Provider-Daten. Verwaltet Selenium-Automatisierung.
+## GUI Package
+gui.LogHandler | GUI-Komponente für Live-Log-Ausgabe mit Terminal-Style.
+gui.SetupDialog | Konfigurationsdialog für Download-Geschwindigkeitseinstellungen.
+gui.ButtonPanelManager | Verwaltet Button-Panel der Hauptanwendung.
+gui.ConversionManager | GUI-Manager für HTML-Konvertierungs-Operationen.
+gui.DownloadManager | GUI-Manager für Download-Operationen mit MQL-Version-Umschaltung.
+gui.MqlDownloaderGui | Haupt-GUI-Klasse mit kompletter Benutzeroberfläche.
+## Logging Package
+logging.LoggerManager | Zentrale Logger-Initialisierung für Log4j2.
+## Main Package
+main.MqlDownloaderApp | Hauptanwendungsklasse. Startet ConfigurationManager, Logger und GUI.
+## Utils Package
+utils.BasicDataProvider | Grundlegende Datenwerte-Provider für MPDD-Calculator. Liest TXT-Dateien.
+utils.ChartPoint | Datenklasse für Chart-Koordinaten mit Datum und Wert.
+utils.StabilityResult | Ergebnis-Container für Stabilitätsberechnungen.
+utils.HtmlParser | Zentrale HTML-Parser-Facade. Koordiniert alle Extraktoren.
+utils.FileUtils | Utility-Klassen für Datei-Operationen.
+utils.FileDataReader | Reader für TXT-Dateien mit Key-Value-Parsing.
+utils.HtmlDatabase | Datenbank-Schnittstelle für HTML-basierte Provider-Daten.
+utils.DataExtractor | Extrahiert Basis-Finanz-Kennzahlen aus HTML-Inhalten.
+utils.MonthDetailsExtractor | Spezialisierter Extraktor für monatliche Profit-Details.
+utils.HtmlContentCache | Caching-Layer für HTML-Inhalte.
+utils.ChartDataExtractor | Extrahiert Chart-Daten für Drawdown-Graphiken.
+utils.StabilityCalculator | Berechnet Stabilitätswerte basierend auf monatlichen Profit-Schwankungen.
+## Calculators Package
+calculators.MPDDCalculator | Haupt-Calculator für MPDD-Berechnungen (3/6/9/12-Monate). Berechnet Month Profit Divided by Drawdown.

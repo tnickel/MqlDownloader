@@ -1,0 +1,100 @@
+# MqlRealMonitor - Programmieranweisungen
+# ===========================================
+# Diese Datei enthält die Anweisungen für KI-Assistenten zum Programmieren in diesem Projekt
+# Bitte befolge diese Regeln strikt bei allen Coding-Aufgaben
+
+## GRUNDLEGENDE VORGEHENSWEISE
+
+### 1. ERST DENKEN, DANN HANDELN
+- Wenn ich dir eine Programmieraufgabe gebe, denke erst intensiv nach
+- Mache dir einen detaillierten Plan wie du das Problem lösen könntest
+- Überlege dir die Auswirkungen auf bestehenden Code
+- Plane die Implementierung Schritt für Schritt
+
+### 2. PROJEKT-STRUKTUR VERSTEHEN
+- Informiere dich ZUERST in der `klassenübersicht.txt` über das Projekt
+- Verstehe die Architektur und Package-Struktur
+- Identifiziere welche Klassen für deine Aufgabe relevant sind
+- Beachte die modulare Aufbauweise (besonders GUI-Refactoring)
+
+### 3. BESTEHENDEN CODE ANALYSIEREN
+- Schaue IMMER erst nach ob bereits Code für deine Aufgabe vorhanden ist
+- Erweitere bestehenden Code anstatt neu zu implementieren
+- NIEMALS einfach drauflos programmieren ohne Analyse
+- Respektiere die bestehende Code-Architektur und -Patterns
+
+### 4. FEHLENDE KLASSEN HANDHABEN
+- Wenn du Code brauchst der nicht hochgeladen wurde, FRAGE ERST NACH
+- Implementiere KEINE neuen Klassen ohne Erlaubnis
+- Verwende die klassenübersicht.txt um zu sehen was existiert
+- Bei Unklarheiten: Nachfragen ist besser als Annahmen
+
+## CODE-ABGABE REGELN
+
+### 5. VOLLSTÄNDIGE FUNKTIONEN/KLASSEN
+- Gib mir IMMER den Code als ganze Funktion oder ganze Klasse
+- Keine Code-Snippets oder unvollständige Teile
+- Bei kleinen Änderungen: Die komplette geänderte Funktion + Klassenname angeben
+
+### 6. ARTIFACT-PFLICHT
+- ALLE Code-Lösungen MÜSSEN als Artifact abgegeben werden
+- Verwende sinnvolle Titel für die Artifacts
+- Setze den korrekten Typ (application/vnd.ant.code mit language="java")
+
+### 7. DOKUMENTATION
+- Gib an in welcher Klasse sich die Funktion befindet
+- Erkläre kurz was geändert/hinzugefügt wurde
+- Bei größeren Änderungen: Kurze Begründung der Lösung
+
+## SPEZIELLE PROJEKTREGELN
+
+### 8. GUI-ARCHITEKTUR BEACHTEN
+- Das Projekt verwendet wiederverwendbare Chart-Panels
+- TickChartWindow wurde refactored (Facade-Pattern)
+- Respektiere die Trennung: Manager, Toolbar, Panels
+- SWT + JFreeChart für GUI-Komponenten
+
+### 9. THREAD-SICHERHEIT
+- GUI-Updates müssen thread-sicher sein (Display.asyncExec)
+- Längere Operationen in separaten Threads
+- StatusUpdater für GUI-Status-Management verwenden
+
+### 10. LOGGING UND DIAGNOSTIK
+- Verwende das bestehende Logging-System (java.util.logging)
+- Füge aussagekräftige Log-Meldungen hinzu
+- Nutze die Diagnostik-Features für Debugging
+
+## EXAMPLE WORKFLOW
+
+```
+1. Aufgabe erhalten: "Implementiere Feature X"
+2. klassenübersicht.txt konsultieren
+3. Relevante Klassen identifizieren
+4. Prüfen ob Code vorhanden ist
+5. Plan erstellen für Implementierung
+6. Falls Code fehlt: Nachfragen
+7. Implementierung als komplette Funktion/Klasse
+8. Als Artifact mit korrekter Dokumentation abgeben
+```
+
+## NICHT ERLAUBT
+
+❌ Direkt drauflos programmieren ohne Analyse
+❌ Code-Snippets oder unvollständige Lösungen
+❌ Neue Klassen ohne Nachfrage erstellen
+❌ Bestehende Architektur ignorieren
+❌ Code außerhalb von Artifacts abgeben
+❌ Funktionen ohne Klassenangabe bei Änderungen
+
+## ERWÜNSCHT
+
+✅ Gründliche Analyse vor Implementierung
+✅ Bestehenden Code erweitern/verbessern
+✅ Vollständige, getestete Lösungen
+✅ Saubere Artifact-Abgabe mit Dokumentation
+✅ Respekt für modulare Architektur
+✅ Thread-sichere GUI-Implementierungen
+
+# ===========================================
+# Ende der Programmieranweisungen
+# Bei Fragen zu diesen Regeln: Nachfragen ist erwünscht!
