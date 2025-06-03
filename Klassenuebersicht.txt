@@ -1,6 +1,6 @@
 # MqlDownloader - Klassenübersicht
-# Generated: 2025-05-30
-# Version: 1.0.0
+# Generated: 2025-06-03
+# Version: 1.1.0 - Erweitert um fehlende Klassen
 #
 # PROJECT DESCRIPTION:
 # MqlDownloader ist eine Java-Desktop-Anwendung für automatisiertes Herunterladen und Analysieren von MQL4/MQL5 Signal-Provider-Daten. Nutzt Selenium WebDriver für Web-Scraping, extrahiert Finanz-Kennzahlen und führt MPDD-Analysen durch.
@@ -28,19 +28,25 @@
 # 
 # Format: <Package>.<Class> | <Description>
 # ========================================================================
+
 ## Default Package
 StartDownloader | Hauptklasse für Initialisierung. Orchestriert WebDriver, ConfigurationManager, Credentials und SignalDownloader.
+
 ## Browser Package
 browser.WebDriverManager | WebDriver-Management für Selenium Chrome-Automatisierung. Konfiguriert Download-Verzeichnisse und Browser-Optionen.
+
 ## Config Package  
 config.ConfigurationManager | Zentrale Konfigurationsverwaltung für Pfade, Verzeichnisse und Anwendungseinstellungen.
 config.Credentials | Datenklasse für Benutzeranmeldedaten (Username/Passwort).
+
 ## Converter Package
 converter.ConversionProgress | Interface für Fortschritts-Callbacks während HTML-zu-TXT Konvertierungen.
 converter.HtmlConverter | Hauptkonverter für HTML-zu-TXT Transformation. Führt MPDD-Filtering durch und löscht schlechte Provider.
+
 ## Downloader Package
 downloader.ProgressCallback | Interface für Download-Fortschritts-Tracking.
 downloader.SignalDownloader | Hauptdownloader für Signal-Provider-Daten. Verwaltet Selenium-Automatisierung.
+
 ## GUI Package
 gui.LogHandler | GUI-Komponente für Live-Log-Ausgabe mit Terminal-Style.
 gui.SetupDialog | Konfigurationsdialog für Download-Geschwindigkeitseinstellungen.
@@ -48,10 +54,13 @@ gui.ButtonPanelManager | Verwaltet Button-Panel der Hauptanwendung.
 gui.ConversionManager | GUI-Manager für HTML-Konvertierungs-Operationen.
 gui.DownloadManager | GUI-Manager für Download-Operationen mit MQL-Version-Umschaltung.
 gui.MqlDownloaderGui | Haupt-GUI-Klasse mit kompletter Benutzeroberfläche.
+
 ## Logging Package
 logging.LoggerManager | Zentrale Logger-Initialisierung für Log4j2.
+
 ## Main Package
 main.MqlDownloaderApp | Hauptanwendungsklasse. Startet ConfigurationManager, Logger und GUI.
+
 ## Utils Package
 utils.BasicDataProvider | Grundlegende Datenwerte-Provider für MPDD-Calculator. Liest TXT-Dateien.
 utils.ChartPoint | Datenklasse für Chart-Koordinaten mit Datum und Wert.
@@ -65,5 +74,7 @@ utils.MonthDetailsExtractor | Spezialisierter Extraktor für monatliche Profit-D
 utils.HtmlContentCache | Caching-Layer für HTML-Inhalte.
 utils.ChartDataExtractor | Extrahiert Chart-Daten für Drawdown-Graphiken.
 utils.StabilityCalculator | Berechnet Stabilitätswerte basierend auf monatlichen Profit-Schwankungen.
+utils.LogTest | Test-Utility für Logger-Funktionalität.
+
 ## Calculators Package
 calculators.MPDDCalculator | Haupt-Calculator für MPDD-Berechnungen (3/6/9/12-Monate). Berechnet Month Profit Divided by Drawdown.

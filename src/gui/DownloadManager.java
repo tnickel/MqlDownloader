@@ -25,6 +25,7 @@ public class DownloadManager {
     private WebDriver currentDriver;
     private volatile boolean stopRequested;
     private Thread downloadThread;
+    private boolean limitReachedLogged = false; // Flag um mehrfaches Loggen zu verhindern
 
     public DownloadManager(ConfigurationManager configManager, LogHandler logHandler, ButtonPanelManager buttonManager) {
         this.configManager = configManager;
@@ -34,80 +35,114 @@ public class DownloadManager {
     }
 
     public void startDownload(String version) {
-        logHandler.log("Starte " + version + " Download Prozess...");
+        logHandler.log("=== STARTE " + version + " DOWNLOAD-PROZESS ===");
         stopRequested = false;
+        limitReachedLogged = false; // Reset bei neuem Download
         buttonManager.updateCounter(version, 0);
         setupUIForDownload(version);
 
         String downloadPath = configManager.getRootDirPath() + "\\download\\" + version.toLowerCase();
-        logHandler.log("Download Pfad: " + downloadPath);
+        logHandler.log("Download-Verzeichnis: " + downloadPath);
         configManager.setDownloadPath(downloadPath);
         
-        // Protokoll f�r die aktuelle MQL-Version zur�cksetzen
+        // Protokoll für die aktuelle MQL-Version zurücksetzen
         String mqlVersionProtokoll = version.toLowerCase();
         downloadProtokoll.resetProtokoll(mqlVersionProtokoll);
-        downloadProtokoll.log(mqlVersionProtokoll, "Download-Prozess gestartet");
+        downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD-PROZESS GESTARTET ===");
         
         // MQL-Version auf mt4 oder mt5 setzen
         String mqlVersion = version.equals("MQL4") ? "mt4" : "mt5";
+        int limit = version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
+        
         try {
             configManager.setMqlVersion(mqlVersion);
-            logHandler.log("MQL-Version gesetzt auf: " + mqlVersion + " mit URL: " + configManager.getBaseUrl());
+            logHandler.log("MQL-Version: " + mqlVersion + " | Limit: " + limit + " Provider | URL: " + configManager.getBaseUrl());
         } catch (IOException e) {
             logHandler.logError("Fehler beim Setzen der MQL-Version: " + e.getMessage(), e);
         }
         
         downloadThread = new Thread(() -> {
             try {
-                logger.info("Initialisiere Verzeichnisse...");
+                logging.LoggerManager.safeLog("Initialisiere Verzeichnisse...");
                 configManager.initializeDirectories();
                 
-                logger.info("Setze WebDriver auf...");
+                logging.LoggerManager.safeLog("Setze WebDriver auf...");
                 WebDriverManager webDriverManager = new WebDriverManager(configManager.getDownloadPath());
                 currentDriver = webDriverManager.initializeDriver();
 
-                logger.info("Starte Download Prozess...");
+                logging.LoggerManager.safeLog("Starte Download Prozess...");
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
                 downloader.setDownloadProtokoll(downloadProtokoll);
+                
+                // VERBESSERTE ProgressCallback mit thread-sicherem Logging
                 downloader.setProgressCallback(count -> {
-                    buttonManager.updateCounter(version, count);
-                    int limit = version.equals("MQL4") ? 
-                        configManager.getMql4Limit() : 
-                        configManager.getMql5Limit();
-                    if (count >= limit) {
-                        stopRequested = true;
-                        SwingUtilities.invokeLater(() -> {
-                            logHandler.log(version + " Download erfolgreich beendet. Limit von " + limit + " erreicht.");
-                            downloadProtokoll.log(mqlVersionProtokoll, "Download abgeschlossen - Limit von " + limit + " erreicht");
-                            cleanupDownload();
-                        });
-                    }
+                    SwingUtilities.invokeLater(() -> {
+                        buttonManager.updateCounter(version, count);
+                        
+                        // Detailliertes Progress-Logging (nur für wichtige Meilensteine)
+                        if (count % 5 == 0 || count <= 3) { // Alle 5 Provider oder die ersten 3
+                            logHandler.log(String.format("Fortschritt %s: %d/%d Provider verarbeitet", 
+                                         version, count, limit));
+                        }
+                        
+                        // Limit-Check nur einmal loggen
+                        if (count >= limit && !limitReachedLogged) {
+                            limitReachedLogged = true;
+                            stopRequested = true;
+                            
+                            logHandler.log("=== " + version + " DOWNLOAD ABGESCHLOSSEN ===");
+                            logHandler.log("SUCCESS - LIMIT ERREICHT: " + count + " von " + limit + " Providern erfolgreich verarbeitet");
+                            downloadProtokoll.log(mqlVersionProtokoll, 
+                                "=== DOWNLOAD ERFOLGREICH ABGESCHLOSSEN === Limit erreicht: " + count + "/" + limit + " Provider");
+                            
+                            // Trigger cleanup in separate thread um UI nicht zu blockieren
+                            new Thread(this::cleanupDownload).start();
+                        }
+                    });
                 });
                 
                 downloader.startDownloadProcess();
 
             } catch (Exception e) {
                 if (!stopRequested) {
-                    logHandler.logError("Fehler w�hrend " + version + " Download: " + e.getMessage(), e);
-                    downloadProtokoll.log(mqlVersionProtokoll, "Download mit Fehler beendet: " + e.getMessage());
+                    String errorMsg = "Fehler während " + version + " Download: " + e.getMessage();
+                    logHandler.logError(errorMsg, e);
+                    logging.LoggerManager.safeLogError(errorMsg, e);
+                    downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD MIT FEHLER BEENDET === " + e.getMessage());
+                    
                     SwingUtilities.invokeLater(() -> {
                         JOptionPane.showMessageDialog(null,
-                            "Fehler beim Download: " + e.getMessage(),
-                            "Fehler",
+                            "Download-Fehler bei " + version + ":\n" + e.getMessage(),
+                            "Download Fehler",
                             JOptionPane.ERROR_MESSAGE);
                         cleanupDownload();
                     });
                 }
             } finally {
-                cleanupDownload();
+                if (!limitReachedLogged) { // Nur loggen wenn nicht bereits durch Limit-Erreichen geloggt
+                    SwingUtilities.invokeLater(() -> {
+                        if (stopRequested) {
+                            logHandler.log("=== " + version + " DOWNLOAD GESTOPPT ===");
+                            downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD MANUELL GESTOPPT ===");
+                        } else {
+                            logHandler.log("=== " + version + " DOWNLOAD BEENDET ===");
+                            downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD REGULÄR BEENDET ===");
+                        }
+                    });
+                }
+                
+                // Cleanup falls noch nicht durch Limit-Erreichen ausgelöst
+                if (!limitReachedLogged) {
+                    cleanupDownload();
+                }
             }
         });
         downloadThread.start();
     }
 
     public void stopDownload() {
-        logHandler.log("Stoppe Download Prozess...");
+        logHandler.log("STOPPE Download-Prozess...");
         stopRequested = true;
         buttonManager.getStopButton().setEnabled(false);
         
@@ -117,14 +152,16 @@ public class DownloadManager {
                 String mqlVersionProtokoll = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
                 
                 // Protokolliere den manuellen Stop
-                downloadProtokoll.log(mqlVersionProtokoll, "Download-Prozess manuell gestoppt");
+                downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD MANUELL GESTOPPT ===");
+                
+                SwingUtilities.invokeLater(() -> {
+                    logHandler.log("=== DOWNLOAD-PROZESS MANUELL GESTOPPT ===");
+                });
                 
                 cleanupDownload();
-                SwingUtilities.invokeLater(() -> {
-                    logHandler.log("Download Prozess manuell gestoppt");
-                });
             } catch (Exception e) {
                 logHandler.logError("Fehler beim Stoppen des Downloads: " + e.getMessage(), e);
+                logging.LoggerManager.safeLogError("Fehler beim Stoppen des Downloads", e);
             }
         }).start();
     }
@@ -139,30 +176,44 @@ public class DownloadManager {
         buttonManager.getMql5LimitField().setEnabled(false);
         buttonManager.getDownloadDaysField().setEnabled(false);
         
-        activeButton.setBackground(new Color(144, 238, 144));
+        activeButton.setBackground(new Color(144, 238, 144)); // Hellgrün für aktiven Download
         activeButton.setEnabled(false);
         inactiveButton.setEnabled(false);
-        inactiveButton.setBackground(new Color(200, 200, 200));
+        inactiveButton.setBackground(new Color(200, 200, 200)); // Grau für inaktiven Button
         buttonManager.getStopButton().setEnabled(true);
+        
+        // Update Button Text to show active state
+        activeButton.setText(version + " (LÄUFT...)");
     }
 
+    /**
+     * VERBESSERTE cleanupDownload Methode mit thread-sicherem Logging
+     */
     private void cleanupDownload() {
         if (currentDriver != null) {
             try {
-                logger.info("Schlie�e WebDriver...");
+                logging.LoggerManager.safeLog("Schließe WebDriver...");
                 currentDriver.quit();
+                logging.LoggerManager.safeLog("WebDriver erfolgreich geschlossen");
             } catch (Exception e) {
-                logger.warn("Fehler beim Schlie�en des WebDrivers", e);
+                logging.LoggerManager.safeLogError("Fehler beim Schließen des WebDrivers: " + e.getMessage(), e);
             } finally {
                 currentDriver = null;
             }
         }
         
         SwingUtilities.invokeLater(() -> {
+            // Reset UI state
             buttonManager.resetButtons();
             buttonManager.getMql4LimitField().setEnabled(true);
             buttonManager.getMql5LimitField().setEnabled(true);
             buttonManager.getDownloadDaysField().setEnabled(true);
+            
+            // Reset button texts
+            buttonManager.getMql4Button().setText("MQL4 Download");
+            buttonManager.getMql5Button().setText("MQL5 Download");
+            
+            logHandler.log("UI-Status zurückgesetzt - Bereit für neue Downloads");
         });
     }
 
@@ -177,6 +228,20 @@ public class DownloadManager {
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+        }
+    }
+    
+    /**
+     * Gibt detaillierte Informationen über den aktuellen Download-Status
+     */
+    public String getDownloadStatus() {
+        if (isDownloadRunning()) {
+            String version = configManager.getMqlVersion().startsWith("mt4") ? "MQL4" : "MQL5";
+            int limit = version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
+            
+            return String.format("%s Download läuft (Limit: %d Provider)", version, limit);
+        } else {
+            return "Kein Download aktiv";
         }
     }
 }
