@@ -133,6 +133,119 @@ public class SignalDownloader {
     }
 
     /**
+     * NEUE METHODE: Ermittelt die maximale Seitenzahl aus der Pagination
+     */
+    private int getMaxPageNumber() {
+        try {
+            logger.info("Ermittle maximale Seitenzahl aus der Pagination...");
+            
+            // Lade die erste Seite, falls nicht bereits geladen
+            if (!driver.getCurrentUrl().contains("/signals/")) {
+                driver.get(baseUrl);
+                Thread.sleep(getRandomWaitTime());
+            }
+            
+            // Verschiedene Selektoren für Pagination-Elemente
+            List<String> paginationSelectors = Arrays.asList(
+                ".paging a",                      // Standard Pagination Links
+                "a.paging__link",                 // Alternative Klasse
+                ".pagination a",                  // Alternative Pagination
+                "[class*='paging'] a",            // Beliebige Klasse die 'paging' enthält
+                "a[href*='/page']"                // Links die '/page' enthalten
+            );
+            
+            int maxPage = 1;
+            boolean paginationFound = false;
+            
+            for (String selector : paginationSelectors) {
+                try {
+                    List<WebElement> pageLinks = driver.findElements(By.cssSelector(selector));
+                    
+                    if (!pageLinks.isEmpty()) {
+                        logger.debug("Pagination-Links gefunden mit Selektor '{}': {} Links", selector, pageLinks.size());
+                        paginationFound = true;
+                        
+                        // Durchsuche alle Pagination-Links
+                        for (WebElement link : pageLinks) {
+                            String linkText = link.getText().trim();
+                            String href = link.getAttribute("href");
+                            
+                            // Versuche Seitenzahl aus Text zu extrahieren
+                            try {
+                                int pageNum = Integer.parseInt(linkText);
+                                if (pageNum > maxPage) {
+                                    maxPage = pageNum;
+                                }
+                            } catch (NumberFormatException e) {
+                                // Text ist keine Zahl, versuche aus href zu extrahieren
+                                if (href != null && href.contains("/page")) {
+                                    String pageNumStr = href.replaceAll(".*page(\\d+).*", "$1");
+                                    try {
+                                        int pageNum = Integer.parseInt(pageNumStr);
+                                        if (pageNum > maxPage) {
+                                            maxPage = pageNum;
+                                        }
+                                    } catch (NumberFormatException ex) {
+                                        // Ignoriere, wenn keine Nummer extrahiert werden kann
+                                    }
+                                }
+                            }
+                        }
+                        
+                        // Wenn Pagination gefunden wurde, breche die Suche ab
+                        break;
+                    }
+                } catch (Exception e) {
+                    logger.debug("Fehler mit Selektor '{}': {}", selector, e.getMessage());
+                }
+            }
+            
+            // Falls keine Pagination gefunden wurde, versuche alternative Methode
+            if (!paginationFound) {
+                logger.warn("Keine Pagination-Elemente gefunden, versuche alternative Methode...");
+                
+                // Suche nach dem "Last Page" Link oder ähnlichem
+                try {
+                    // Suche nach dem letzten numerischen Link
+                    List<WebElement> allLinks = driver.findElements(By.tagName("a"));
+                    for (WebElement link : allLinks) {
+                        String href = link.getAttribute("href");
+                        if (href != null && href.matches(".*page\\d+$")) {
+                            String pageNumStr = href.replaceAll(".*page(\\d+)$", "$1");
+                            try {
+                                int pageNum = Integer.parseInt(pageNumStr);
+                                if (pageNum > maxPage) {
+                                    maxPage = pageNum;
+                                }
+                            } catch (NumberFormatException e) {
+                                // Ignoriere
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.error("Alternative Methode zur Pagination-Erkennung fehlgeschlagen: {}", e.getMessage());
+                }
+            }
+            
+            logger.info("Maximale Seitenzahl ermittelt: {} Seiten", maxPage);
+            
+            // Protokolliere die ermittelte Seitenzahl
+            if (downloadProtokoll != null) {
+                String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+                downloadProtokoll.logSystemEvent(mqlVersionForLog, "PAGINATION ERKANNT", 
+                    "Maximale Seitenzahl: " + maxPage);
+            }
+            
+            return maxPage;
+            
+        } catch (Exception e) {
+            logger.error("Fehler beim Ermitteln der maximalen Seitenzahl: {}", e.getMessage(), e);
+            // Im Fehlerfall geben wir 0 zurück, was bedeutet, dass die alte Logik verwendet wird
+            return 0;
+        }
+    }
+
+    /**
      * KORRIGIERTE startDownloadProcess Methode ohne problematisches LogManager.shutdown()
      */
     public void startDownloadProcess() {
@@ -262,7 +375,7 @@ public class SignalDownloader {
     }
 
     /**
-     * KORRIGIERTE processSignalProviders Methode mit korrekter Limit-Prüfung
+     * ERWEITERTE processSignalProviders Methode mit Pagination-Erkennung
      */
     private void processSignalProviders() {
         int currentPage = 1;
@@ -279,12 +392,43 @@ public class SignalDownloader {
                 "Limit: " + mqlLimit + " Provider | URL: " + baseUrl);
         }
 
+        // NEUE LOGIK: Ermittle maximale Seitenzahl
+        int maxPageNumber = 0;
+        try {
+            // Lade erste Seite für Pagination-Analyse
+            driver.get(baseUrl);
+            Thread.sleep(getRandomWaitTime());
+            maxPageNumber = getMaxPageNumber();
+        } catch (Exception e) {
+            logger.warn("Fehler beim Ermitteln der maximalen Seitenzahl: {}", e.getMessage());
+            // Fahre mit alter Logik fort, wenn Pagination-Erkennung fehlschlägt
+        }
+
         while (hasNextPage && !stopRequested && totalProvidersProcessed < mqlLimit) {
+            // NEUE LOGIK: Prüfe ob maximale Seitenzahl erreicht wurde
+            if (maxPageNumber > 0 && currentPage > maxPageNumber) {
+                logger.info("Maximale Seitenzahl ({}) erreicht - beende Download-Prozess", maxPageNumber);
+                hasNextPage = false;
+                break;
+            }
+            
             String pageUrl = baseUrl + "/page" + currentPage;
             try {
-                logger.info("Verarbeite Seite {} - Provider {}/{}", currentPage, totalProvidersProcessed, mqlLimit);
+                logger.info("Verarbeite Seite {} von {} - Provider {}/{}", 
+                           currentPage, 
+                           maxPageNumber > 0 ? maxPageNumber : "unbekannt", 
+                           totalProvidersProcessed, 
+                           mqlLimit);
                 
-                processSignalProvidersPage(pageUrl);
+                // NEUE LOGIK: Prüfe ob Seite Provider enthält
+                boolean pageHasProviders = processSignalProvidersPage(pageUrl);
+                
+                if (!pageHasProviders) {
+                    logger.info("Keine Provider auf Seite {} gefunden - Ende der Liste erreicht", currentPage);
+                    hasNextPage = false;
+                    break;
+                }
+                
                 currentPage++;
                 consecutiveErrors = 0; // Reset bei erfolgreichem Processing
                 
@@ -381,7 +525,7 @@ public class SignalDownloader {
         }
         
         // Detaillierte Abschluss-Logs
-        String reason = determineEndReason(hasNextPage, totalProvidersProcessed, mqlLimit, consecutiveErrors);
+        String reason = determineEndReason(hasNextPage, totalProvidersProcessed, mqlLimit, consecutiveErrors, maxPageNumber, currentPage);
         logger.info("Download-Prozess beendet - {}: {} Provider verarbeitet, {} Seiten durchsucht", 
                    reason, totalProvidersProcessed, currentPage - 1);
         
@@ -399,10 +543,10 @@ public class SignalDownloader {
     }
     
     /**
-     * KORRIGIERTE processSignalProvidersPage Methode mit korrekter Limit-Prüfung
+     * ERWEITERTE processSignalProvidersPage Methode die boolean zurückgibt
      */
-    private void processSignalProvidersPage(String pageUrl) {
-        if (stopRequested) return;
+    private boolean processSignalProvidersPage(String pageUrl) {
+        if (stopRequested) return false;
 
         try {
             driver.get(pageUrl);
@@ -411,13 +555,15 @@ public class SignalDownloader {
             boolean pageLoaded = waitForPageElements();
             
             if (!pageLoaded) {
-                throw new RuntimeException("Seite konnte nicht geladen werden oder keine Signal-Provider gefunden");
+                logger.warn("Seite konnte nicht geladen werden oder keine Signal-Provider gefunden für: {}", pageUrl);
+                return false;
             }
 
             List<WebElement> providerLinks = findProviderLinks();
 
             if (providerLinks.isEmpty()) {
-                throw new RuntimeException("Keine Signal-Provider gefunden");
+                logger.info("Keine Signal-Provider auf Seite {} gefunden", pageUrl);
+                return false;
             }
 
             logger.info("Seite {}: {} Provider gefunden (Gesamt bisher: {})", 
@@ -441,6 +587,8 @@ public class SignalDownloader {
                     }
                 }
             }
+            
+            return true; // Seite hatte Provider
             
         } catch (Exception e) {
             ErrorType errorType = classifyError(e);
@@ -681,7 +829,7 @@ public class SignalDownloader {
     }
 
     /**
-     * KORRIGIERTE processSignalProvider Methode mit korrekter Numerierung
+     * KORRIGIERTE processSignalProvider Methode mit fortlaufender Numerierung
      */
     private void processSignalProvider(String pageUrl, int index) {
         if (stopRequested) return;
@@ -706,15 +854,18 @@ public class SignalDownloader {
                 providerId = providerId.substring(0, providerId.indexOf("?"));
             }
 
-            logger.info("STARTE Provider: '{}' (ID: {}) - Index {} auf Seite", 
-                       providerName, providerId, index);
+            // FORTLAUFENDE NUMERIERUNG: Verwende totalProvidersProcessed für die globale Nummer
+            int globalProviderNumber = totalProvidersProcessed;
+
+            logger.info("STARTE Provider: '{}' (ID: {}) - Fortlaufende Nr. {} (Index {} auf Seite)", 
+                       providerName, providerId, globalProviderNumber + 1, index);
 
             // Bestimme die aktuelle MQL-Version für das Protokoll
             String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
             
-            // Protokolliere den Versuch
+            // Protokolliere den Versuch mit FORTLAUFENDER NUMMER
             if (downloadProtokoll != null) {
-                downloadProtokoll.logAttempt(mqlVersion, providerName, providerId, index);
+                downloadProtokoll.logAttempt(mqlVersion, providerName, providerId, globalProviderNumber);
             }
 
             // Prüfe, ob Dateien kürzlich heruntergeladen wurden
@@ -722,10 +873,10 @@ public class SignalDownloader {
                 // KORRIGIERTE Fortschrittsanzeige für übersprungene Provider
                 updateProgress(providerName, "ÜBERSPRUNGEN (Dateien jünger als " + configManager.getDownloadDays() + " Tage)", false);
                 
-                // Protokolliere das Überspringen mit Index
+                // Protokolliere das Überspringen mit FORTLAUFENDER NUMMER
                 if (downloadProtokoll != null) {
                     downloadProtokoll.logSkipped(mqlVersion, providerName, 
-                        "Dateien sind jünger als " + configManager.getDownloadDays() + " Tage", index);
+                        "Dateien sind jünger als " + configManager.getDownloadDays() + " Tage", globalProviderNumber);
                 }
                 return;
             }
@@ -760,9 +911,9 @@ public class SignalDownloader {
                 // KORRIGIERTE Fortschrittsanzeige für erfolgreich verarbeitete Provider
                 updateProgress(providerName, "ERFOLGREICH HERUNTERGELADEN", true);
                 
-                // Protokolliere den erfolgreichen Download mit Index
+                // Protokolliere den erfolgreichen Download mit FORTLAUFENDER NUMMER
                 if (downloadProtokoll != null) {
-                    downloadProtokoll.logSuccess(mqlVersion, providerName, index);
+                    downloadProtokoll.logSuccess(mqlVersion, providerName, globalProviderNumber);
                 }
             }
             
@@ -781,25 +932,27 @@ public class SignalDownloader {
                     throw new RuntimeException("Kritischer Provider-Fehler", e);
                 }
                 
-                String errorMsg = "Fehler beim Verarbeiten von Provider '" + providerName + "' (ID: " + providerId + ", Index " + index + "): " + e.getMessage();
+                // FORTLAUFENDE NUMERIERUNG auch in Fehlermeldungen
+                int globalProviderNumber = totalProvidersProcessed;
+                String errorMsg = "Fehler beim Verarbeiten von Provider '" + providerName + "' (ID: " + providerId + ", Fortlaufende Nr. " + (globalProviderNumber + 1) + "): " + e.getMessage();
                 
                 switch (errorType) {
                     case RECOVERABLE:
                         logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
-                        // Protokolliere den Fehlschlag und versuche Recovery
+                        // Protokolliere den Fehlschlag mit FORTLAUFENDER NUMMER
                         if (downloadProtokoll != null) {
                             String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Recovery-fähiger Fehler: " + e.getMessage(), index);
+                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Recovery-fähiger Fehler: " + e.getMessage(), globalProviderNumber);
                         }
                         throw e; // Weiterwerfen für Recovery in höherer Ebene
                         
                     case NON_CRITICAL:
                     default:
                         logger.warn("NICHT-KRITISCHER FEHLER - {}", errorMsg);
-                        // Protokolliere den Fehlschlag aber fahre fort
+                        // Protokolliere den Fehlschlag mit FORTLAUFENDER NUMMER
                         if (downloadProtokoll != null) {
                             String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Nicht-kritischer Fehler: " + e.getMessage(), index);
+                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Nicht-kritischer Fehler: " + e.getMessage(), globalProviderNumber);
                         }
                         
                         // KORRIGIERTE Fortschrittsanzeige für fehlgeschlagene Provider
@@ -1053,15 +1206,18 @@ public class SignalDownloader {
     }
     
     /**
-     * KORRIGIERTE determineEndReason Methode mit korrekten Variablen
+     * ERWEITERTE determineEndReason Methode mit maxPageNumber Parameter
      */
-    private String determineEndReason(boolean hasNextPage, int processedProviders, int mqlLimit, int consecutiveErrors) {
+    private String determineEndReason(boolean hasNextPage, int processedProviders, int mqlLimit, 
+                                    int consecutiveErrors, int maxPageNumber, int currentPage) {
         if (stopRequested) {
             return "BENUTZER-STOPP";
         } else if (totalProvidersProcessed >= mqlLimit) {
             return "LIMIT ERREICHT (" + mqlLimit + ")";
         } else if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
             return "ZU VIELE FEHLER (" + consecutiveErrors + ")";
+        } else if (maxPageNumber > 0 && currentPage > maxPageNumber) {
+            return "MAXIMALE SEITENZAHL ERREICHT (" + maxPageNumber + ")";
         } else if (!hasNextPage) {
             return "KEINE WEITEREN SEITEN";
         } else {
