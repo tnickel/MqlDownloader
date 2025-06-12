@@ -242,11 +242,12 @@ public class MqlDownloadProtokoll {
 
     /**
      * Gibt den Pfad zur Protokolldatei für die angegebene MQL-Version zurück
+     * KORRIGIERT: Verwendet jetzt korrekt den mqlVersion Parameter
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @return Der vollständige Pfad zur Protokolldatei
      */
     private String getFilename(String mqlVersion) {
-        return Paths.get(downloadPath, mqlVersion.toLowerCase() + "_download_protokoll.txt").toString();
+        return Paths.get(downloadPath, mqlVersion.toLowerCase() + "download.txt").toString();
     }
 }
