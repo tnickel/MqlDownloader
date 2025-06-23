@@ -31,8 +31,14 @@ public class ButtonPanelManager {
     }
 
     private void initializeComponents() {
-        mql4Button = createStyledButton("MQL4 Download");
-        mql5Button = createStyledButton("MQL5 Download");
+        mql4Button = createStyledButton(
+                "MQL4 Download",
+                UIManager.getIcon("FileView.directoryIcon"),
+                "Startet den Download der MQL4 Signale");
+        mql5Button = createStyledButton(
+                "MQL5 Download",
+                UIManager.getIcon("FileView.directoryIcon"),
+                "Startet den Download der MQL5 Signale");
         stopButton = createStopButton();
         convertButton = createConvertButton();
         doAllButton = createDoAllButton();
@@ -86,7 +92,7 @@ public class ButtonPanelManager {
         return panel;
     }
 
-    // Neues Panel für Download Days
+    // Neues Panel fÃ¼r Download Days
     public JPanel createDownloadDaysPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 5));
         
@@ -97,16 +103,16 @@ public class ButtonPanelManager {
         downloadDaysField = new JTextField(5);
         downloadDaysField.setText(String.valueOf(configManager.getDownloadDays()));
         downloadDaysField.setFont(new Font("Arial", Font.PLAIN, 14));
-        downloadDaysField.setToolTipText("<html>Legt fest, wie alt die Dateien sein müssen, bevor sie neu heruntergeladen werden.<br>"+
-                                          "Dies ist eine Optimierungsmaßnahme, um den Download-Prozess zu beschleunigen.<br>"+
-                                          "Bei einem Wert von 5 werden Dateien, die jünger als 5 Tage sind, nicht erneut heruntergeladen.<br>"+
+        downloadDaysField.setToolTipText("<html>Legt fest, wie alt die Dateien sein mÃ¼ssen, bevor sie neu heruntergeladen werden.<br>"+
+                                          "Dies ist eine OptimierungsmaÃŸnahme, um den Download-Prozess zu beschleunigen.<br>"+
+                                          "Bei einem Wert von 5 werden Dateien, die jÃ¼nger als 5 Tage sind, nicht erneut heruntergeladen.<br>"+
                                           "Ein Wert von 0 bewirkt, dass alle Dateien bei jedem Durchlauf neu heruntergeladen werden.</html>");
         
-        // Verbesserte Validierung: Füge NumericRangeFilter hinzu
+        // Verbesserte Validierung: FÃ¼ge NumericRangeFilter hinzu
         ((AbstractDocument)downloadDaysField.getDocument()).setDocumentFilter(
             new NumericRangeFilter(0, 20, downloadDaysField, "Download Tage"));
         
-        // Fokus-Listener für Eingabevalidierung
+        // Fokus-Listener fÃ¼r Eingabevalidierung
         addDownloadDaysFieldListener(downloadDaysField);
         panel.add(downloadDaysField);
         
@@ -114,7 +120,7 @@ public class ButtonPanelManager {
     }
 
     /**
-     * Neues Panel für Convert-Button mit Hinweistext
+     * Neues Panel fÃ¼r Convert-Button mit Hinweistext
      */
     public JPanel createConvertPanel() {
         JPanel panel = new JPanel();
@@ -126,7 +132,7 @@ public class ButtonPanelManager {
         panel.add(buttonPanel);
         
         // Hinweistext unter dem Button
-        JLabel hinweisLabel = new JLabel("<html><i>Hinweis: Provider mit 3MPDD &lt; 0.5 werden automatisch gelöscht</i></html>");
+        JLabel hinweisLabel = new JLabel("<html><i>Hinweis: Provider mit 3MPDD &lt; 0.5 werden automatisch gelÃ¶scht</i></html>");
         hinweisLabel.setFont(hinweisLabel.getFont().deriveFont(Font.ITALIC, 11f));
         hinweisLabel.setForeground(Color.GRAY);
         hinweisLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
@@ -168,14 +174,14 @@ public class ButtonPanelManager {
                         configManager.getMql5Limit()));
                     JOptionPane.showMessageDialog(null,
                         "Bitte geben Sie eine Zahl zwischen 1 und 5000 ein.",
-                        "Ungültige Eingabe",
+                        "UngÃ¼ltige Eingabe",
                         JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
     }
     
-    // Verbesserter Listener für das Download Days Feld
+    // Verbesserter Listener fÃ¼r das Download Days Feld
     private void addDownloadDaysFieldListener(JTextField field) {
         field.addFocusListener(new FocusAdapter() {
             @Override
@@ -190,52 +196,72 @@ public class ButtonPanelManager {
                     field.setText(String.valueOf(configManager.getDownloadDays()));
                     JOptionPane.showMessageDialog(null,
                         "Bitte geben Sie eine Zahl zwischen 0 und 20 ein.",
-                        "Ungültige Eingabe",
+                        "UngÃ¼ltige Eingabe",
                         JOptionPane.ERROR_MESSAGE);
                 }
             }
         });
     }
 
-    private JButton createStyledButton(String text) {
-        JButton button = new JButton(text);
+    private JButton createStyledButton(String text, Icon icon, String tooltip) {
+        JButton button = new JButton(text, icon);
         button.setFont(new Font("Arial", Font.BOLD, 14));
         button.setBackground(new Color(240, 240, 240));
         button.setForeground(Color.BLACK);
         button.setFocusPainted(false);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        if (tooltip != null) {
+            button.setToolTipText(tooltip);
+        }
         return button;
     }
 
+    private JButton createStyledButton(String text) {
+        return createStyledButton(text, null, null);
+    }
+
     private JButton createStopButton() {
-        JButton button = new JButton("Stop Download");
+        JButton button = new JButton(
+                "Stop Download",
+                UIManager.getIcon("OptionPane.errorIcon"));
         button.setFont(new Font("Arial", Font.BOLD, 14));
         button.setBackground(new Color(220, 53, 69));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("Stoppt laufende Downloads");
         return button;
     }
 
     private JButton createConvertButton() {
-        JButton button = new JButton("Convert");
+        JButton button = new JButton(
+                "Convert",
+                UIManager.getIcon("FileView.fileIcon"));
         button.setFont(new Font("Arial", Font.BOLD, 14));
         button.setBackground(new Color(65, 105, 225));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("Konvertiert heruntergeladene HTML Dateien");
         return button;
     }
 
     private JButton createDoAllButton() {
-        JButton button = new JButton("Do all at Once");
+        JButton button = new JButton(
+                "Do all at Once",
+                UIManager.getIcon("OptionPane.informationIcon"));
         button.setFont(new Font("Arial", Font.BOLD, 14));
         button.setBackground(new Color(50, 205, 50));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("FÃ¼hrt alle Schritte nacheinander aus");
         return button;
     }
 
@@ -267,7 +293,7 @@ public class ButtonPanelManager {
         downloadDaysField.setEnabled(true);
     }
 
-    // Getter für alle Buttons und Felder
+    // Getter fÃ¼r alle Buttons und Felder
     public JButton getMql4Button() { return mql4Button; }
     public JButton getMql5Button() { return mql5Button; }
     public JButton getStopButton() { return stopButton; }
@@ -279,7 +305,7 @@ public class ButtonPanelManager {
     public JProgressBar getConvertProgress() { return convertProgress; }
     public JLabel getConvertStatusLabel() { return convertStatusLabel; }
     
-    // Neue DocumentFilter-Klasse für Zahlenvalidierung
+    // Neue DocumentFilter-Klasse fÃ¼r Zahlenvalidierung
     private class NumericRangeFilter extends DocumentFilter {
         private final int min;
         private final int max;
@@ -301,7 +327,7 @@ public class ButtonPanelManager {
             if (isValid(newValue)) {
                 super.insertString(fb, offset, string, attr);
             } else {
-                // Warnung anzeigen, wenn nicht gültig
+                // Warnung anzeigen, wenn nicht gÃ¼ltig
                 showWarning();
             }
         }
@@ -315,7 +341,7 @@ public class ButtonPanelManager {
             String afterOffset = currentText.substring(offset + length);
             String newValue = beforeOffset + text + afterOffset;
             
-            // Wenn leer oder nur ein Minus, erlauben (temporär)
+            // Wenn leer oder nur ein Minus, erlauben (temporÃ¤r)
             if (newValue.isEmpty() || (newValue.equals("-") && min < 0)) {
                 super.replace(fb, offset, length, text, attrs);
                 return;
@@ -324,13 +350,13 @@ public class ButtonPanelManager {
             if (isValid(newValue)) {
                 super.replace(fb, offset, length, text, attrs);
             } else {
-                // Warnung anzeigen, wenn nicht gültig
+                // Warnung anzeigen, wenn nicht gÃ¼ltig
                 showWarning();
             }
         }
         
         private boolean isValid(String value) {
-            if (value.isEmpty()) return true; // Leere Eingabe erlauben (temporär)
+            if (value.isEmpty()) return true; // Leere Eingabe erlauben (temporÃ¤r)
             
             try {
                 int intValue = Integer.parseInt(value);
@@ -345,7 +371,7 @@ public class ButtonPanelManager {
                 Toolkit.getDefaultToolkit().beep();
                 JOptionPane.showMessageDialog(field,
                     fieldName + " muss zwischen " + min + " und " + max + " liegen.",
-                    "Ungültiger Wert",
+                    "UngÃ¼ltiger Wert",
                     JOptionPane.WARNING_MESSAGE);
                 field.setText(String.valueOf(configManager.getDownloadDays()));
             });
