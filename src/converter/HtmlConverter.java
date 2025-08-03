@@ -65,13 +65,20 @@ public class HtmlConverter {
         try {
             totalFiles += countHtmlFiles(Paths.get(downloadPath, "mql4"));
             totalFiles += countHtmlFiles(Paths.get(downloadPath, "mql5"));
+            logger.info("Insgesamt " + totalFiles + " HTML-Dateien zu verarbeiten");
         } catch (IOException e) {
             logger.error("Error counting files", e);
         }
         int currentFile = 0;
+        
+        // MQL4 Verzeichnis verarbeiten
         Path mql4Path = Paths.get(downloadPath, "mql4");
+        logger.info("Starte Verarbeitung von MQL4-Dateien...");
         currentFile = processDirectory(mql4Path, currentFile, totalFiles);
+        
+        // MQL5 Verzeichnis verarbeiten
         Path mql5Path = Paths.get(downloadPath, "mql5");
+        logger.info("Starte Verarbeitung von MQL5-Dateien...");
         currentFile = processDirectory(mql5Path, currentFile, totalFiles);
         
         // Abschließende Log-Einträge
@@ -87,17 +94,24 @@ public class HtmlConverter {
     private int processDirectory(Path directory, int currentFile, int totalFiles) {
         try {
             if (!Files.exists(directory)) {
+                logger.info("Verzeichnis existiert nicht: " + directory);
                 return currentFile;
             }
-            List<Path> htmlFiles = Files.walk(directory)
+            
+            // NUR direkte Dateien im Verzeichnis, KEINE Unterverzeichnisse
+            List<Path> htmlFiles = Files.list(directory)
+                .filter(path -> Files.isRegularFile(path))
                 .filter(path -> path.toString().endsWith("_root.html"))
                 .collect(Collectors.toList());
+                
+            logger.info("Verarbeite Verzeichnis: " + directory + " - " + htmlFiles.size() + " HTML-Dateien gefunden");
+            
             for (Path htmlFile : htmlFiles) {
                 convertHtmlFile(htmlFile);
                 currentFile++;
                 updateProgress(
                     (int)((currentFile / (double)totalFiles) * 100),
-                    String.format("Konvertiere Datei %d von %d", currentFile, totalFiles)
+                    String.format("Konvertiere Datei %d von %d (%s)", currentFile, totalFiles, htmlFile.getFileName())
                 );
             }
         } catch (IOException e) {
@@ -116,9 +130,13 @@ public class HtmlConverter {
         if (!Files.exists(directory)) {
             return 0;
         }
-        return (int) Files.walk(directory)
+        // NUR direkte Dateien zählen, KEINE Unterverzeichnisse
+        int count = (int) Files.list(directory)
+            .filter(path -> Files.isRegularFile(path))
             .filter(path -> path.toString().endsWith("_root.html"))
             .count();
+        logger.info("Gefunden: " + count + " HTML-Dateien in " + directory);
+        return count;
     }
     
     private void convertHtmlFile(Path htmlFile) throws IOException {
@@ -138,8 +156,8 @@ public class HtmlConverter {
             logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) für " + htmlFileName + " - Dateien werden gelöscht");
             deleteRelatedFiles(htmlFileName);
             
-            // Log-Eintrag für gelöschten Provider
-            logProviderAction(providerName, mpdd3, "GELÖSCHT - 3MPDD < 0.5");
+            // Log-Eintrag für gelöschten Provider mit Dateipfad
+            logProviderAction(providerName, mpdd3, "GELÖSCHT - 3MPDD < 0.5", htmlFileName);
             deletedProvidersCount++;
             
             return; // Keine weitere Verarbeitung
@@ -218,8 +236,8 @@ public class HtmlConverter {
         // Schreibe die vollständige Datei mit 3MPDD
         Files.writeString(txtFile, output.toString());
         
-        // Log-Eintrag für verarbeiteten Provider
-        logProviderAction(providerName, mpdd3, "OK - Vollständig verarbeitet");
+        // Log-Eintrag für verarbeiteten Provider mit Dateipfad
+        logProviderAction(providerName, mpdd3, "OK - Vollständig verarbeitet", htmlFileName);
         processedProvidersCount++;
         
         logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName() + " with 3MPDD: " + String.format("%.4f", mpdd3));
@@ -302,18 +320,18 @@ public class HtmlConverter {
     }
     
     /**
-     * Initialisiert das Konvertierungs-Logfile
+     * Initialisiert das Konvertierungs-Logfile mit erweitertem Format
      */
     private void initializeConversionLog() {
         try {
             StringBuilder logHeader = new StringBuilder();
-            logHeader.append("=".repeat(80)).append("\n");
+            logHeader.append("=".repeat(120)).append("\n");
             logHeader.append("CONVERSION LOG - ").append(java.time.LocalDateTime.now().toString()).append("\n");
-            logHeader.append("=".repeat(80)).append("\n");
+            logHeader.append("=".repeat(120)).append("\n");
             logHeader.append("HINWEIS: Provider mit 3MPDD < 0.5 werden automatisch gelöscht\n");
-            logHeader.append("=".repeat(80)).append("\n");
-            logHeader.append(String.format("%-50s | %-10s | %s\n", "PROVIDER NAME", "3MPDD", "AKTION"));
-            logHeader.append("-".repeat(80)).append("\n");
+            logHeader.append("=".repeat(120)).append("\n");
+            logHeader.append(String.format("%-35s | %-10s | %-25s | %s\n", "PROVIDER NAME", "3MPDD", "AKTION", "DATEIPFAD"));
+            logHeader.append("-".repeat(120)).append("\n");
             
             Files.writeString(conversionLogPath, logHeader.toString());
             logger.info("Conversion log initialisiert: " + conversionLogPath);
@@ -324,14 +342,21 @@ public class HtmlConverter {
     }
     
     /**
-     * Schreibt einen Eintrag in das Konvertierungs-Logfile
+     * Schreibt einen Eintrag in das Konvertierungs-Logfile mit Dateipfad
      */
-    private void logProviderAction(String providerName, double mpdd3, String action) {
+    private void logProviderAction(String providerName, double mpdd3, String action, String filePath) {
         try {
-            String logEntry = String.format("%-50s | %-10.4f | %s\n", 
-                                          providerName.length() > 50 ? providerName.substring(0, 47) + "..." : providerName,
+            // Relativen Pfad erstellen für bessere Lesbarkeit
+            String relativePath = filePath.replace(downloadPath, "").replace("\\", "/");
+            if (relativePath.startsWith("/")) {
+                relativePath = relativePath.substring(1);
+            }
+            
+            String logEntry = String.format("%-35s | %-10.4f | %-25s | %s\n", 
+                                          providerName.length() > 35 ? providerName.substring(0, 32) + "..." : providerName,
                                           mpdd3, 
-                                          action);
+                                          action,
+                                          relativePath);
             
             Files.writeString(conversionLogPath, logEntry, java.nio.file.StandardOpenOption.APPEND);
             
@@ -346,12 +371,12 @@ public class HtmlConverter {
     private void finalizeConversionLog() {
         try {
             StringBuilder logFooter = new StringBuilder();
-            logFooter.append("-".repeat(80)).append("\n");
+            logFooter.append("-".repeat(120)).append("\n");
             logFooter.append("ZUSAMMENFASSUNG:\n");
             logFooter.append("Provider verarbeitet: ").append(processedProvidersCount).append("\n");
             logFooter.append("Provider gelöscht: ").append(deletedProvidersCount).append(" (3MPDD < 0.5)\n");
             logFooter.append("Gesamt Provider: ").append(processedProvidersCount + deletedProvidersCount).append("\n");
-            logFooter.append("=".repeat(80)).append("\n");
+            logFooter.append("=".repeat(120)).append("\n");
             
             Files.writeString(conversionLogPath, logFooter.toString(), java.nio.file.StandardOpenOption.APPEND);
             logger.info("Conversion log finalisiert mit " + (processedProvidersCount + deletedProvidersCount) + " Providern");
