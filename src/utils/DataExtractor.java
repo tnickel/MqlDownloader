@@ -207,38 +207,89 @@ public class DataExtractor {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) return 0.0;
 
-            // Angepasster Ausdruck, der sowohl Werte mit als auch ohne Dezimalstellen erfasst
+            // Pattern 1: Originalformat mit korrektem "Rückgang"
             Pattern pattern = Pattern.compile("Maximaler Rückgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
             Matcher matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1);
                 equityDrawdown = Double.parseDouble(ddStr);
-                logger.info("Equity Drawdown erfolgreich extrahiert: " + equityDrawdown);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 1): " + equityDrawdown);
                 return equityDrawdown;
             }
             
-            // Noch flexiblerer Ausdruck für ähnliche Formate
+            // Pattern 2: Flexiblerer Ausdruck für ähnliche Formate
             pattern = Pattern.compile("Maximaler Rückgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");
                 equityDrawdown = Double.parseDouble(ddStr);
-                logger.info("Equity Drawdown erfolgreich extrahiert (mit allgemeinerem Pattern): " + equityDrawdown);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 2): " + equityDrawdown);
                 return equityDrawdown;
             }
             
-            // Dritter Versuch: Suche nach verkrüppeltem Format "Maximaler...Rüg: XX.X%"
+            // Pattern 3: Suche nach verkrüppeltem Format "Maximaler...Rüg: XX.X%"
             pattern = Pattern.compile("Maximaler[^<]*</tspan><tspan[^>]*>R.g:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");
                 equityDrawdown = Double.parseDouble(ddStr);
-                logger.info("Equity Drawdown erfolgreich extrahiert (mit Pattern für verkrüppeltes Format): " + equityDrawdown);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 3 - verkrüppelt): " + equityDrawdown);
                 return equityDrawdown;
             }
             
-            // Debug-Ausgabe für Fehlerbehebung
-            logger.debug("HTML-Inhalt um 'Maximaler': " + extractContextAroundKeyword(htmlContent, "Maximaler"));
+            // Pattern 4: NEU - Robustes Pattern für UTF-8-Kodierungsprobleme
+            // Sucht nach "Maximaler" gefolgt von beliebigen Zeichen bis zum ":" und dann Prozentwert
+            pattern = Pattern.compile("Maximaler[^<]*</tspan><tspan[^>]*>[^:]*:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1).replace(",", ".");
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 4 - UTF-8 robust): " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Pattern 5: NEU - Sehr flexibles Pattern, das beliebige Zeichen zwischen "Maximaler" und ":" akzeptiert
+            pattern = Pattern.compile("Maximaler.*?:\\s*(\\d+(?:[,.]\\d+)?)%");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1).replace(",", ".");
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 5 - sehr flexibel): " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Pattern 6: NEU - Spezifisch für das beobachtete HTML-Format
+            // >Maximaler</tspan><tspan dy="17" x="75">Rückgang: 14.1%</tspan>
+            pattern = Pattern.compile(">Maximaler</tspan><tspan[^>]*>[^:]*:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1).replace(",", ".");
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 6 - spezifisches HTML-Format): " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Pattern 7: NEU - Fallback für Fälle wo nur der Prozentwert nach "Maximaler" relevant ist
+            // Sucht nach "Maximaler" und dann dem ersten Prozentwert in der Nähe
+            pattern = Pattern.compile("Maximaler[\\s\\S]{0,200}?(\\d+(?:[,.]\\d+)?)%");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                String ddStr = matcher.group(1).replace(",", ".");
+                equityDrawdown = Double.parseDouble(ddStr);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 7 - Fallback): " + equityDrawdown);
+                return equityDrawdown;
+            }
+            
+            // Debug-Ausgabe für Fehlerbehebung - erweitert um mehr Kontext
+            String context = extractContextAroundKeyword(htmlContent, "Maximaler");
+            logger.debug("HTML-Inhalt um 'Maximaler': " + context);
+            
+            // Zusätzliche Debug-Ausgabe: Suche nach beliebigen Prozentzeichen in der Nähe von "Maximaler"
+            pattern = Pattern.compile("Maximaler[\\s\\S]{0,500}");
+            matcher = pattern.matcher(htmlContent);
+            if (matcher.find()) {
+                logger.debug("Erweiterte Kontext um 'Maximaler': " + matcher.group(0));
+            }
             
             // Wenn kein Equity Drawdown gefunden wurde
             String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
