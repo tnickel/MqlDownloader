@@ -29,7 +29,7 @@ public class MqlDownloaderGui extends JFrame {
     private final ButtonPanelManager buttonManager;
     private final DownloadManager downloadManager;
     private final ConversionManager conversionManager;
-    private JButton statisticsButton;  // Neuer Button für Statistiken
+    private JButton statisticsButton;  // Neuer Button fÃ¼r Statistiken
 
     public MqlDownloaderGui() {
         configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
@@ -48,7 +48,7 @@ public class MqlDownloaderGui extends JFrame {
         setLayout(new BorderLayout(10, 10));
         setSize(800, 600);
 
-        // Top panel für Buttons - KOMPAKTER LAYOUT
+        // Top panel fÃ¼r Buttons - KOMPAKTER LAYOUT
         JPanel topPanel = new JPanel(new GridLayout(3, 1, 5, 5)); // NUR 3 Zeilen statt 6!
         topPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Kleinere Padding
 
@@ -83,7 +83,7 @@ public class MqlDownloaderGui extends JFrame {
         mainPanel.add(statisticsButtonPanel, BorderLayout.EAST);
         mainPanel.add(buttonManager.createProgressPanel(), BorderLayout.SOUTH);
 
-        // Zum Frame hinzufügen
+        // Zum Frame hinzufÃ¼gen
         add(mainPanel);
 
         // Menu Bar initialisieren
@@ -93,7 +93,7 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getStopButton().setEnabled(false);
 
         // Initiale Log Nachricht
-        logHandler.log("Anwendung gestartet. Bereit für Operationen.");
+        logHandler.log("Anwendung gestartet. Bereit fÃ¼r Operationen.");
     }
 
     private JButton createStatisticsButton() {
@@ -103,7 +103,7 @@ public class MqlDownloaderGui extends JFrame {
         button.setForeground(java.awt.Color.BLACK);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
-        button.setToolTipText("Zeigt eine Statistik über das Alter der heruntergeladenen Dateien an");
+        button.setToolTipText("Zeigt eine Statistik Ã¼ber das Alter der heruntergeladenen Dateien an");
         return button;
     }
 
@@ -120,7 +120,7 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getConvertButton().addActionListener(e -> conversionManager.startConversion());
         buttonManager.getDoAllButton().addActionListener(e -> handleDoAllButton());
         
-        // Neuer Event-Handler für den Statistik-Button
+        // Neuer Event-Handler fÃ¼r den Statistik-Button
         statisticsButton.addActionListener(e -> showStatisticsDialog());
     }
     
@@ -136,7 +136,7 @@ public class MqlDownloaderGui extends JFrame {
         
         Thread allProcessesThread = new Thread(() -> {
             try {
-                // Start des Gesamtprozesses - ohne vorheriges Löschen der Dateien
+                // Start des Gesamtprozesses - ohne vorheriges LÃ¶schen der Dateien
                 
                 logHandler.log("Starte MQL4 Download...");
                 downloadManager.startDownload("MQL4");
@@ -191,7 +191,7 @@ public class MqlDownloaderGui extends JFrame {
         statsItem.addActionListener(e -> showStatisticsDialog());
         
         fileMenu.add(setupItem);
-        fileMenu.add(statsItem);  // Auch im Menü zugänglich machen
+        fileMenu.add(statsItem);  // Auch im MenÃ¼ zugÃ¤nglich machen
         menuBar.add(fileMenu);
         
         return menuBar;
@@ -204,13 +204,23 @@ public class MqlDownloaderGui extends JFrame {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            try {
-                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-            } catch (Exception e) {
-                logger.error("Error setting Look and Feel", e);
-            }
+            setPreferredLookAndFeel();
             MqlDownloaderGui gui = new MqlDownloaderGui();
             gui.setVisible(true);
         });
+    }
+
+    private static void setPreferredLookAndFeel() {
+        try {
+            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+                if ("Nimbus".equals(info.getName())) {
+                    UIManager.setLookAndFeel(info.getClassName());
+                    return;
+                }
+            }
+            UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+        } catch (Exception e) {
+            logger.error("Error setting Look and Feel", e);
+        }
     }
 }
