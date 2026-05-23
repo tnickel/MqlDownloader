@@ -120,11 +120,14 @@ MPDD = Durchschnittlicher Monatlicher Profit / Equity Drawdown
 - Chrome Browser (für Selenium)
 - 4GB+ RAM empfohlen
 
+### Projektpfad
+Das Projekt befindet sich auf der Festplatte unter: `D:\git\MQL\MqlDownloader` (ehemals `D:\git\MqlDownloader`).
+
 ### Quick Start
-1. Repository klonen
-2. Dependencies installieren
-3. Konfigurationspfad anpassen (`C:\Forex\MqlAnalyzer`)
-4. Anwendung starten
+1. Repository klonen oder direkt aus `D:\git\MQL\MqlDownloader` in der IDE öffnen.
+2. Dependencies installieren.
+3. Konfigurationspfad anpassen (`C:\Forex\MqlAnalyzer`).
+4. Anwendung starten.
 
 ## 📈 Output-Formate
 

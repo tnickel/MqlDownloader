@@ -107,7 +107,15 @@ public class HtmlConverter {
             logger.info("Verarbeite Verzeichnis: " + directory + " - " + htmlFiles.size() + " HTML-Dateien gefunden");
             
             for (Path htmlFile : htmlFiles) {
-                convertHtmlFile(htmlFile);
+                try {
+                    convertHtmlFile(htmlFile);
+                } catch (Exception e) {
+                    logger.error("Fehler bei der Konvertierung von " + htmlFile.getFileName() + ": " + e.getMessage(), e);
+                    deleteRelatedFiles(htmlFile.toString());
+                    deletedProvidersCount++;
+                    String providerName = extractProviderName(htmlFile.toString());
+                    logProviderAction(providerName, 0.0, "FEHLER BEIM PARSEN (Gelöscht)", htmlFile.toString());
+                }
                 currentFile++;
                 updateProgress(
                     (int)((currentFile / (double)totalFiles) * 100),

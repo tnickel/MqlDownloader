@@ -40,13 +40,8 @@ public class DataExtractor {
             if (htmlContent == null) {
                 String errorMessage = "HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName;
                 logger.error(errorMessage);
-                if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                    return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-                } else {
-                    // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                    System.exit(1);
-                    return 0.0;  // Diese Zeile wird nie erreicht
-                }
+                deleteRelatedFiles(fileName);
+                throw new RuntimeException(errorMessage);
             }
             
             // HTML mit JSoup parsen
@@ -84,61 +79,19 @@ public class DataExtractor {
                 } else {
                     String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden für Datei: " + fileName;
                     logger.error(errorMessage);
-                    if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                        return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-                    } else {
-                        // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                        System.exit(1);
-                        return 0.0;  // Diese Zeile wird nie erreicht
-                    }
+                    deleteRelatedFiles(fileName);
+                    throw new RuntimeException(errorMessage);
                 }
             }
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren der Balance für " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-            } else {
-                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                System.exit(1);
-                return 0.0;  // Diese Zeile wird nie erreicht
-            }
+            deleteRelatedFiles(fileName);
+            throw new RuntimeException(errorMessage, e);
         }
-    }
-
-    // Ersetzte Methode: Zeigt Fehlermeldung und fragt, ob die Datei gelöscht werden soll
-    private boolean showErrorAndAskForDeletion(String errorMessage, String fileName) {
-        // Optionen für den Dialog
-        String[] options = {"Datei löschen und fortfahren", "Abbrechen"};
-        
-        // Dialog anzeigen und Auswahl des Benutzers erhalten
-        int choice = javax.swing.JOptionPane.showOptionDialog(
-            null,
-            errorMessage + "\n\nSoll die Datei gelöscht und mit der Konvertierung fortgefahren werden?",
-            "Extraktionsfehler",
-            javax.swing.JOptionPane.YES_NO_OPTION,
-            javax.swing.JOptionPane.ERROR_MESSAGE,
-            null,
-            options,
-            options[1]  // Standardauswahl ist "Abbrechen"
-        );
-        
-        // Wenn Benutzer "Datei löschen und fortfahren" wählt
-        if (choice == 0) {
-            if (deleteRelatedFiles(fileName)) {
-                logger.info("Dateien wurden gelöscht, Konvertierung wird fortgesetzt.");
-                return true;
-            } else {
-                logger.error("Fehler beim Löschen der Dateien.");
-                return false;
-            }
-        }
-        
-        // Benutzer hat abgebrochen
-        return false;
     }
     
-    // Neue Methode: Löscht die zugehörigen Dateien (root.html, .csv und .txt)
+    // Methode: Löscht die zugehörigen Dateien (root.html, .csv und .txt) bei Fehlern
     private boolean deleteRelatedFiles(String fileName) {
         try {
             Path htmlPath = Paths.get(fileName);
@@ -148,7 +101,6 @@ public class DataExtractor {
             Path csvPath = Paths.get(baseName + ".csv");
             Path txtPath = Paths.get(baseName + "_root.txt");
             
-            // Dateien löschen, wenn sie existieren
             boolean success = true;
             
             if (Files.exists(htmlPath)) {
@@ -205,7 +157,10 @@ public class DataExtractor {
     public double getEquityDrawdown(String fileName) {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
-            if (htmlContent == null) return 0.0;
+            if (htmlContent == null) {
+                deleteRelatedFiles(fileName);
+                throw new RuntimeException("HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName);
+            }
 
             // Pattern 1: Originalformat mit korrektem "Rückgang"
             Pattern pattern = Pattern.compile("Maximaler Rückgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
@@ -294,27 +249,14 @@ public class DataExtractor {
             // Wenn kein Equity Drawdown gefunden wurde
             String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
             logger.error(errorMessage);
+            deleteRelatedFiles(fileName);
+            throw new RuntimeException(errorMessage);
             
-            // Anstatt sofort zu beenden, fragen wir den Benutzer
-            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-            } else {
-                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                System.exit(1);
-                return 0.0;  // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
-            }
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren des Equity Drawdown für " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            
-            // Anstatt sofort zu beenden, fragen wir den Benutzer
-            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-            } else {
-                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                System.exit(1);
-                return 0.0;  // Diese Zeile wird nie erreicht, aber ist notwendig für die Kompilierung
-            }
+            deleteRelatedFiles(fileName);
+            throw new RuntimeException(errorMessage, e);
         }
     }
     
@@ -341,13 +283,8 @@ public class DataExtractor {
         } catch (Exception e) {
             String errorMessage = "Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits für " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            if (showErrorAndAskForDeletion(errorMessage, fileName)) {
-                return 0.0;  // Datei wurde gelöscht, wir geben 0.0 zurück
-            } else {
-                // Benutzer möchte nicht löschen, aber wir können nicht fortfahren
-                System.exit(1);
-                return 0.0;  // Diese Zeile wird nie erreicht
-            }
+            deleteRelatedFiles(fileName);
+            throw new RuntimeException(errorMessage, e);
         }
     }
     
