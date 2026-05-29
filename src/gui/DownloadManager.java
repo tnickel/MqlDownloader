@@ -4,7 +4,9 @@ import java.awt.Color;
 import java.io.IOException;
 
 import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
+import javax.swing.JProgressBar;
 import javax.swing.SwingUtilities;
 
 import org.apache.logging.log4j.LogManager;
@@ -74,6 +76,47 @@ public class DownloadManager {
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
                 downloader.setDownloadProtokoll(downloadProtokoll);
+                
+                // Fortschritt der Schutzwartezeit an GUI-Progressbar übermitteln
+                downloader.setWaitCallback(new downloader.WaitCallback() {
+                    @Override
+                    public void onWait(int elapsedMs, int totalMs) {
+                        SwingUtilities.invokeLater(() -> {
+                            JProgressBar progressBar = buttonManager.getConvertProgress();
+                            JLabel statusLabel = buttonManager.getConvertStatusLabel();
+                            
+                            if (!progressBar.isVisible()) {
+                                progressBar.setVisible(true);
+                                statusLabel.setVisible(true);
+                            }
+                            
+                            int percent = (int) ((elapsedMs / (double) totalMs) * 100);
+                            progressBar.setValue(percent);
+                            
+                            double elapsedSec = elapsedMs / 1000.0;
+                            double totalSec = totalMs / 1000.0;
+                            String text = String.format("Wartezeit wegen MQL-Server-Schutz: %.1fs / %.1fs (%.0f%%)", 
+                                                        elapsedSec, totalSec, (double)percent);
+                            progressBar.setString(text);
+                            statusLabel.setText("Anti-Overload-Schutz aktiv...");
+                        });
+                    }
+
+                    @Override
+                    public void onWaitFinished() {
+                        SwingUtilities.invokeLater(() -> {
+                            buttonManager.getConvertProgress().setVisible(false);
+                            buttonManager.getConvertStatusLabel().setVisible(false);
+                        });
+                    }
+
+                    @Override
+                    public void onStatusUpdate(String status) {
+                        SwingUtilities.invokeLater(() -> {
+                            buttonManager.getCurrentFileField().setText(status);
+                        });
+                    }
+                });
                 
                 // VERBESSERTE ProgressCallback mit thread-sicherem Logging
                 downloader.setProgressCallback(count -> {
@@ -208,6 +251,9 @@ public class DownloadManager {
             buttonManager.getMql4LimitField().setEnabled(true);
             buttonManager.getMql5LimitField().setEnabled(true);
             buttonManager.getDownloadDaysField().setEnabled(true);
+            buttonManager.getConvertProgress().setVisible(false);
+            buttonManager.getConvertStatusLabel().setVisible(false);
+            buttonManager.getCurrentFileField().setText("Inaktiv / Bereit");
             
             // Reset button texts
             buttonManager.getMql4Button().setText("MQL4 Download");

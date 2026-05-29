@@ -174,6 +174,7 @@ public class HtmlConverter {
         logger.info("3MPDD OK (" + String.format("%.4f", mpdd3) + " >= 0.5) für " + htmlFileName + " - Vollständige Verarbeitung");
         
         double balance = htmlParser.getBalance(htmlFileName);
+        int subscribers = htmlParser.getSubscribers(htmlFileName);
         double equityDrawdownGraphic = htmlParser.getEquityDrawdownGraphic(htmlFileName);
         double equityDrawdown = htmlParser.getEquityDrawdown(htmlFileName);
         double avgProfit = htmlParser.getAvr3MonthProfit(htmlFileName);
@@ -188,6 +189,7 @@ public class HtmlConverter {
         // Erstelle die vollständige .txt-Datei
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
+        output.append("Subscribers=").append(subscribers).append("\n");
         output.append("MaxDDGraphic=").append(String.format("%.2f", equityDrawdownGraphic)).append("\n");
         output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n");
         output.append("Average3MonthProfit=").append(String.format("%.2f", avgProfit)).append("\n");

@@ -49,6 +49,10 @@ public class HtmlParser {
         return dataExtractor.getAvr3MonthProfit(fileName, monthExtractor);
     }
     
+    public int getSubscribers(String fileName) {
+        return dataExtractor.getSubscribers(fileName);
+    }
+    
     public List<ChartPoint> getDrawdownChartData(String fileName) {
         return chartExtractor.getDrawdownChartData(fileName);
     }

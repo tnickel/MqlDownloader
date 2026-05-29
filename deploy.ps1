@@ -61,19 +61,33 @@ if (-not $sourceJars) {
 }
 
 $sourceJar = $sourceJars[0]
-$targetPath = "\\ds918\Forex\tmp\MqlDownloaderApp.jar"
+$targetPaths = @(
+    "D:\git\MQL\MqlDownloader\tmp\MqlDownloaderApp.jar",
+    "\\ds918\Forex\tmp\MqlDownloaderApp.jar"
+)
 
-Write-Host "==> Deploying $($sourceJar.Name) to $targetPath ..."
-try {
-    # Check if target share is reachable and writeable
-    $targetDir = Split-Path $targetPath
-    if (-not (Test-Path $targetDir)) {
-        Write-Warning "Directory $targetDir is not directly accessible or does not exist. Attempting copy anyway..."
+foreach ($targetPath in $targetPaths) {
+    Write-Host "==> Deploying $($sourceJar.Name) to $targetPath ..."
+    try {
+        # Check if target directory exists, create if not
+        $targetDir = Split-Path $targetPath
+        if (-not (Test-Path $targetDir)) {
+            if ($targetPath.StartsWith("\\")) {
+                Write-Warning "Directory $targetDir is not directly accessible or does not exist. Attempting copy anyway..."
+            } else {
+                Write-Host "Creating directory $targetDir ..."
+                New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+            }
+        }
+        
+        Copy-Item -Path $sourceJar.FullName -Destination $targetPath -Force
+        Write-Host "Deployment successful! JAR copied to $targetPath"
+    } catch {
+        if ($targetPath.StartsWith("\\")) {
+            Write-Warning "Deployment to network path failed: $_"
+        } else {
+            Write-Error "Deployment failed: $_"
+            exit 1
+        }
     }
-    
-    Copy-Item -Path $sourceJar.FullName -Destination $targetPath -Force
-    Write-Host "Deployment successful! JAR copied to $targetPath"
-} catch {
-    Write-Error "Deployment failed: $_"
-    exit 1
 }

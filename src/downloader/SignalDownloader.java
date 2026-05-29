@@ -36,22 +36,23 @@ public class SignalDownloader {
     private String baseUrl;
     private static final Logger logger = LogManager.getLogger(SignalDownloader.class);
     private volatile boolean stopRequested;
-    private int providerCount = 0; // Für Rückwärtskompatibilität mit getMqlLimit() Prüfungen
+    private int providerCount = 0; // FÃ¼r RÃ¼ckwÃ¤rtskompatibilitÃ¤t mit getMqlLimit() PrÃ¼fungen
     private ProgressCallback progressCallback;
+    private WaitCallback waitCallback;
     private int consecutiveErrors = 0;
-    private static final int MAX_CONSECUTIVE_ERRORS = 5; // Erhöht von 2 auf 5
+    private static final int MAX_CONSECUTIVE_ERRORS = 5; // ErhÃ¶ht von 2 auf 5
     private MqlDownloadProtokoll downloadProtokoll;
     
-    // NEUE Klassenvariablen für korrekte Numerierung
+    // NEUE Klassenvariablen fÃ¼r korrekte Numerierung
     private int totalProvidersProcessed = 0;  // Gesamtzahl aller verarbeiteten Provider
     private int successfulDownloads = 0;      // Nur erfolgreich heruntergeladene
-    private int skippedProviders = 0;         // Übersprungene Provider
+    private int skippedProviders = 0;         // Ãœbersprungene Provider
     
-    // Fehlertypen für bessere Klassifizierung
+    // Fehlertypen fÃ¼r bessere Klassifizierung
     private enum ErrorType {
         CRITICAL,           // Sofortiger Stopp (Internetverbindung, schwerwiegende WebDriver-Fehler)
-        RECOVERABLE,        // Recovery möglich (Element nicht gefunden, Timeout)
-        NON_CRITICAL        // Weiter mit nächstem Provider (Einzelner Download-Fehler)
+        RECOVERABLE,        // Recovery mÃ¶glich (Element nicht gefunden, Timeout)
+        NON_CRITICAL        // Weiter mit nÃ¤chstem Provider (Einzelner Download-Fehler)
     }
 
     public SignalDownloader(WebDriver driver, ConfigurationManager configManager, Credentials credentials) throws IOException {
@@ -81,6 +82,10 @@ public class SignalDownloader {
     public void setProgressCallback(ProgressCallback callback) {
         this.progressCallback = callback;
     }
+
+    public void setWaitCallback(WaitCallback callback) {
+        this.waitCallback = callback;
+    }
     
     public void setDownloadProtokoll(MqlDownloadProtokoll protokoll) {
         this.downloadProtokoll = protokoll;
@@ -94,18 +99,18 @@ public class SignalDownloader {
         
         if (isSuccessful) {
             successfulDownloads++;
-        } else if (action.contains("ÜBERSPRUNGEN")) {
+        } else if (action.contains("ÃœBERSPRUNGEN")) {
             skippedProviders++;
         }
         
         // Einheitliche Log-Nachricht mit korrekter Numerierung
-        logger.info("Fortschritt MQL{}: {}/{} Provider verarbeitet - Provider #{}: '{}' - {} (Erfolgreich: {}, Übersprungen: {})", 
+        logger.info("Fortschritt MQL{}: {}/{} Provider verarbeitet - Provider #{}: '{}' - {} (Erfolgreich: {}, Ãœbersprungen: {})", 
                    configManager.getMqlVersion().contains("4") ? "4" : "5",
                    totalProvidersProcessed, getMqlLimit(), totalProvidersProcessed, providerName, action,
                    successfulDownloads, skippedProviders);
         
         // KORRIGIERT: Verwende sanften Flush statt problematischen flushAllLogs()
-        // Nur alle 10 Provider einen sanften Flush durchführen
+        // Nur alle 10 Provider einen sanften Flush durchfÃ¼hren
         if (totalProvidersProcessed % 10 == 0) {
             logging.LoggerManager.gentleFlush();
         }
@@ -116,7 +121,7 @@ public class SignalDownloader {
     }
 
     /**
-     * Überladene Methode für Rückwärtskompatibilität
+     * Ãœberladene Methode fÃ¼r RÃ¼ckwÃ¤rtskompatibilitÃ¤t
      */
   
 
@@ -141,16 +146,15 @@ public class SignalDownloader {
             
             // Lade die erste Seite, falls nicht bereits geladen
             if (!driver.getCurrentUrl().contains("/signals/")) {
-                driver.get(baseUrl);
-                Thread.sleep(getRandomWaitTime());
+                safeNavigate(baseUrl);
             }
             
-            // Verschiedene Selektoren für Pagination-Elemente
+            // Verschiedene Selektoren fÃ¼r Pagination-Elemente
             List<String> paginationSelectors = Arrays.asList(
                 ".paging a",                      // Standard Pagination Links
                 "a.paging__link",                 // Alternative Klasse
                 ".pagination a",                  // Alternative Pagination
-                "[class*='paging'] a",            // Beliebige Klasse die 'paging' enthält
+                "[class*='paging'] a",            // Beliebige Klasse die 'paging' enthÃ¤lt
                 "a[href*='/page']"                // Links die '/page' enthalten
             );
             
@@ -204,7 +208,7 @@ public class SignalDownloader {
             if (!paginationFound) {
                 logger.warn("Keine Pagination-Elemente gefunden, versuche alternative Methode...");
                 
-                // Suche nach dem "Last Page" Link oder ähnlichem
+                // Suche nach dem "Last Page" Link oder Ã¤hnlichem
                 try {
                     // Suche nach dem letzten numerischen Link
                     List<WebElement> allLinks = driver.findElements(By.tagName("a"));
@@ -240,7 +244,7 @@ public class SignalDownloader {
             
         } catch (Exception e) {
             logger.error("Fehler beim Ermitteln der maximalen Seitenzahl: {}", e.getMessage(), e);
-            // Im Fehlerfall geben wir 0 zurück, was bedeutet, dass die alte Logik verwendet wird
+            // Im Fehlerfall geben wir 0 zurÃ¼ck, was bedeutet, dass die alte Logik verwendet wird
             return 0;
         }
     }
@@ -250,13 +254,13 @@ public class SignalDownloader {
      */
     public void startDownloadProcess() {
         try {
-            // Reset der Zähler bei Start
+            // Reset der ZÃ¤hler bei Start
             totalProvidersProcessed = 0;
             successfulDownloads = 0;
             skippedProviders = 0;
-            providerCount = 0; // Für Rückwärtskompatibilität mit getMqlLimit() Prüfungen
+            providerCount = 0; // FÃ¼r RÃ¼ckwÃ¤rtskompatibilitÃ¤t mit getMqlLimit() PrÃ¼fungen
             
-            logger.info("=== DOWNLOAD-PROZESS GESTARTET für {} ===", configManager.getMqlVersion().toUpperCase());
+            logger.info("=== DOWNLOAD-PROZESS GESTARTET fÃ¼r {} ===", configManager.getMqlVersion().toUpperCase());
             logging.LoggerManager.flushAllLogs();
             
             if (!stopRequested) performLogin();
@@ -283,7 +287,7 @@ public class SignalDownloader {
             logger.info("=== DOWNLOAD-PROZESS BEENDET ===");
             logger.info("Gesamte Provider verarbeitet: {}", totalProvidersProcessed);
             logger.info("Erfolgreich heruntergeladen: {}", successfulDownloads);
-            logger.info("Übersprungen: {}", skippedProviders);
+            logger.info("Ãœbersprungen: {}", skippedProviders);
             logger.info("Fehlgeschlagen: {}", totalProvidersProcessed - successfulDownloads - skippedProviders);
             
             // WebDriver cleanup
@@ -293,7 +297,7 @@ public class SignalDownloader {
             }
             
             // KORRIGIERT: Verwende sanften Flush statt aggressiven flushAllLogs()
-            logger.info("Führe sanften Log-Flush durch...");
+            logger.info("FÃ¼hre sanften Log-Flush durch...");
             logging.LoggerManager.gentleFlush();
             
             // Kurz warten damit alle Writes abgeschlossen sind
@@ -321,7 +325,7 @@ public class SignalDownloader {
         logger.info("Starte Anmeldeprozess...");
         
         try {
-            driver.get("https://www.mql5.com/en/auth_login");
+            safeNavigate("https://www.mql5.com/en/auth_login");
 
             WebElement usernameField = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("Login")));
             WebElement passwordField = driver.findElement(By.id("Password"));
@@ -368,7 +372,7 @@ public class SignalDownloader {
     private void verifyLogin() {
         try {
             wait.until(ExpectedConditions.urlContains("/en"));
-            Thread.sleep(getRandomWaitTime());
+            sleepWithProgress(getRandomWaitTime());
         } catch (Exception e) {
             throw new RuntimeException("Login-Verifizierung fehlgeschlagen", e);
         }
@@ -382,7 +386,7 @@ public class SignalDownloader {
         boolean hasNextPage = true;
         int mqlLimit = getMqlLimit(); // Hole das konfigurierte Limit
         
-        logger.info("Starte Download-Prozess für {} - Limit: {} Provider", 
+        logger.info("Starte Download-Prozess fÃ¼r {} - Limit: {} Provider", 
                    configManager.getMqlVersion().toUpperCase(), mqlLimit);
 
         // Log start in protocol
@@ -395,17 +399,16 @@ public class SignalDownloader {
         // NEUE LOGIK: Ermittle maximale Seitenzahl
         int maxPageNumber = 0;
         try {
-            // Lade erste Seite für Pagination-Analyse
-            driver.get(baseUrl);
-            Thread.sleep(getRandomWaitTime());
+            // Lade erste Seite fÃ¼r Pagination-Analyse
+            safeNavigate(baseUrl);
             maxPageNumber = getMaxPageNumber();
         } catch (Exception e) {
             logger.warn("Fehler beim Ermitteln der maximalen Seitenzahl: {}", e.getMessage());
-            // Fahre mit alter Logik fort, wenn Pagination-Erkennung fehlschlägt
+            // Fahre mit alter Logik fort, wenn Pagination-Erkennung fehlschlÃ¤gt
         }
 
         while (hasNextPage && !stopRequested && totalProvidersProcessed < mqlLimit) {
-            // NEUE LOGIK: Prüfe ob maximale Seitenzahl erreicht wurde
+            // NEUE LOGIK: PrÃ¼fe ob maximale Seitenzahl erreicht wurde
             if (maxPageNumber > 0 && currentPage > maxPageNumber) {
                 logger.info("Maximale Seitenzahl ({}) erreicht - beende Download-Prozess", maxPageNumber);
                 hasNextPage = false;
@@ -420,7 +423,7 @@ public class SignalDownloader {
                            totalProvidersProcessed, 
                            mqlLimit);
                 
-                // NEUE LOGIK: Prüfe ob Seite Provider enthält
+                // NEUE LOGIK: PrÃ¼fe ob Seite Provider enthÃ¤lt
                 boolean pageHasProviders = processSignalProvidersPage(pageUrl);
                 
                 if (!pageHasProviders) {
@@ -438,9 +441,9 @@ public class SignalDownloader {
                     downloadProtokoll.logPageProgress(mqlVersionForLog, currentPage - 1, 0, totalProvidersProcessed);
                 }
                 
-                // Prüfe Limit nach jeder Seite
+                // PrÃ¼fe Limit nach jeder Seite
                 if (totalProvidersProcessed >= mqlLimit) {
-                    logger.info("LIMIT ERREICHT: {} von {} Providern verarbeitet für {}", 
+                    logger.info("LIMIT ERREICHT: {} von {} Providern verarbeitet fÃ¼r {}", 
                                totalProvidersProcessed, mqlLimit, configManager.getMqlVersion().toUpperCase());
                     break;
                 }
@@ -470,15 +473,15 @@ public class SignalDownloader {
                         currentPage, consecutiveErrors, MAX_CONSECUTIVE_ERRORS, e.getMessage()));
                 }
                 
-                // Prüfe ob Ende der Seiten erreicht
+                // PrÃ¼fe ob Ende der Seiten erreicht
                 if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
-                    logger.info("Keine weiteren Signalprovider auf Seite {} gefunden - reguläres Ende", currentPage);
+                    logger.info("Keine weiteren Signalprovider auf Seite {} gefunden - regulÃ¤res Ende", currentPage);
                     hasNextPage = false;
-                    consecutiveErrors = 0; // Reset, da es sich um ein reguläres Ende handelt
+                    consecutiveErrors = 0; // Reset, da es sich um ein regulÃ¤res Ende handelt
                     continue;
                 }
                 
-                // Prüfe Limit für aufeinanderfolgende Fehler
+                // PrÃ¼fe Limit fÃ¼r aufeinanderfolgende Fehler
                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
                     logger.error("Zu viele aufeinanderfolgende Fehler ({} von {}). Beende Download-Prozess.", 
                                consecutiveErrors, MAX_CONSECUTIVE_ERRORS);
@@ -491,7 +494,7 @@ public class SignalDownloader {
                     throw e;
                 }
                 
-                // Versuche Recovery bei recovery-fähigen Fehlern
+                // Versuche Recovery bei recovery-fÃ¤higen Fehlern
                 if (errorType == ErrorType.RECOVERABLE) {
                     logger.info("Versuche Recovery nach Fehler bei Seite {}", currentPage);
                     boolean recovered = attemptRecovery(e);
@@ -507,19 +510,17 @@ public class SignalDownloader {
                         // Seite wiederholen ohne Increment
                         continue;
                     } else {
-                        logger.warn("Recovery fehlgeschlagen, überspringe Seite {}", currentPage);
+                        logger.warn("Recovery fehlgeschlagen, Ã¼berspringe Seite {}", currentPage);
                     }
                 }
                 
-                // Warte vor dem nächsten Versuch
-                try {
-                    Thread.sleep(getRandomWaitTime());
-                } catch (InterruptedException ie) {
-                    Thread.currentThread().interrupt();
+                // Warte vor dem nÃ¤chsten Versuch
+                sleepWithProgress(getRandomWaitTime());
+                if (Thread.currentThread().isInterrupted()) {
                     break;
                 }
                 
-                // Gehe zur nächsten Seite über
+                // Gehe zur nÃ¤chsten Seite Ã¼ber
                 currentPage++;
             }
         }
@@ -534,7 +535,7 @@ public class SignalDownloader {
             String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
             downloadProtokoll.logSystemEvent(mqlVersionForLog, "DOWNLOAD BEENDET", reason);
             
-            // Verwende die tatsächlichen Statistiken
+            // Verwende die tatsÃ¤chlichen Statistiken
             downloadProtokoll.logFinalStatistics(mqlVersionForLog, totalProvidersProcessed, 
                                                 successfulDownloads, skippedProviders, 
                                                 totalProvidersProcessed - successfulDownloads - skippedProviders, 
@@ -543,19 +544,19 @@ public class SignalDownloader {
     }
     
     /**
-     * ERWEITERTE processSignalProvidersPage Methode die boolean zurückgibt
+     * ERWEITERTE processSignalProvidersPage Methode die boolean zurÃ¼ckgibt
      */
     private boolean processSignalProvidersPage(String pageUrl) {
         if (stopRequested) return false;
 
         try {
-            driver.get(pageUrl);
+            safeNavigate(pageUrl);
             
             // Warte auf Seitenladung mit robusten Selektoren
             boolean pageLoaded = waitForPageElements();
             
             if (!pageLoaded) {
-                logger.warn("Seite konnte nicht geladen werden oder keine Signal-Provider gefunden für: {}", pageUrl);
+                logger.warn("Seite konnte nicht geladen werden oder keine Signal-Provider gefunden fÃ¼r: {}", pageUrl);
                 return false;
             }
 
@@ -572,7 +573,7 @@ public class SignalDownloader {
             int mqlLimit = getMqlLimit();
             
             for (int i = 0; i < providerLinks.size() && !stopRequested; i++) {
-                // Prüfe Limit vor jedem Provider
+                // PrÃ¼fe Limit vor jedem Provider
                 if (totalProvidersProcessed >= mqlLimit) {
                     logger.info("LIMIT ERREICHT: {} Provider verarbeitet von maximal {}", totalProvidersProcessed, mqlLimit);
                     break;
@@ -620,7 +621,7 @@ public class SignalDownloader {
                 logger.debug("Seite geladen, Elemente gefunden mit Selektor: {}", selector);
                 return true;
             } catch (TimeoutException e) {
-                logger.debug("Timeout mit Selektor {}, versuche nächsten", selector);
+                logger.debug("Timeout mit Selektor {}, versuche nÃ¤chsten", selector);
             }
         }
 
@@ -658,7 +659,7 @@ public class SignalDownloader {
     }
 
     /**
-     * Klassifiziert Fehler nach Schweregrad und Recovery-Möglichkeit
+     * Klassifiziert Fehler nach Schweregrad und Recovery-MÃ¶glichkeit
      */
     private ErrorType classifyError(Exception e) {
         String message = e.getMessage().toLowerCase();
@@ -676,7 +677,7 @@ public class SignalDownloader {
             return ErrorType.CRITICAL;
         }
 
-        // Recovery-fähige Fehler
+        // Recovery-fÃ¤hige Fehler
         if (message.contains("timeout") ||
             message.contains("no such element") ||
             message.contains("element not found") ||
@@ -704,11 +705,11 @@ public class SignalDownloader {
                 throw new RuntimeException("Kritischer Fehler", e);
                 
             case RECOVERABLE:
-                logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
-                // Versuche Recovery, aber zähle als Fehler
+                logger.warn("RECOVERY-FÃ„HIGER FEHLER - {}", errorMsg);
+                // Versuche Recovery, aber zÃ¤hle als Fehler
                 boolean recovered = attemptRecovery(e);
                 if (!recovered) {
-                    logger.error("Recovery fehlgeschlagen für Provider {}", providerIndex);
+                    logger.error("Recovery fehlgeschlagen fÃ¼r Provider {}", providerIndex);
                 }
                 break;
                 
@@ -721,7 +722,7 @@ public class SignalDownloader {
     }
 
     /**
-     * Versucht Recovery von recovery-fähigen Fehlern
+     * Versucht Recovery von recovery-fÃ¤higen Fehlern
      */
     private boolean attemptRecovery(Exception e) {
         try {
@@ -747,9 +748,9 @@ public class SignalDownloader {
             }
             
             // Einfache Recovery: Seite neu laden
-            logger.info("Lade aktuelle Seite neu für Recovery...");
+            logger.info("Lade aktuelle Seite neu fÃ¼r Recovery...");
             driver.navigate().refresh();
-            Thread.sleep(getRandomWaitTime());
+            sleepWithProgress(getRandomWaitTime());
             
             return true;
             
@@ -760,7 +761,7 @@ public class SignalDownloader {
     }
 
     /**
-     * Prüft, ob die Dateien für einen bestimmten Provider kürzlich heruntergeladen wurden
+     * PrÃ¼ft, ob die Dateien fÃ¼r einen bestimmten Provider kÃ¼rzlich heruntergeladen wurden
      * basierend auf dem konfigurierten Alter in Tagen.
      * 
      * @param providerId Die ID des Providers
@@ -771,22 +772,22 @@ public class SignalDownloader {
         String targetPath = configManager.getCurrentDownloadPath();
         String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
         
-        // Überprüfe die HTML-Datei
+        // ÃœberprÃ¼fe die HTML-Datei
         String htmlFileName = String.format("%s_%s_root.html", safeProviderName, providerId);
         File htmlFile = new File(targetPath, htmlFileName);
         
-        // Überprüfe die CSV-Datei (könnte mehrere Dateien mit diesem Präfix geben)
+        // ÃœberprÃ¼fe die CSV-Datei (kÃ¶nnte mehrere Dateien mit diesem PrÃ¤fix geben)
         File[] csvFiles = new File(targetPath).listFiles((dir, name) -> 
             name.startsWith(safeProviderName) && name.endsWith(".csv"));
         
-        // Wenn beide Dateien existieren, prüfe ihr Alter
+        // Wenn beide Dateien existieren, prÃ¼fe ihr Alter
         if (htmlFile.exists() && csvFiles != null && csvFiles.length > 0) {
             // Konfigurierte Tage aus den Einstellungen abrufen
             int configuredDays = configManager.getDownloadDays();
             
             // Wenn 0 Tage konfiguriert sind, immer neu herunterladen
             if (configuredDays == 0) {
-                logger.debug("Konfigurierte Tage ist 0, lade Dateien für Provider {} neu herunter", providerName);
+                logger.debug("Konfigurierte Tage ist 0, lade Dateien fÃ¼r Provider {} neu herunter", providerName);
                 return false;
             }
             
@@ -795,7 +796,7 @@ public class SignalDownloader {
             
             long htmlFileAge = currentTime - htmlFile.lastModified();
             
-            // Finde die jüngste CSV-Datei
+            // Finde die jÃ¼ngste CSV-Datei
             long youngestCsvFileAge = Long.MAX_VALUE;
             for (File csvFile : csvFiles) {
                 long age = currentTime - csvFile.lastModified();
@@ -804,27 +805,27 @@ public class SignalDownloader {
                 }
             }
             
-            // Wenn beide Dateien jünger als die konfigurierten Tage sind
+            // Wenn beide Dateien jÃ¼nger als die konfigurierten Tage sind
             boolean result = (htmlFileAge < configuredDaysInMillis && youngestCsvFileAge < configuredDaysInMillis);
             if (result) {
-                logger.debug("Provider {} Dateien sind jünger als {} Tage, überspringe", 
+                logger.debug("Provider {} Dateien sind jÃ¼nger als {} Tage, Ã¼berspringe", 
                     providerName, configuredDays);
                 
-                // Protokolliere das Überspringen
+                // Protokolliere das Ãœberspringen
                 if (downloadProtokoll != null) {
                     String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
                     downloadProtokoll.logSkipped(mqlVersion, providerName, 
-                        "Dateien sind jünger als " + configuredDays + " Tage");
+                        "Dateien sind jÃ¼nger als " + configuredDays + " Tage");
                 }
             } else {
-                logger.debug("Provider {} Dateien sind älter als {} Tage, lade neu herunter", 
+                logger.debug("Provider {} Dateien sind Ã¤lter als {} Tage, lade neu herunter", 
                     providerName, configuredDays);
             }
             return result;
         }
         
         // Wenn eine der Dateien nicht existiert, muss heruntergeladen werden
-        logger.debug("Eine oder beide Dateien für Provider {} existieren nicht, lade herunter", providerName);
+        logger.debug("Eine oder beide Dateien fÃ¼r Provider {} existieren nicht, lade herunter", providerName);
         return false;
     }
 
@@ -840,7 +841,7 @@ public class SignalDownloader {
         try {
             List<WebElement> providerLinks = findProviderLinks();
             if (index >= providerLinks.size() || stopRequested) {
-                logger.debug("Provider-Index {} außerhalb der Grenzen ({}) oder Stop angefordert", index, providerLinks.size());
+                logger.debug("Provider-Index {} auÃŸerhalb der Grenzen ({}) oder Stop angefordert", index, providerLinks.size());
                 return;
             }
 
@@ -854,13 +855,18 @@ public class SignalDownloader {
                 providerId = providerId.substring(0, providerId.indexOf("?"));
             }
 
-            // FORTLAUFENDE NUMERIERUNG: Verwende totalProvidersProcessed für die globale Nummer
+            // FORTLAUFENDE NUMERIERUNG: Verwende totalProvidersProcessed fÃ¼r die globale Nummer
             int globalProviderNumber = totalProvidersProcessed;
 
             logger.info("STARTE Provider: '{}' (ID: {}) - Fortlaufende Nr. {} (Index {} auf Seite)", 
                        providerName, providerId, globalProviderNumber + 1, index);
 
-            // Bestimme die aktuelle MQL-Version für das Protokoll
+            if (waitCallback != null) {
+                waitCallback.onStatusUpdate(String.format("[%d/%d] Starte: %s (ID: %s)", 
+                    globalProviderNumber + 1, getMqlLimit(), providerName, providerId));
+            }
+
+            // Bestimme die aktuelle MQL-Version fÃ¼r das Protokoll
             String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
             
             // Protokolliere den Versuch mit FORTLAUFENDER NUMMER
@@ -868,47 +874,51 @@ public class SignalDownloader {
                 downloadProtokoll.logAttempt(mqlVersion, providerName, providerId, globalProviderNumber);
             }
 
-            // Prüfe, ob Dateien kürzlich heruntergeladen wurden
+            // PrÃ¼fe, ob Dateien kÃ¼rzlich heruntergeladen wurden
             if (isFileRecentlyDownloaded(providerId, providerName)) {
-                // KORRIGIERTE Fortschrittsanzeige für übersprungene Provider
-                updateProgress(providerName, "ÜBERSPRUNGEN (Dateien jünger als " + configManager.getDownloadDays() + " Tage)", false);
+                // KORRIGIERTE Fortschrittsanzeige fÃ¼r Ã¼bersprungene Provider
+                updateProgress(providerName, "ÃœBERSPRUNGEN (Dateien jÃ¼nger als " + configManager.getDownloadDays() + " Tage)", false);
                 
-                // Protokolliere das Überspringen mit FORTLAUFENDER NUMMER
+                // Protokolliere das Ãœberspringen mit FORTLAUFENDER NUMMER
                 if (downloadProtokoll != null) {
                     downloadProtokoll.logSkipped(mqlVersion, providerName, 
-                        "Dateien sind jünger als " + configManager.getDownloadDays() + " Tage", globalProviderNumber);
+                        "Dateien sind jÃ¼nger als " + configManager.getDownloadDays() + " Tage", globalProviderNumber);
+                }
+                if (waitCallback != null) {
+                    waitCallback.onStatusUpdate(String.format("[%d/%d] Ãœbersprungen (jÃ¼ngste): %s", 
+                        globalProviderNumber + 1, getMqlLimit(), providerName));
                 }
                 return;
             }
 
             // Versuche Root Page zu downloaden
             try {
-                logger.debug("Lade Root-Seite für Provider: {}", providerName);
+                logger.debug("Lade Root-Seite fÃ¼r Provider: {}", providerName);
                 downloadProviderRootPage(providerUrl, providerId, providerName);
-                logger.debug("Root-Seite erfolgreich für Provider: {}", providerName);
+                logger.debug("Root-Seite erfolgreich fÃ¼r Provider: {}", providerName);
             } catch (RuntimeException e) {
                 // Wenn kritischer Fehler, weiterwerfen
                 if (e.getMessage().contains("Kritischer Fehler")) {
                     throw e;
                 }
-                logger.warn("Root Page Download fehlgeschlagen für '{}', überspringe Trading History", providerName);
+                logger.warn("Root Page Download fehlgeschlagen fÃ¼r '{}', Ã¼berspringe Trading History", providerName);
             }
             
             if (!stopRequested) {
                 // Versuche Trading History zu downloaden
                 try {
-                    logger.debug("Lade Trading History für Provider: {}", providerName);
-                    downloadTradeHistory(providerUrl, providerName);
-                    logger.debug("Trading History erfolgreich für Provider: {}", providerName);
+                    logger.debug("Lade Trading History fÃ¼r Provider: {}", providerName);
+                    downloadTradeHistory(providerUrl, providerName, providerId);
+                    logger.debug("Trading History erfolgreich fÃ¼r Provider: {}", providerName);
                 } catch (RuntimeException e) {
                     // Wenn kritischer Fehler, weiterwerfen
                     if (e.getMessage().contains("Kritischer Fehler")) {
                         throw e;
                     }
-                    logger.warn("Trading History Download fehlgeschlagen für '{}'", providerName);
+                    logger.warn("Trading History Download fehlgeschlagen fÃ¼r '{}'", providerName);
                 }
                 
-                // KORRIGIERTE Fortschrittsanzeige für erfolgreich verarbeitete Provider
+                // KORRIGIERTE Fortschrittsanzeige fÃ¼r erfolgreich verarbeitete Provider
                 updateProgress(providerName, "ERFOLGREICH HERUNTERGELADEN", true);
                 
                 // Protokolliere den erfolgreichen Download mit FORTLAUFENDER NUMMER
@@ -918,7 +928,7 @@ public class SignalDownloader {
             }
             
             if (!stopRequested) {
-                logger.debug("Kehre zur Übersichtsseite zurück");
+                logger.debug("Kehre zur Ãœbersichtsseite zurÃ¼ck: {}", pageUrl);
                 driver.get(pageUrl);
             }
             
@@ -938,13 +948,13 @@ public class SignalDownloader {
                 
                 switch (errorType) {
                     case RECOVERABLE:
-                        logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
+                        logger.warn("RECOVERY-FÃ„HIGER FEHLER - {}", errorMsg);
                         // Protokolliere den Fehlschlag mit FORTLAUFENDER NUMMER
                         if (downloadProtokoll != null) {
                             String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Recovery-fähiger Fehler: " + e.getMessage(), globalProviderNumber);
+                            downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Recovery-fÃ¤higer Fehler: " + e.getMessage(), globalProviderNumber);
                         }
-                        throw e; // Weiterwerfen für Recovery in höherer Ebene
+                        throw e; // Weiterwerfen fÃ¼r Recovery in hÃ¶herer Ebene
                         
                     case NON_CRITICAL:
                     default:
@@ -955,9 +965,9 @@ public class SignalDownloader {
                             downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Nicht-kritischer Fehler: " + e.getMessage(), globalProviderNumber);
                         }
                         
-                        // KORRIGIERTE Fortschrittsanzeige für fehlgeschlagene Provider
+                        // KORRIGIERTE Fortschrittsanzeige fÃ¼r fehlgeschlagene Provider
                         updateProgress(providerName, "FEHLGESCHLAGEN (" + e.getMessage() + ")", false);
-                        // Nicht weiterwerfen - mit nächstem Provider fortfahren
+                        // Nicht weiterwerfen - mit nÃ¤chstem Provider fortfahren
                         break;
                 }
             }
@@ -977,9 +987,8 @@ public class SignalDownloader {
             String rootPageUrl = String.format("https://www.mql5.com/de/signals/%s?source=Site+Signals+%s+Table",
                     cleanProviderId, mqlVersion.toUpperCase());
             
-            logger.debug("Lade Root-Seite für '{}': {}", providerName, rootPageUrl);
-            driver.get(rootPageUrl);
-            Thread.sleep(getRandomWaitTime());
+            logger.debug("Lade Root-Seite fÃ¼r '{}': {}", providerName, rootPageUrl);
+            safeNavigate(rootPageUrl);
             
             String pageSource = driver.getPageSource();
             
@@ -991,9 +1000,12 @@ public class SignalDownloader {
             try (FileWriter writer = new FileWriter(htmlFile)) {
                 writer.write(pageSource);
             }
+            if (waitCallback != null) {
+                waitCallback.onStatusUpdate("Gespeichert (HTML): " + htmlFileName);
+            }
             
             long fileSizeKB = htmlFile.length() / 1024;
-            logger.info("Root-Seite gespeichert für '{}' (ID: {}): {} ({} KB)", 
+            logger.info("Root-Seite gespeichert fÃ¼r '{}' (ID: {}): {} ({} KB)", 
                        providerName, cleanProviderId, htmlFileName, fileSizeKB);
             
             // Log file details to protocol
@@ -1006,7 +1018,7 @@ public class SignalDownloader {
         } catch (Exception e) {
             if (!stopRequested) {
                 ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Herunterladen der Root-Seite für '" + providerName + "' (ID: " + providerId + "): " + e.getMessage();
+                String errorMsg = "Fehler beim Herunterladen der Root-Seite fÃ¼r '" + providerName + "' (ID: " + providerId + "): " + e.getMessage();
                 
                 // Protokolliere den Fehlschlag
                 if (downloadProtokoll != null) {
@@ -1020,10 +1032,10 @@ public class SignalDownloader {
                         throw new RuntimeException("Kritischer Fehler beim Root-Page Download", e);
                         
                     case RECOVERABLE:
-                        logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
+                        logger.warn("RECOVERY-FÃ„HIGER FEHLER - {}", errorMsg);
                         boolean recovered = attemptRecovery(e);
                         if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen für Root-Page Download von '{}'", providerName);
+                            logger.error("Recovery fehlgeschlagen fÃ¼r Root-Page Download von '{}'", providerName);
                             throw new RuntimeException("Recovery fehlgeschlagen", e);
                         }
                         break;
@@ -1038,20 +1050,32 @@ public class SignalDownloader {
         }
     }
 
-    private void downloadTradeHistory(String providerUrl, String providerName) {
+    private void downloadTradeHistory(String providerUrl, String providerName, String providerId) {
         if (stopRequested) return;
 
         try {
-            logger.debug("Lade Trading History für '{}': {}", providerName, providerUrl);
-            driver.get(providerUrl);
+            // Bereinige das Download-Verzeichnis vor dem Download, um Verwechslungen zu vermeiden
+            cleanupDownloadDirectory(configManager.getDownloadPath());
+            
+            String cleanProviderId = providerId;
+            if (cleanProviderId.contains("?")) {
+                cleanProviderId = cleanProviderId.substring(0, cleanProviderId.indexOf("?"));
+            }
+            
+            if (!driver.getCurrentUrl().contains("/signals/" + cleanProviderId)) {
+                logger.debug("Lade Trading History fÃ¼r '{}': {}", providerName, providerUrl);
+                safeNavigate(providerUrl);
+            } else {
+                logger.debug("Browser ist bereits auf Provider-Seite, Ã¼berspringe erneute Navigation");
+            }
             
             WebElement tradeHistoryTab = wait.until(ExpectedConditions.elementToBeClickable(
-                By.xpath("//*[text()='Trading history']")));
+                By.xpath("//*[text()='Trading history' or text()='Handelshistorie' or text()='Trading History']")));
             ((JavascriptExecutor) driver).executeScript("arguments[0].click();", tradeHistoryTab);
 
-            List<WebElement> exportLinks = driver.findElements(By.xpath("//*[text()='History']"));
+            List<WebElement> exportLinks = driver.findElements(By.xpath("//*[text()='History' or text()='Historie']"));
             if (exportLinks.isEmpty()) {
-                String warnMsg = "Kein Export-Link für Trading History gefunden bei Provider: " + providerName;
+                String warnMsg = "Kein Export-Link fÃ¼r Trading History gefunden bei Provider: " + providerName;
                 logger.warn(warnMsg);
                 
                 // Protokolliere die fehlende History
@@ -1062,8 +1086,11 @@ public class SignalDownloader {
                 return;
             }
 
-            logger.debug("Starte CSV-Download für '{}'", providerName);
+            logger.debug("Starte CSV-Download fÃ¼r '{}'", providerName);
             WebElement exportLink = exportLinks.get(exportLinks.size() - 1);
+            if (waitCallback != null) {
+                waitCallback.onStatusUpdate("CSV Download gestartet fÃ¼r: " + providerName);
+            }
             exportLink.click();
 
             handleDownloadedFile(providerName, providerUrl.substring(providerUrl.lastIndexOf("/") + 1));
@@ -1071,7 +1098,7 @@ public class SignalDownloader {
         } catch (Exception e) {
             if (!stopRequested) {
                 ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Herunterladen der Trading History für '" + providerName + "': " + e.getMessage();
+                String errorMsg = "Fehler beim Herunterladen der Trading History fÃ¼r '" + providerName + "': " + e.getMessage();
                 
                 // Protokolliere den Fehlschlag
                 if (downloadProtokoll != null) {
@@ -1085,10 +1112,10 @@ public class SignalDownloader {
                         throw new RuntimeException("Kritischer Fehler beim Trading History Download", e);
                         
                     case RECOVERABLE:
-                        logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
+                        logger.warn("RECOVERY-FÃ„HIGER FEHLER - {}", errorMsg);
                         boolean recovered = attemptRecovery(e);
                         if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen für Trading History Download von '{}'", providerName);
+                            logger.error("Recovery fehlgeschlagen fÃ¼r Trading History Download von '{}'", providerName);
                             throw new RuntimeException("Recovery fehlgeschlagen", e);
                         }
                         break;
@@ -1107,8 +1134,25 @@ public class SignalDownloader {
         if (stopRequested) return;
 
         try {
-            Thread.sleep(getRandomWaitTime());
-            File downloadedFile = findDownloadedFile(configManager.getDownloadPath());
+            // Erst die Schutzwartezeit einhalten, wÃ¤hrend die Datei im Hintergrund heruntergeladen wird
+            if (waitCallback != null) {
+                waitCallback.onStatusUpdate("Lade CSV-Datei: " + providerName);
+            }
+            int delay = getRandomWaitTime();
+            logger.debug("Warte {} ms nach CSV-Klick (wÃ¤hrend des Downloads)...", delay);
+            sleepWithProgress(delay);
+
+            // Dynamisches Warten auf die CSV-Datei (max. 5 Sekunden, falls noch nicht fertig)
+            File downloadedFile = null;
+            int elapsed = 0;
+            while (elapsed < 5000 && !stopRequested) {
+                downloadedFile = findDownloadedFile(configManager.getDownloadPath());
+                if (downloadedFile != null && downloadedFile.exists()) {
+                    break;
+                }
+                Thread.sleep(200);
+                elapsed += 200;
+            }
             
             if (downloadedFile != null && downloadedFile.exists()) {
                 String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
@@ -1122,9 +1166,12 @@ public class SignalDownloader {
                     
                 Files.move(downloadedFile.toPath(), targetFile.toPath(), 
                     StandardCopyOption.REPLACE_EXISTING);
+                if (waitCallback != null) {
+                    waitCallback.onStatusUpdate("Gespeichert (CSV): " + targetFile.getName());
+                }
                 
                 long fileSizeKB = targetFile.length() / 1024;
-                logger.info("CSV-Datei gespeichert für '{}' (ID: {}): {} ({} KB)", 
+                logger.info("CSV-Datei gespeichert fÃ¼r '{}' (ID: {}): {} ({} KB)", 
                            providerName, originalId, targetFile.getName(), fileSizeKB);
                 
                 // Update protocol with complete file information
@@ -1139,7 +1186,7 @@ public class SignalDownloader {
                                                    htmlFileName, htmlSizeKB, targetFile.getName(), fileSizeKB);
                 }
             } else {
-                String warnMsg = "Keine CSV-Datei im Download-Verzeichnis gefunden für Provider: " + providerName;
+                String warnMsg = "Keine CSV-Datei im Download-Verzeichnis gefunden fÃ¼r Provider: " + providerName;
                 logger.warn(warnMsg);
                 
                 // Protokolliere den fehlenden Download
@@ -1151,7 +1198,7 @@ public class SignalDownloader {
         } catch (Exception e) {
             if (!stopRequested) {
                 ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Verarbeiten der CSV-Datei für '" + providerName + "': " + e.getMessage();
+                String errorMsg = "Fehler beim Verarbeiten der CSV-Datei fÃ¼r '" + providerName + "': " + e.getMessage();
                 
                 // Protokolliere den Fehler beim Dateihandling
                 if (downloadProtokoll != null) {
@@ -1165,10 +1212,10 @@ public class SignalDownloader {
                         throw new RuntimeException("Kritischer Fehler beim Dateihandling", e);
                         
                     case RECOVERABLE:
-                        logger.warn("RECOVERY-FÄHIGER FEHLER - {}", errorMsg);
+                        logger.warn("RECOVERY-FÃ„HIGER FEHLER - {}", errorMsg);
                         boolean recovered = attemptRecovery(e);
                         if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen für Dateihandling von '{}'", providerName);
+                            logger.error("Recovery fehlgeschlagen fÃ¼r Dateihandling von '{}'", providerName);
                             throw new RuntimeException("Recovery fehlgeschlagen", e);
                         }
                         break;
@@ -1230,10 +1277,61 @@ public class SignalDownloader {
      */
     private int getMqlLimit() {
         String mqlVersion = configManager.getMqlVersion();
+        int limit;
         if (mqlVersion.startsWith("mt4")) {
-            return configManager.getMql4Limit();
+            limit = configManager.getMql4Limit();
         } else {
-            return configManager.getMql5Limit();
+            limit = configManager.getMql5Limit();
+        }
+        return limit == 0 ? Integer.MAX_VALUE : limit;
+    }
+
+    private void safeNavigate(String url) {
+        if (stopRequested) return;
+        logger.info("Lade Seite: {}", url);
+        driver.get(url);
+        int delay = getRandomWaitTime();
+        logger.debug("Warte {} ms nach Seitennavigation...", delay);
+        sleepWithProgress(delay);
+    }
+
+    private void sleepWithProgress(int delay) {
+        try {
+            int elapsed = 0;
+            if (waitCallback != null) {
+                waitCallback.onWait(0, delay);
+            }
+            while (elapsed < delay && !stopRequested) {
+                int remaining = delay - elapsed;
+                int sleepTime = Math.min(100, remaining);
+                Thread.sleep(sleepTime);
+                elapsed += sleepTime;
+                if (waitCallback != null) {
+                    waitCallback.onWait(elapsed, delay);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            if (waitCallback != null) {
+                waitCallback.onWaitFinished();
+            }
+        }
+    }
+
+    private void cleanupDownloadDirectory(String downloadDirectory) {
+        try {
+            File dir = new File(downloadDirectory);
+            File[] files = dir.listFiles((d, name) -> name.endsWith(".csv"));
+            if (files != null) {
+                for (File file : files) {
+                    if (file.delete()) {
+                        logger.debug("Alte CSV-Datei vor Download gelÃ¶scht: {}", file.getName());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Fehler beim Bereinigen des Download-Verzeichnisses: {}", e.getMessage());
         }
     }
 }

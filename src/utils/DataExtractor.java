@@ -23,6 +23,7 @@ public class DataExtractor {
     private double equityDrawdown;
     private double avr3MonthProfit;
     private List<ChartPoint> drawdownChartData;
+    private int subscribers;
     
     public DataExtractor(HtmlContentCache contentCache, ChartDataExtractor chartExtractor) {
         this.contentCache = contentCache;
@@ -32,6 +33,7 @@ public class DataExtractor {
         this.equityDrawdown = 0.0;
         this.avr3MonthProfit = 0.0;
         this.drawdownChartData = new ArrayList<>();
+        this.subscribers = 0;
     }
     
     public double getBalance(String fileName) {
@@ -339,5 +341,48 @@ public class DataExtractor {
     
     public List<ChartPoint> getDrawdownChartData() {
         return drawdownChartData;
+    }
+
+    public int getSubscribers(String fileName) {
+        try {
+            String htmlContent = contentCache.getHtmlContent(fileName);
+            if (htmlContent == null) {
+                return 0;
+            }
+            
+            org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(htmlContent);
+            
+            // Nach dem Element mit dem Label "Abonnenten:" suchen
+            org.jsoup.select.Elements elements = doc.select("div.s-list-info__item:contains(Abonnenten:) .s-list-info__value");
+            
+            if (elements.isEmpty()) {
+                // Alternative Suche nach "Subscribers:"
+                elements = doc.select("div.s-list-info__item:contains(Subscribers:) .s-list-info__value");
+            }
+            
+            if (!elements.isEmpty()) {
+                String subStr = elements.first().text();
+                logger.info("Extrahierte Abonnenten (Roh): " + subStr);
+                
+                subStr = subStr.replaceAll("[^0-9]", "").trim();
+                if (!subStr.isEmpty()) {
+                    subscribers = Integer.parseInt(subStr);
+                    return subscribers;
+                }
+            } else {
+                logger.warn("Abonnenten/Subscribers konnten nicht extrahiert werden für Datei: " + fileName);
+            }
+        } catch (Exception e) {
+            logger.warn("Fehler beim Extrahieren der Abonnenten für " + fileName + ": " + e.getMessage());
+        }
+        return 0;
+    }
+
+    public int getSubscribers() {
+        return subscribers;
+    }
+
+    public void setSubscribers(int subscribers) {
+        this.subscribers = subscribers;
     }
 }

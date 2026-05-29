@@ -69,6 +69,31 @@ public class SetupDialog extends JDialog {
         mainPanel.add(speedPanel);
         mainPanel.add(Box.createVerticalStrut(10));
 
+        // Path Information Panel
+        JPanel pathPanel = new JPanel(new GridBagLayout());
+        pathPanel.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(),
+            "Path Information",
+            TitledBorder.LEFT,
+            TitledBorder.TOP));
+
+        GridBagConstraints gbcPath = new GridBagConstraints();
+        gbcPath.insets = new Insets(5, 5, 5, 5);
+        gbcPath.anchor = GridBagConstraints.WEST;
+        gbcPath.fill = GridBagConstraints.HORIZONTAL;
+
+        gbcPath.gridx = 0;
+        gbcPath.gridy = 0;
+        gbcPath.weightx = 1.0;
+        
+        JTextField pathField = new JTextField(configManager.getDownloadPath());
+        pathField.setEditable(false);
+        pathField.setColumns(25); // Set width to fit the path nicely
+        pathPanel.add(pathField, gbcPath);
+
+        mainPanel.add(pathPanel);
+        mainPanel.add(Box.createVerticalStrut(10));
+
         // Buttons Panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         JButton saveButton = new JButton("Save");
