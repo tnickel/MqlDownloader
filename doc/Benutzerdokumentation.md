@@ -50,10 +50,10 @@ Nach dem Start öffnet sich das Hauptfenster der Anwendung:
 
 #### A. Download-Bereich (Zeile 1)
 - **MQL4 Download (Button)**: Startet den Scraping-Prozess für MetaTrader 4 Signale.
-- **Limit (MQL4)**: Textfeld zur Eingabe einer Zahl (1 bis 5000). Bestimmt, wie viele Signale aus der MT4-Liste maximal gescannt werden sollen.
+- **Limit (MQL4)**: Textfeld zur Eingabe einer Zahl (0 bis 99999). Bestimmt, wie viele Signale aus der MT4-Liste maximal gescannt werden sollen. Ein Wert von `0` bedeutet **unbegrenzt** (lädt alle verfügbaren Signale herunter).
 - **Zähler (MQL4, Goldene Box)**: Zeigt in Echtzeit an, wie viele MT4-Signale im aktuellen Durchlauf bereits erfolgreich verarbeitet wurden.
 - **MQL5 Download (Button)**: Startet den Scraping-Prozess für MetaTrader 5 Signale.
-- **Limit (MQL5)**: Textfeld zur Eingabe des Limits für MT5-Signale (1 bis 5000).
+- **Limit (MQL5)**: Textfeld zur Eingabe des Limits für MT5-Signale (0 bis 99999). Ein Wert von `0` bedeutet **unbegrenzt** (lädt alle verfügbaren Signale herunter).
 - **Zähler (MQL5, Goldene Box)**: Zeigt die Anzahl verarbeiteter MT5-Signale an.
 
 #### B. Optimierungs- und Filter-Bereich (Zeile 2)
@@ -81,7 +81,8 @@ Nach dem Start öffnet sich das Hauptfenster der Anwendung:
 - **Zentraler Log-Bereich (Schwarz)**:
   Hier sehen Sie live alle Aktionen, Erfolge und Fehler, farblich hervorgehoben (z. B. rote Fehlermeldungen, grüne Erfolgsmeldungen).
 - **Fortschrittsbalken & Statusanzeige**:
-  Zeigt während der Konvertierung den prozentualen Fortschritt und den Namen der aktuell bearbeiteten Datei an.
+  * **Wartezeit-Visualisierung**: Zeigt während der Wartezeiten (`sleepWithProgress`) den genauen Countdown-Fortschritt der aktuellen Verzögerung (z. B. `Warte 5.2s...`) direkt im Fortschrittsbalken an.
+  * **Statusanzeige**: Informiert fortlaufend über den aktuellen Zustand des Downloads (z. B. welcher Provider gerade geladen/gespeichert/übersprungen wird).
 
 ---
 

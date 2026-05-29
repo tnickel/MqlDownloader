@@ -90,9 +90,11 @@ graph TD
 
 ### 3.5. Paket `downloader`
 - **[SignalDownloader.java](file:///d:/git/MQL/MqlDownloader/src/downloader/SignalDownloader.java)**:
-  Der Kern-Scraper. Navigiert über die Signal-Listenseiten von MQL, liest die Tabellen der Signal-Provider aus, klickt sich auf die Unterseiten der Provider, speichert das HTML-Dokument (`_root.html`) und stößt den Download der CSV-Transaktionshistorie an.
+  Der Kern-Scraper. Navigiert über die Signal-Listenseiten von MQL, liest die Tabellen der Signal-Provider aus, klickt sich auf die Unterseiten der Provider, speichert das HTML-Dokument (`_root.html`) und stößt den Download der CSV-Transaktionshistorie an. Bietet nun optimiertes Sleep-Handling, adaptive Wartezeiten und automatische Navigation-Skips.
 - **[ProgressCallback.java](file:///d:/git/MQL/MqlDownloader/src/downloader/ProgressCallback.java)**:
   Interface für Fortschritts-Callbacks an die GUI.
+- **[WaitCallback.java](file:///d:/git/MQL/MqlDownloader/src/downloader/WaitCallback.java)**:
+  Interface für Fortschritts- und Wartezeit-Visualisierungen der Sleep-Phasen an die GUI.
 
 ### 3.6. Paket `converter`
 - **[HtmlConverter.java](file:///d:/git/MQL/MqlDownloader/src/converter/HtmlConverter.java)**:
@@ -235,9 +237,10 @@ Da MQL5 Schutzmechanismen gegen automatisiertes Scraping besitzt, nutzt der Down
 
 1. **User-Agent & Window Spoofing**: Der WebDriver setzt typische Desktop-User-Agents und deaktiviert Automatisierungshinweise.
 2. **Ressourcenschonendes Headless-Setup**: Laden von Bildern, JavaScript-Modulen (soweit nicht notwendig) und Plugins wird blockiert, um CPU und Arbeitsspeicher zu entlasten.
-3. **Randomized Wait Time**: Zwischen Anfragen wird eine zufällige Wartezeit (`getRandomWaitTime()`) zwischen den konfigurierten Werten (Standard: 4 bis 30 Sekunden) eingelegt.
+3. **Randomized Wait Time & Progress Sleeps**: Zwischen Anfragen wird eine zufällige Wartezeit (`getRandomWaitTime()`) eingelegt. Diese Wartezeit wird nun über `sleepWithProgress` in 100ms-Schritten abgewickelt, um sofort auf Benutzerabbrüche reagieren zu können und der GUI den genauen Restwartezeit-Fortschritt per Callback zu signalisieren.
 4. **WebDriver Recovery**: Falls der Chrome-Browser abstürzt oder die Verbindung verliert, kann der `WebDriverManager` eine bestehende Session beenden, Reste säubern (`taskkill`) und den Scraper nahtlos an der letzten Position fortsetzen.
-5. **Download Days**: Einstellbare Lebensdauer für die lokalen Downloads. Dateien, die älter als diese Tage sind, werden automatisch aktualisiert.
+5. **Download Days & Skip-Optimierung**: Einstellbare Lebensdauer für die lokalen Downloads. Dateien, die jünger als diese Tage sind, werden automatisch übersprungen. Der Scraper überspringt zudem die erneute Browser-Navigation, falls sich das Fenster bereits auf der gewünschten Signal-Seite befindet.
+6. **Lokalisierungs-Fallback**: Unterstützung für sowohl deutsche als auch englische Oberflächenlayouts durch flexible XPath-Selektoren bei Registerkarten und CSV-Export-Schaltflächen (z. B. "Trading history" / "Handelshistorie" / "Historie").
 
 ---
 
