@@ -597,8 +597,9 @@ public class SignalDownloader {
                 return false;
             }
 
-            logger.info("Seite {}: {} Provider gefunden (Gesamt bisher: {})", 
-                       pageUrl, providerLinks.size(), totalProvidersProcessed);
+            String loggedUrl = (pageUrl != null && !pageUrl.isEmpty()) ? pageUrl : driver.getCurrentUrl();
+            logger.info("Seite {}: {} Provider gefunden (Gesamt bisher: {})",
+                       loggedUrl, providerLinks.size(), totalProvidersProcessed);
 
             // Pre-extract all provider data to avoid stale element reference exceptions
             List<ProviderData> providersToProcess = new ArrayList<>();
@@ -951,8 +952,9 @@ public class SignalDownloader {
                 downloadProviderRootPage(providerUrl, providerId, providerName);
                 logger.debug("Root-Seite erfolgreich für Provider: {}", providerName);
             } catch (RuntimeException e) {
-                // Wenn kritischer Fehler, weiterwerfen
-                if (e.getMessage().contains("Kritischer Fehler")) {
+                // Wenn kritischer Fehler, weiterwerfen (null-sicher)
+                String msg = e.getMessage();
+                if (msg != null && msg.contains("Kritischer Fehler")) {
                     throw e;
                 }
                 logger.warn("Root Page Download fehlgeschlagen für '{}', überspringe Trading History", providerName);
@@ -965,8 +967,9 @@ public class SignalDownloader {
                     downloadTradeHistory(providerUrl, providerName, providerId);
                     logger.debug("Trading History erfolgreich für Provider: {}", providerName);
                 } catch (RuntimeException e) {
-                    // Wenn kritischer Fehler, weiterwerfen
-                    if (e.getMessage().contains("Kritischer Fehler")) {
+                    // Wenn kritischer Fehler, weiterwerfen (null-sicher)
+                    String msg = e.getMessage();
+                    if (msg != null && msg.contains("Kritischer Fehler")) {
                         throw e;
                     }
                     logger.warn("Trading History Download fehlgeschlagen für '{}'", providerName);

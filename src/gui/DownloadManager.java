@@ -24,17 +24,25 @@ public class DownloadManager {
     private final LogHandler logHandler;
     private final ButtonPanelManager buttonManager;
     private final MqlDownloadProtokoll downloadProtokoll;
+    private final MqlDownloaderGui gui;
+    private final database.DatabaseManager databaseManager;
     private WebDriver currentDriver;
     private volatile SignalDownloader activeDownloader; // Fix #1: Stop-Signal-Propagation
     private volatile boolean stopRequested;
     private Thread downloadThread;
-    private boolean limitReachedLogged = false; // Flag um mehrfaches Loggen zu verhindern
+    private boolean limitReachedLogged = false;
+    private int mql4SubscribersDownloadedCount = 0;
+    private int mql5SubscribersDownloadedCount = 0;
+    private boolean isDoAllAtOnce = false;
 
-    public DownloadManager(ConfigurationManager configManager, LogHandler logHandler, ButtonPanelManager buttonManager) {
+    public DownloadManager(ConfigurationManager configManager, LogHandler logHandler,
+                           ButtonPanelManager buttonManager, MqlDownloaderGui gui) {
         this.configManager = configManager;
         this.logHandler = logHandler;
         this.buttonManager = buttonManager;
+        this.gui = gui;
         this.downloadProtokoll = new MqlDownloadProtokoll(configManager.getRootDirPath() + "\\download");
+        this.databaseManager = new database.DatabaseManager(configManager.getRootDirPath());
     }
 
     public void startDownload(String version) {
@@ -77,6 +85,8 @@ public class DownloadManager {
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
                 downloader.setDownloadProtokoll(downloadProtokoll);
+                downloader.setDatabaseManager(databaseManager);
+                downloader.setSubscriberChangeCallback(change -> gui.addSubscriberChange(change));
                 activeDownloader = downloader; // Fix #1: Referenz halten fuer Stop-Propagation
                 
                 // Fortschritt der Schutzwartezeit an GUI-Progressbar übermitteln
@@ -148,6 +158,14 @@ public class DownloadManager {
                 });
                 
                 downloader.startDownloadProcess();
+
+                // Subscriber-Zaehler je Version aufaddieren
+                int subCount = downloader.getSubscribersDownloadedCount();
+                if (version.equals("MQL4")) {
+                    mql4SubscribersDownloadedCount += subCount;
+                } else {
+                    mql5SubscribersDownloadedCount += subCount;
+                }
 
             } catch (Exception e) {
                 if (!stopRequested) {
@@ -284,16 +302,32 @@ public class DownloadManager {
             Thread.currentThread().interrupt();
         }
     }
-    
+
+    public void resetSubscribersCounters() {
+        mql4SubscribersDownloadedCount = 0;
+        mql5SubscribersDownloadedCount = 0;
+    }
+
+    public void setDoAllAtOnce(boolean value) {
+        this.isDoAllAtOnce = value;
+    }
+
+    public int getMql4SubscribersDownloadedCount() {
+        return mql4SubscribersDownloadedCount;
+    }
+
+    public int getMql5SubscribersDownloadedCount() {
+        return mql5SubscribersDownloadedCount;
+    }
+
     /**
-     * Gibt detaillierte Informationen über den aktuellen Download-Status
+     * Gibt detaillierte Informationen ueber den aktuellen Download-Status
      */
     public String getDownloadStatus() {
         if (isDownloadRunning()) {
             String version = configManager.getMqlVersion().startsWith("mt4") ? "MQL4" : "MQL5";
             int limit = version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
-            
-            return String.format("%s Download läuft (Limit: %d Provider)", version, limit);
+            return String.format("%s Download laeuft (Limit: %d Provider)", version, limit);
         } else {
             return "Kein Download aktiv";
         }
