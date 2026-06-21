@@ -145,7 +145,7 @@ public class DataExtractor {
             if (data != null && !data.isEmpty()) {
                 double maxDrawdown = data.stream()
                     .mapToDouble(ChartPoint::getValue)
-                    .min()
+                    .max()
                     .orElse(0.0);
                 equityDrawdownGraphic = Math.abs(maxDrawdown);
                 return equityDrawdownGraphic;
@@ -165,7 +165,7 @@ public class DataExtractor {
             }
 
             // Pattern 1: Originalformat mit korrektem "Rückgang"
-            Pattern pattern = Pattern.compile("Maximaler Rückgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
+            Pattern pattern = Pattern.compile("Maximaler R\u00fcckgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
             Matcher matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1);
@@ -175,7 +175,7 @@ public class DataExtractor {
             }
             
             // Pattern 2: Flexiblerer Ausdruck für ähnliche Formate
-            pattern = Pattern.compile("Maximaler Rückgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
+            pattern = Pattern.compile("Maximaler R\u00fcckgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");

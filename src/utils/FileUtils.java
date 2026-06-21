@@ -147,6 +147,16 @@ public class FileUtils {
         String mql5Path = baseDownloadPath + "/mql5";
         allCorrected.addAll(correctFileNumbers(mql5Path));
         
+        // MQL4MQL5-Verzeichnis
+        String mql4mql5Path = baseDownloadPath + "/mql4mql5";
+        File mql4mql5Dir = new File(mql4mql5Path);
+        if (mql4mql5Dir.exists() && mql4mql5Dir.isDirectory()) {
+            allCorrected.addAll(correctFileNumbers(mql4mql5Path));
+        }
+
+        // Direktes Verzeichnis
+        allCorrected.addAll(correctFileNumbers(baseDownloadPath));
+
         return allCorrected;
     }
 }

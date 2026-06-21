@@ -1,4 +1,5 @@
 package converter;
+import config.ConfigurationManager;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -21,6 +22,7 @@ import utils.StabilityResult;
 public class HtmlConverter {
     private static final Logger logger = LogManager.getLogger(HtmlConverter.class);
     private final String downloadPath;
+    private final ConfigurationManager configManager;
     private final HtmlParser htmlParser;
     private final HtmlDatabase htmlDatabase;
     private final FileDataReader fileDataReader;
@@ -32,7 +34,12 @@ public class HtmlConverter {
     private int processedProvidersCount = 0;
     
     public HtmlConverter(String downloadPath) {
+        this(downloadPath, null);
+    }
+
+    public HtmlConverter(String downloadPath, ConfigurationManager configManager) {
         this.downloadPath = downloadPath;
+        this.configManager = configManager;
         this.htmlParser = new HtmlParser(downloadPath);
         this.htmlDatabase = new HtmlDatabase(htmlParser);
         this.fileDataReader = new FileDataReader(downloadPath);
@@ -159,8 +166,9 @@ public class HtmlConverter {
         
         // OPTIMIERUNG: Zuerst 3MPDD berechnen und prüfen ob < 0.5
         double mpdd3 = calculate3MPDD(htmlFileName);
+        boolean skipFilter = (configManager != null) && configManager.isSubscribersOnly();
         
-        if (mpdd3 < 0.5) {
+        if (!skipFilter && mpdd3 < 0.5) {
             logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) für " + htmlFileName + " - Dateien werden gelöscht");
             deleteRelatedFiles(htmlFileName);
             

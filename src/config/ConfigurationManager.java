@@ -15,7 +15,7 @@ public class ConfigurationManager {
     private final String logDirPath;
     private final String downloadPath;
     private String baseUrl;
-    private String currentDownloadPath;
+    private String baseDownloadPath;
     private Credentials credentials;
     private static final Logger logger = LogManager.getLogger(ConfigurationManager.class);
 
@@ -30,6 +30,7 @@ public class ConfigurationManager {
     private static final String KEY_MQL4_LIMIT = "mql4Limit";
     private static final String KEY_MQL5_LIMIT = "mql5Limit";
     private static final String KEY_DOWNLOAD_DAYS = "downloadDays";
+    private static final String KEY_SUBSCRIBERS_ONLY = "subscribersOnly";
     
     private static final int DEFAULT_MIN_WAIT = 4000; // 4 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
@@ -86,7 +87,7 @@ public class ConfigurationManager {
         props.setProperty(KEY_USERNAME, username);
         props.setProperty(KEY_PASSWORD, password);
         saveProperties(props, "MQL Downloader Konfiguration");
-        logger.info("Credentials aktualisiert für Benutzer: " + username);
+        logger.info("Credentials aktualisiert fÃ¼r Benutzer: " + username);
     }
 
     public Credentials getCredentials() {
@@ -127,8 +128,8 @@ public class ConfigurationManager {
     }
 
     public void setMql4Limit(int limit) {
-        if (limit < 1 || limit > 5000) {
-            throw new IllegalArgumentException("MQL4 Limit muss zwischen 1 und 5000 liegen");
+        if (limit < 0 || limit > 5000) {
+            throw new IllegalArgumentException("MQL4 Limit muss zwischen 0 (unbegrenzt) und 5000 liegen");
         }
         Properties props = loadProperties();
         props.setProperty(KEY_MQL4_LIMIT, String.valueOf(limit));
@@ -142,8 +143,8 @@ public class ConfigurationManager {
     }
 
     public void setMql5Limit(int limit) {
-        if (limit < 1 || limit > 5000) {
-            throw new IllegalArgumentException("MQL5 Limit muss zwischen 1 und 5000 liegen");
+        if (limit < 0 || limit > 5000) {
+            throw new IllegalArgumentException("MQL5 Limit muss zwischen 0 (unbegrenzt) und 5000 liegen");
         }
         Properties props = loadProperties();
         props.setProperty(KEY_MQL5_LIMIT, String.valueOf(limit));
@@ -151,16 +152,16 @@ public class ConfigurationManager {
         logger.info("MQL5 Limit aktualisiert auf: " + limit);
     }
     
-    // Neuer Getter für Download Days
+    // Neuer Getter fÃ¼r Download Days
     public int getDownloadDays() {
         Properties props = loadProperties();
         return Integer.parseInt(props.getProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS)));
     }
     
-    // Neuer Setter für Download Days mit Validierung
+    // Neuer Setter fÃ¼r Download Days mit Validierung
     public void setDownloadDays(int days) {
         if (days < 0 || days > 20) {
-            throw new IllegalArgumentException("Download Tage müssen zwischen 0 und 20 liegen");
+            throw new IllegalArgumentException("Download Tage mÃ¼ssen zwischen 0 und 20 liegen");
         }
         Properties props = loadProperties();
         props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(days));
@@ -168,10 +169,24 @@ public class ConfigurationManager {
         logger.info("Download Tage aktualisiert auf: " + days);
     }
 
+    public boolean isSubscribersOnly() {
+        Properties props = loadProperties();
+        return Boolean.parseBoolean(props.getProperty(KEY_SUBSCRIBERS_ONLY, "false"));
+    }
+
+    public void setSubscribersOnly(boolean val) {
+        Properties props = loadProperties();
+        props.setProperty(KEY_SUBSCRIBERS_ONLY, String.valueOf(val));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("Subscribers Only Filter aktualisiert auf: " + val);
+    }
+
     public void initializeDirectories() {
         createDirectory(configDirPath);
         createDirectory(logDirPath);
         createDirectory(downloadPath);
+        createDirectory(downloadPath + "\\mql4");
+        createDirectory(downloadPath + "\\mql5");
         initializeDefaultConfig();
     }
 
@@ -188,6 +203,7 @@ public class ConfigurationManager {
             props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
             props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
             props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS));
+            props.setProperty(KEY_SUBSCRIBERS_ONLY, "false");
             saveProperties(props, "MQL Downloader Standard-Konfiguration");
             logger.info("Standard-Konfigurationsdatei erstellt: " + mqlConfigFilePath);
         }
@@ -210,7 +226,7 @@ public class ConfigurationManager {
     }
 
     public String getDownloadPath() {
-        return downloadPath;
+        return getBaseDownloadPath();
     }
 
     public String getConfigDirPath() {
@@ -240,11 +256,12 @@ public class ConfigurationManager {
         props.setProperty(KEY_MQL4_LIMIT, String.valueOf(DEFAULT_MQL4_LIMIT));
         props.setProperty(KEY_MQL5_LIMIT, String.valueOf(DEFAULT_MQL5_LIMIT));
         props.setProperty(KEY_DOWNLOAD_DAYS, String.valueOf(DEFAULT_DOWNLOAD_DAYS));
-        saveProperties(props, "MQL Downloader Konfiguration - Zurückgesetzt auf Standardwerte");
+        props.setProperty(KEY_SUBSCRIBERS_ONLY, "false");
+        saveProperties(props, "MQL Downloader Konfiguration - ZurÃ¼ckgesetzt auf Standardwerte");
         
-        logger.info("Konfiguration wurde auf Standardwerte zurückgesetzt");
+        logger.info("Konfiguration wurde auf Standardwerte zurÃ¼ckgesetzt");
         this.baseUrl = null;
-        this.currentDownloadPath = null;
+        this.baseDownloadPath = null;
         this.credentials = new Credentials("", "");
     }
 
@@ -268,8 +285,15 @@ public class ConfigurationManager {
     }
 
     public void setDownloadPath(String path) {
-        this.currentDownloadPath = path;
+        if (path.endsWith("\\mql4")) {
+            path = path.substring(0, path.length() - 5);
+        } else if (path.endsWith("\\mql5")) {
+            path = path.substring(0, path.length() - 5);
+        }
+        this.baseDownloadPath = path;
         createDirectory(path);
+        createDirectory(path + "\\mql4");
+        createDirectory(path + "\\mql5");
         
         Properties props = new Properties();
         File mqlConfigFile = new File(mqlConfigFilePath);
@@ -304,21 +328,36 @@ public class ConfigurationManager {
         return baseUrl;
     }
 
-    public String getCurrentDownloadPath() {
-        if (currentDownloadPath == null) {
+    public String getBaseDownloadPath() {
+        if (baseDownloadPath == null) {
             try {
                 Properties props = new Properties();
                 File mqlConfigFile = new File(mqlConfigFilePath);
                 if (mqlConfigFile.exists()) {
                     props.load(Files.newBufferedReader(mqlConfigFile.toPath()));
-                    currentDownloadPath = props.getProperty("downloadPath", downloadPath);
+                    String path = props.getProperty("downloadPath", downloadPath);
+                    if (path.endsWith("\\mql4")) {
+                        path = path.substring(0, path.length() - 5);
+                    } else if (path.endsWith("\\mql5")) {
+                        path = path.substring(0, path.length() - 5);
+                    }
+                    baseDownloadPath = path;
+                } else {
+                    baseDownloadPath = downloadPath;
                 }
             } catch (IOException e) {
                 logger.error("Fehler beim Laden des Download-Pfads", e);
-                currentDownloadPath = downloadPath; // Fallback zum Standard-Pfad
+                baseDownloadPath = downloadPath; // Fallback zum Standard-Pfad
             }
         }
-        return currentDownloadPath;
+        return baseDownloadPath;
+    }
+
+    public String getCurrentDownloadPath() {
+        String basePath = getBaseDownloadPath();
+        String version = getMqlVersion();
+        String subfolder = version.startsWith("mt4") ? "mql4" : "mql5";
+        return basePath + "\\" + subfolder;
     }
 
     public void setMqlVersion(String version) throws IOException {

@@ -23,6 +23,8 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import browser.WebDriverManager;
+import database.DatabaseManager;
+import downloader.SubscriberChangeCallback;
 import config.ConfigurationManager;
 import config.Credentials;
 import utils.MqlDownloadProtokoll;
@@ -42,6 +44,9 @@ public class SignalDownloader {
     private int consecutiveErrors = 0;
     private static final int MAX_CONSECUTIVE_ERRORS = 5; // Erhöht von 2 auf 5
     private MqlDownloadProtokoll downloadProtokoll;
+    private DatabaseManager databaseManager;
+    private SubscriberChangeCallback subscriberChangeCallback;
+    private int subscribersDownloadedCount = 0;
     
     // NEUE Klassenvariablen für korrekte Numerierung
     private int totalProvidersProcessed = 0;  // Gesamtzahl aller verarbeiteten Provider
@@ -401,6 +406,9 @@ public class SignalDownloader {
         try {
             // Lade erste Seite für Pagination-Analyse
             safeNavigate(baseUrl);
+            if (configManager.isSubscribersOnly()) {
+                ensureSortedBySubscribers();
+            }
             maxPageNumber = getMaxPageNumber();
         } catch (Exception e) {
             logger.warn("Fehler beim Ermitteln der maximalen Seitenzahl: {}", e.getMessage());
@@ -424,7 +432,13 @@ public class SignalDownloader {
                            mqlLimit);
                 
                 // NEUE LOGIK: Prüfe ob Seite Provider enthält
-                boolean pageHasProviders = processSignalProvidersPage(pageUrl);
+                if (configManager.isSubscribersOnly() && currentPage > 1) {
+                    navigateToPage(currentPage);
+                } else if (currentPage > 1) {
+                    safeNavigate(pageUrl);
+                }
+                String listPageUrl = driver.getCurrentUrl();
+                boolean pageHasProviders = processSignalProvidersPage(currentPage == 1 ? null : pageUrl, listPageUrl);
                 
                 if (!pageHasProviders) {
                     logger.info("Keine Provider auf Seite {} gefunden - Ende der Liste erreicht", currentPage);
@@ -543,14 +557,30 @@ public class SignalDownloader {
         }
     }
     
+    private static class ProviderData {
+        final String url;
+        final String name;
+        final String id;
+        final int subscribers;
+
+        ProviderData(String url, String name, String id, int subscribers) {
+            this.url = url;
+            this.name = name;
+            this.id = id;
+            this.subscribers = subscribers;
+        }
+    }
+
     /**
      * ERWEITERTE processSignalProvidersPage Methode die boolean zurückgibt
      */
-    private boolean processSignalProvidersPage(String pageUrl) {
+    private boolean processSignalProvidersPage(String pageUrl, String returnUrl) {
         if (stopRequested) return false;
 
         try {
-            safeNavigate(pageUrl);
+            if (pageUrl != null && !pageUrl.isEmpty()) {
+                safeNavigate(pageUrl);
+            }
             
             // Warte auf Seitenladung mit robusten Selektoren
             boolean pageLoaded = waitForPageElements();
@@ -570,17 +600,57 @@ public class SignalDownloader {
             logger.info("Seite {}: {} Provider gefunden (Gesamt bisher: {})", 
                        pageUrl, providerLinks.size(), totalProvidersProcessed);
 
+            // Pre-extract all provider data to avoid stale element reference exceptions
+            List<ProviderData> providersToProcess = new ArrayList<>();
+            String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+            
+            for (WebElement link : providerLinks) {
+                try {
+                    String providerUrl = link.getAttribute("href");
+                    String providerName = link.getText().trim();
+                    int subscribers = getSubscribersFromRow(link);
+                    
+                    String providerId = providerUrl.substring(providerUrl.lastIndexOf('/') + 1);
+                    if (providerId.contains("?")) {
+                        providerId = providerId.substring(0, providerId.indexOf("?"));
+                    }
+                    
+                    providersToProcess.add(new ProviderData(providerUrl, providerName, providerId, subscribers));
+                } catch (Exception e) {
+                    logger.warn("Fehler beim Extrahieren der Provider-Daten aus der Zeile: {}", e.getMessage());
+                }
+            }
+
+            if (providersToProcess.isEmpty()) {
+                logger.warn("Keine gültigen Provider-Daten extrahiert für Seite {}", pageUrl);
+                return false;
+            }
+
             int mqlLimit = getMqlLimit();
             
-            for (int i = 0; i < providerLinks.size() && !stopRequested; i++) {
+            for (int i = 0; i < providersToProcess.size() && !stopRequested; i++) {
                 // Prüfe Limit vor jedem Provider
                 if (totalProvidersProcessed >= mqlLimit) {
                     logger.info("LIMIT ERREICHT: {} Provider verarbeitet von maximal {}", totalProvidersProcessed, mqlLimit);
                     break;
                 }
                 
+                ProviderData data = providersToProcess.get(i);
+                
                 try {
-                    processSignalProvider(pageUrl, i);
+                    if (databaseManager != null) {
+                        String changeMessage = databaseManager.checkAndUpdateSubscribers(data.id, mqlVersion, data.name, data.subscribers);
+                        if (changeMessage != null && subscriberChangeCallback != null) {
+                            subscriberChangeCallback.onSubscriberChange(changeMessage);
+                        }
+                    }
+
+                    if (configManager.isSubscribersOnly() && data.subscribers == 0) {
+                        logger.info("SubscribersOnly is active and provider '{}' has 0 subscribers. Stopping list processing.", data.name);
+                        stopRequested = true;
+                        break;
+                    }
+                    processSignalProvider(returnUrl, data.url, data.id, data.name, data.subscribers);
                 } catch (Exception e) {
                     if (!stopRequested) {
                         ErrorType errorType = classifyError(e);
@@ -662,7 +732,7 @@ public class SignalDownloader {
      * Klassifiziert Fehler nach Schweregrad und Recovery-Möglichkeit
      */
     private ErrorType classifyError(Exception e) {
-        String message = e.getMessage().toLowerCase();
+        String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
         String className = e.getClass().getSimpleName().toLowerCase();
 
         // Kritische Fehler - sofortiger Stopp
@@ -832,34 +902,15 @@ public class SignalDownloader {
     /**
      * KORRIGIERTE processSignalProvider Methode mit fortlaufender Numerierung
      */
-    private void processSignalProvider(String pageUrl, int index) {
+    private void processSignalProvider(String pageUrl, String providerUrl, String providerId, String providerName, int subscribers) {
         if (stopRequested) return;
 
-        String providerName = "Unbekannt";
-        String providerId = "0";
-        
         try {
-            List<WebElement> providerLinks = findProviderLinks();
-            if (index >= providerLinks.size() || stopRequested) {
-                logger.debug("Provider-Index {} außerhalb der Grenzen ({}) oder Stop angefordert", index, providerLinks.size());
-                return;
-            }
-
-            WebElement link = providerLinks.get(index);
-            String providerUrl = link.getAttribute("href");
-            providerName = link.getText().trim();
-            
-            // Provider ID extrahieren und bereinigen
-            providerId = providerUrl.substring(providerUrl.lastIndexOf("/") + 1);
-            if (providerId.contains("?")) {
-                providerId = providerId.substring(0, providerId.indexOf("?"));
-            }
-
             // FORTLAUFENDE NUMERIERUNG: Verwende totalProvidersProcessed für die globale Nummer
             int globalProviderNumber = totalProvidersProcessed;
 
-            logger.info("STARTE Provider: '{}' (ID: {}) - Fortlaufende Nr. {} (Index {} auf Seite)", 
-                       providerName, providerId, globalProviderNumber + 1, index);
+            logger.info("STARTE Provider: '{}' (ID: {}) - Fortlaufende Nr. {} (Index in Liste)", 
+                       providerName, providerId, globalProviderNumber + 1);
 
             if (waitCallback != null) {
                 waitCallback.onStatusUpdate(String.format("[%d/%d] Starte: %s (ID: %s)", 
@@ -878,6 +929,9 @@ public class SignalDownloader {
             if (isFileRecentlyDownloaded(providerId, providerName)) {
                 // KORRIGIERTE Fortschrittsanzeige für übersprungene Provider
                 updateProgress(providerName, "ÜBERSPRUNGEN (Dateien jünger als " + configManager.getDownloadDays() + " Tage)", false);
+                if (subscribers > 0) {
+                    subscribersDownloadedCount++;
+                }
                 
                 // Protokolliere das Überspringen mit FORTLAUFENDER NUMMER
                 if (downloadProtokoll != null) {
@@ -920,6 +974,9 @@ public class SignalDownloader {
                 
                 // KORRIGIERTE Fortschrittsanzeige für erfolgreich verarbeitete Provider
                 updateProgress(providerName, "ERFOLGREICH HERUNTERGELADEN", true);
+                if (subscribers > 0) {
+                    subscribersDownloadedCount++;
+                }
                 
                 // Protokolliere den erfolgreichen Download mit FORTLAUFENDER NUMMER
                 if (downloadProtokoll != null) {
@@ -1332,6 +1389,106 @@ public class SignalDownloader {
             }
         } catch (Exception e) {
             logger.warn("Fehler beim Bereinigen des Download-Verzeichnisses: {}", e.getMessage());
+        }
+    }
+    public void setDatabaseManager(DatabaseManager databaseManager) {
+        this.databaseManager = databaseManager;
+    }
+
+    public void setSubscriberChangeCallback(SubscriberChangeCallback callback) {
+        this.subscriberChangeCallback = callback;
+    }
+
+    public int getSubscribersDownloadedCount() {
+        return subscribersDownloadedCount;
+    }
+
+    private int getSubscribersFromRow(WebElement link) {
+        try {
+            WebElement row = null;
+            try {
+                row = link.findElement(By.xpath("./ancestor::*[self::tr or (self::div and contains(@class, 'row') and contains(@class, 'signal'))][1]"));
+            } catch (Exception ex) {
+                row = link.findElement(By.xpath("./ancestor::tr[1]"));
+            }
+            List<String> selectors = Arrays.asList(
+                ".col-subscribers",
+                "td.col-subscribers",
+                "div.col-subscribers",
+                "[class*=\"subscribers\"]",
+                "td:nth-child(5)"
+            );
+            for (String selector : selectors) {
+                try {
+                    WebElement cell = row.findElement(By.cssSelector(selector));
+                    String text = cell.getText().trim();
+                    if (!text.isEmpty()) {
+                        text = text.replaceAll("[^0-9]", "");
+                        if (!text.isEmpty()) {
+                            return Integer.parseInt(text);
+                        }
+                    }
+                } catch (Exception e) {
+                    // ignore
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not extract subscribers from row: " + e.getMessage());
+        }
+        return 0;
+    }
+
+    private void ensureSortedBySubscribers() {
+        try {
+            logger.info("Ensuring the list is sorted by subscribers...");
+            List<WebElement> headers = driver.findElements(By.xpath("//th | //div[contains(@class, 'header')]"));
+            WebElement subscribersHeader = null;
+            for (WebElement header : headers) {
+                if (header.getText().trim().equalsIgnoreCase("Subscribers")) {
+                    subscribersHeader = header;
+                    break;
+                }
+            }
+            if (subscribersHeader == null) {
+                subscribersHeader = driver.findElement(By.xpath("//*[text()=\"Subscribers\"]"));
+            }
+            if (subscribersHeader != null) {
+                logger.info("Found Subscribers header. Clicking to sort...");
+                subscribersHeader.click();
+                Thread.sleep(3000);
+                List<WebElement> providerLinks = findProviderLinks();
+                if (providerLinks.size() >= 2) {
+                    int firstSub = getSubscribersFromRow(providerLinks.get(0));
+                    int secondSub = getSubscribersFromRow(providerLinks.get(1));
+                    logger.info("Subscribers of first: {}, second: {}", firstSub, secondSub);
+                    if (firstSub < secondSub) {
+                        logger.info("Sorted ascending. Clicking Subscribers header again to sort descending...");
+                        subscribersHeader.click();
+                        Thread.sleep(3000);
+                    }
+                }
+            } else {
+                logger.warn("Could not find Subscribers header!");
+            }
+        } catch (Exception e) {
+            logger.error("Error sorting by subscribers: " + e.getMessage(), e);
+        }
+    }
+
+    private void navigateToPage(int targetPage) {
+        try {
+            logger.info("Navigating to page {} using paginator...", targetPage);
+            WebElement paginator = driver.findElement(By.cssSelector(".paginatorEx"));
+            WebElement pageLink = paginator.findElement(By.xpath(".//a[text()=\"" + targetPage + "\"]"));
+            pageLink.click();
+            Thread.sleep(3000);
+        } catch (Exception e) {
+            logger.warn("Could not navigate to page {} via paginator: {}. Falling back to direct URL navigation.", targetPage, e.getMessage());
+            String fallbackUrl = baseUrl;
+            if (fallbackUrl.endsWith("/list")) {
+                fallbackUrl = fallbackUrl.substring(0, fallbackUrl.length() - 5);
+            }
+            safeNavigate(fallbackUrl + "/page" + targetPage);
         }
     }
 }

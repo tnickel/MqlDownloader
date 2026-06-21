@@ -28,7 +28,7 @@ public class ConversionManager {
         conversionThread = new Thread(() -> {
             try {
                 String basePath = configManager.getRootDirPath() + "\\download";
-                HtmlConverter converter = new HtmlConverter(basePath);
+                HtmlConverter converter = new HtmlConverter(basePath, configManager);
                 
                 converter.setProgressCallback((progress, status) -> {
                     SwingUtilities.invokeLater(() -> {

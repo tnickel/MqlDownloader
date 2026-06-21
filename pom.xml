@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>MqlDownloader</groupId>
     <artifactId>MqlDownloader</artifactId>
-    <version>0.0.18-SNAPSHOT</version>
+    <version>0.0.30-SNAPSHOT</version>
     
     <properties>
         <project.build.sourceEncoding>ISO-8859-1</project.build.sourceEncoding>
@@ -63,6 +63,13 @@
             <version>4.26.0</version>
         </dependency>
 
+        <!-- H2 Database -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.2.224</version>
+        </dependency>
+
         <!-- Log4j for logging -->
        <dependency>
         <groupId>org.apache.logging.log4j</groupId>
@@ -102,6 +109,18 @@
 
     </dependencies>
 </project>
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

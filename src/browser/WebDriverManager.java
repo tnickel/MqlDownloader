@@ -1,4 +1,4 @@
-package browser;
+ï»¿package browser;
 
 import java.io.File;
 import java.io.IOException;
@@ -117,7 +117,7 @@ public class WebDriverManager {
         options.setExperimentalOption("prefs", prefs);
         options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         
-        // Eindeutige user-data-dir (löst das Hauptproblem)
+        // Eindeutige user-data-dir (lï¿½st das Hauptproblem)
         options.addArguments("--user-data-dir=" + currentUserDataDir);
         
         // Robustheit-Optionen
@@ -127,7 +127,7 @@ public class WebDriverManager {
         options.addArguments("--disable-extensions");
         options.addArguments("--disable-plugins");
         options.addArguments("--disable-images");
-        options.addArguments("--disable-javascript");
+        // JS bleibt aktiv - Selenium JavascriptExecutor benoetigt es fuer Klicks/Navigation
         options.addArguments("--disable-default-apps");
         options.addArguments("--disable-background-timer-throttling");
         options.addArguments("--disable-backgrounding-occluded-windows");
@@ -135,9 +135,9 @@ public class WebDriverManager {
         options.addArguments("--disable-features=TranslateUI");
         options.addArguments("--disable-ipc-flooding-protection");
         
-        // Stabilität und Performance
+        // Stabilitï¿½t und Performance
         options.addArguments("--max_old_space_size=4096");
-        options.addArguments("--remote-debugging-port=0"); // Zufälliger Port
+        options.addArguments("--remote-debugging-port=0"); // Zufï¿½lliger Port
         options.addArguments("--disable-web-security");
         options.addArguments("--allow-running-insecure-content");
         
@@ -173,7 +173,7 @@ public class WebDriverManager {
     }
 
     /**
-     * Bereinigt die aktuelle Session und entfernt temporäre Dateien
+     * Bereinigt die aktuelle Session und entfernt temporï¿½re Dateien
      */
     public void cleanupSession() {
         cleanupPreviousSession();
@@ -194,41 +194,32 @@ public class WebDriverManager {
                 logger.warn("Fehler beim Bereinigen der user-data-dir {}: {}", currentUserDataDir, e.getMessage());
             }
         }
-        
-        // Töte eventuell hängende Chrome-Prozesse (nur unter Windows)
-        if (System.getProperty("os.name").toLowerCase().contains("windows")) {
-            try {
-                ProcessBuilder pb = new ProcessBuilder("taskkill", "/F", "/IM", "chrome.exe");
-                pb.start().waitFor();
-                Thread.sleep(1000); // Warte kurz nach dem Töten der Prozesse
-            } catch (Exception e) {
-                logger.debug("Konnte Chrome-Prozesse nicht töten (normal wenn keine laufen): {}", e.getMessage());
-            }
-        }
+        // Kein globales taskkill: wuerde alle Chrome-Fenster des Benutzers schliessen.
+        // Selenium-Sessions werden sauber ueber driver.quit() beendet.
     }
 
     /**
-     * Löscht ein Verzeichnis rekursiv
+     * Lï¿½scht ein Verzeichnis rekursiv
      * 
-     * @param path Pfad zum zu löschenden Verzeichnis
-     * @throws IOException bei Fehlern beim Löschen
+     * @param path Pfad zum zu lï¿½schenden Verzeichnis
+     * @throws IOException bei Fehlern beim Lï¿½schen
      */
     private void deleteDirectoryRecursively(Path path) throws IOException {
         if (Files.exists(path)) {
             Files.walk(path)
-                .sorted((a, b) -> b.compareTo(a)) // Sortiere absteigend für korrekte Löschung
+                .sorted((a, b) -> b.compareTo(a)) // Sortiere absteigend fï¿½r korrekte Lï¿½schung
                 .forEach(p -> {
                     try {
                         Files.delete(p);
                     } catch (IOException e) {
-                        logger.debug("Konnte Datei/Verzeichnis nicht löschen: {} - {}", p, e.getMessage());
+                        logger.debug("Konnte Datei/Verzeichnis nicht lï¿½schen: {} - {}", p, e.getMessage());
                     }
                 });
         }
     }
 
     /**
-     * Prüft, ob es sich um einen kritischen Fehler handelt, bei dem nicht retry werden sollte
+     * Prï¿½ft, ob es sich um einen kritischen Fehler handelt, bei dem nicht retry werden sollte
      * 
      * @param exception Die aufgetretene Exception
      * @return true wenn es ein kritischer Fehler ist
@@ -236,7 +227,7 @@ public class WebDriverManager {
     private boolean isCriticalError(Exception exception) {
         String message = exception.getMessage().toLowerCase();
         
-        // Kritische Fehler, bei denen kein Retry helfen würde
+        // Kritische Fehler, bei denen kein Retry helfen wï¿½rde
         return message.contains("no such file or directory") ||
                message.contains("permission denied") ||
                message.contains("access denied") ||
@@ -255,12 +246,12 @@ public class WebDriverManager {
     public WebDriver recoverWebDriver(WebDriver oldDriver) {
         logger.info("Starte WebDriver-Recovery...");
         
-        // Schließe den alten WebDriver sauber
+        // Schlieï¿½e den alten WebDriver sauber
         if (oldDriver != null) {
             try {
                 oldDriver.quit();
             } catch (Exception e) {
-                logger.warn("Fehler beim Schließen des alten WebDrivers: {}", e.getMessage());
+                logger.warn("Fehler beim Schlieï¿½en des alten WebDrivers: {}", e.getMessage());
             }
         }
         
@@ -268,7 +259,7 @@ public class WebDriverManager {
         cleanupPreviousSession();
         
         try {
-            Thread.sleep(3000); // Längere Pause für Recovery
+            Thread.sleep(3000); // Lï¿½ngere Pause fï¿½r Recovery
             return initializeDriver();
         } catch (Exception e) {
             logger.error("WebDriver-Recovery fehlgeschlagen: {}", e.getMessage());
@@ -277,10 +268,10 @@ public class WebDriverManager {
     }
 
     /**
-     * Prüft, ob ein WebDriver noch funktionsfähig ist
+     * Prï¿½ft, ob ein WebDriver noch funktionsfï¿½hig ist
      * 
-     * @param driver Der zu prüfende WebDriver
-     * @return true wenn der WebDriver funktionsfähig ist
+     * @param driver Der zu prï¿½fende WebDriver
+     * @return true wenn der WebDriver funktionsfï¿½hig ist
      */
     public boolean isDriverHealthy(WebDriver driver) {
         if (driver == null) {
@@ -298,7 +289,7 @@ public class WebDriverManager {
     }
 
     /**
-     * Getter für die aktuelle user-data-dir (für Debugging)
+     * Getter fï¿½r die aktuelle user-data-dir (fï¿½r Debugging)
      * 
      * @return Aktueller Pfad zur user-data-dir
      */

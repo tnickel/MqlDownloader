@@ -25,6 +25,7 @@ public class ButtonPanelManager {
     private JProgressBar convertProgress;
     private JLabel convertStatusLabel;
     private JTextField currentFileField;
+    private JCheckBox subscribersOnlyCheckbox;
 
     public ButtonPanelManager(ConfigurationManager configManager) {
         this.configManager = configManager;
@@ -44,6 +45,13 @@ public class ButtonPanelManager {
         convertStatusLabel.setHorizontalAlignment(SwingConstants.CENTER);
         convertStatusLabel.setVisible(false);
         
+        subscribersOnlyCheckbox = new JCheckBox("Nur mit Abonnenten laden (3MPDD-Filter aus)");
+        subscribersOnlyCheckbox.setFont(new Font("Arial", Font.BOLD, 12));
+        subscribersOnlyCheckbox.setSelected(configManager.isSubscribersOnly());
+        subscribersOnlyCheckbox.addActionListener(e -> {
+            configManager.setSubscribersOnly(subscribersOnlyCheckbox.isSelected());
+        });
+
         currentFileField = new JTextField("Inaktiv / Bereit");
         currentFileField.setEditable(false);
         currentFileField.setFont(new Font("Arial", Font.PLAIN, 12));
@@ -161,7 +169,7 @@ public class ButtonPanelManager {
             public void focusLost(FocusEvent e) {
                 try {
                     int value = Integer.parseInt(field.getText());
-                    if (value >= 0 && value <= 99999) {
+                    if (value >= 0 && value <= 5000) {
                         if (isMql4) {
                             configManager.setMql4Limit(value);
                         } else {
@@ -175,8 +183,8 @@ public class ButtonPanelManager {
                         configManager.getMql4Limit() : 
                         configManager.getMql5Limit()));
                     JOptionPane.showMessageDialog(null,
-                        "Bitte geben Sie eine Zahl zwischen 0 (f\u00fcr unbegrenzt) und 99999 ein.",
-                        "Ungültige Eingabe",
+                        "Bitte geben Sie eine Zahl zwischen 0 (f\u00fcr unbegrenzt) und 5000 ein.",
+                        "Ung\u00fcltige Eingabe",
                         JOptionPane.ERROR_MESSAGE);
                 }
             }
@@ -273,6 +281,7 @@ public class ButtonPanelManager {
         mql4LimitField.setEnabled(true);
         mql5LimitField.setEnabled(true);
         downloadDaysField.setEnabled(true);
+        subscribersOnlyCheckbox.setEnabled(true);
     }
 
     // Getter für alle Buttons und Felder
@@ -287,6 +296,7 @@ public class ButtonPanelManager {
     public JProgressBar getConvertProgress() { return convertProgress; }
     public JLabel getConvertStatusLabel() { return convertStatusLabel; }
     public JTextField getCurrentFileField() { return currentFileField; }
+    public JCheckBox getSubscribersOnlyCheckbox() { return subscribersOnlyCheckbox; }
     
     // Neue DocumentFilter-Klasse für Zahlenvalidierung
     private class NumericRangeFilter extends DocumentFilter {

@@ -1,6 +1,15 @@
 package gui;
 
 import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.Font;
+import java.awt.Color;
+import javax.swing.DefaultListModel;
+import javax.swing.JList;
+import javax.swing.JScrollPane;
+import javax.swing.JLabel;
+import javax.swing.DefaultListCellRenderer;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
 import java.io.File;
@@ -29,13 +38,15 @@ public class MqlDownloaderGui extends JFrame {
     private final ButtonPanelManager buttonManager;
     private final DownloadManager downloadManager;
     private final ConversionManager conversionManager;
-    private JButton statisticsButton;  // Neuer Button für Statistiken
+    private JButton statisticsButton;
+    private DefaultListModel<String> subscriberChangesListModel;
+    private JList<String> subscriberChangesList;
 
     public MqlDownloaderGui() {
         configManager = new ConfigurationManager("C:\\Forex\\MqlAnalyzer");
         logHandler = new LogHandler();
         buttonManager = new ButtonPanelManager(configManager);
-        downloadManager = new DownloadManager(configManager, logHandler, buttonManager);
+        downloadManager = new DownloadManager(configManager, logHandler, buttonManager, this);
         conversionManager = new ConversionManager(configManager, logHandler, buttonManager);
         
         initializeGui();
@@ -49,7 +60,7 @@ public class MqlDownloaderGui extends JFrame {
         setSize(800, 600);
 
         // Top panel für Buttons - KOMPAKTER LAYOUT
-        JPanel topPanel = new JPanel(new GridLayout(3, 1, 5, 5)); // NUR 3 Zeilen statt 6!
+        JPanel topPanel = new JPanel(new GridLayout(4, 1, 5, 5));
         topPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Kleinere Padding
 
         // Erste Zeile: MQL4 und MQL5 horizontal nebeneinander
@@ -70,17 +81,42 @@ public class MqlDownloaderGui extends JFrame {
         actionPanel.add(createCenteredPanel(buttonManager.getDoAllButton()));
         topPanel.add(actionPanel);
 
+        // Vierte Zeile: Abonnenten Checkbox
+        JPanel checkboxPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        checkboxPanel.add(buttonManager.getSubscribersOnlyCheckbox());
+        topPanel.add(checkboxPanel);
+
         // Statistik-Button (rechts neben dem Log-Panel)
         statisticsButton = createStatisticsButton();
         JPanel statisticsButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         statisticsButtonPanel.add(statisticsButton);
+
+        // Sidebar fuer Abonnenten-Aenderungen
+        subscriberChangesListModel = new DefaultListModel<>();
+        subscriberChangesList = new JList<>(subscriberChangesListModel);
+        subscriberChangesList.setFont(new Font("Monospaced", Font.PLAIN, 12));
+        subscriberChangesList.setCellRenderer(new SubscriberChangeCellRenderer());
+
+        JScrollPane subscriberChangesScrollPane = new JScrollPane(subscriberChangesList);
+        subscriberChangesScrollPane.setBorder(BorderFactory.createTitledBorder(
+            BorderFactory.createEtchedBorder(),
+            "Abonnenten-Aenderungen",
+            javax.swing.border.TitledBorder.LEFT,
+            javax.swing.border.TitledBorder.TOP));
+        subscriberChangesScrollPane.setPreferredSize(new Dimension(220, 300));
+
+        JPanel sidePanel = new JPanel(new BorderLayout(5, 5));
+        sidePanel.add(statisticsButtonPanel, BorderLayout.NORTH);
+        sidePanel.add(subscriberChangesScrollPane, BorderLayout.CENTER);
+
+
 
         // Main Panel zusammenbauen
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         mainPanel.add(topPanel, BorderLayout.NORTH);
         mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER); // Bekommt jetzt VIEL mehr Platz!
-        mainPanel.add(statisticsButtonPanel, BorderLayout.EAST);
+        mainPanel.add(sidePanel, BorderLayout.EAST);
         mainPanel.add(buttonManager.createProgressPanel(), BorderLayout.SOUTH);
 
         // Zum Frame hinzufügen
@@ -133,35 +169,76 @@ public class MqlDownloaderGui extends JFrame {
     private void handleDoAllButton() {
         logHandler.log("Starte automatisierten Gesamtprozess...");
         disableAllButtons();
-        
+        downloadManager.resetSubscribersCounters();
+        downloadManager.setDoAllAtOnce(true);
+
         Thread allProcessesThread = new Thread(() -> {
             try {
-                // Start des Gesamtprozesses - ohne vorheriges Löschen der Dateien
-                
+                // Start des Gesamtprozesses - ohne vorheriges Loeschen der Dateien
+
                 logHandler.log("Starte MQL4 Download...");
                 downloadManager.startDownload("MQL4");
                 downloadManager.waitForDownloadCompletion();
-                
+
                 logHandler.log("Starte MQL5 Download...");
                 downloadManager.startDownload("MQL5");
                 downloadManager.waitForDownloadCompletion();
-                
+
                 logHandler.log("Starte Konvertierung...");
                 conversionManager.startConversion();
                 conversionManager.waitForConversionCompletion();
-                
+
                 SwingUtilities.invokeLater(() -> {
                     logHandler.log("Gesamtprozess erfolgreich abgeschlossen!");
+                    downloadManager.setDoAllAtOnce(false);
                     enableAllButtons();
+                    int mql4Count = downloadManager.getMql4SubscribersDownloadedCount();
+                    int mql5Count = downloadManager.getMql5SubscribersDownloadedCount();
+                    JOptionPane.showMessageDialog(this,
+                        "Do all at Once abgeschlossen:\n" + mql5Count + " MQL5 Signale mit Abonnenten und " + mql4Count + " MQL4 Signale mit Abonnenten geladen.",
+                        "Ergebnis Gesamtprozess",
+                        JOptionPane.INFORMATION_MESSAGE);
                 });
             } catch (Exception e) {
                 logHandler.logError("Fehler im Gesamtprozess: " + e.getMessage(), e);
+                downloadManager.setDoAllAtOnce(false);
                 SwingUtilities.invokeLater(this::enableAllButtons);
             }
         });
-        
+
         allProcessesThread.start();
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private void disableAllButtons() {
         buttonManager.getDoAllButton().setEnabled(false);
@@ -171,7 +248,8 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getMql4LimitField().setEnabled(false);
         buttonManager.getMql5LimitField().setEnabled(false);
         buttonManager.getDownloadDaysField().setEnabled(false);
-        statisticsButton.setEnabled(false);  // Auch den Statistik-Button deaktivieren
+        buttonManager.getSubscribersOnlyCheckbox().setEnabled(false);
+        statisticsButton.setEnabled(false);
     }
 
     private void enableAllButtons() {
@@ -212,5 +290,44 @@ public class MqlDownloaderGui extends JFrame {
             MqlDownloaderGui gui = new MqlDownloaderGui();
             gui.setVisible(true);
         });
+    }
+    public void addSubscriberChange(String change) {
+        SwingUtilities.invokeLater(() -> {
+            subscriberChangesListModel.addElement(change);
+            int lastIndex = subscriberChangesListModel.getSize() - 1;
+            if (lastIndex >= 0) {
+                subscriberChangesList.ensureIndexIsVisible(lastIndex);
+            }
+        });
+    }
+
+    public void clearSubscriberChanges() {
+        SwingUtilities.invokeLater(() -> {
+            subscriberChangesListModel.clear();
+        });
+    }
+
+    private static class SubscriberChangeCellRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            String text = (String) value;
+            
+            if (text.startsWith("[NEW]")) {
+                label.setForeground(new Color(0, 120, 215)); // Nice premium blue
+                label.setFont(label.getFont().deriveFont(Font.BOLD));
+            } else if (text.contains(":+")) {
+                label.setForeground(new Color(40, 167, 69)); // Forest green
+                label.setFont(label.getFont().deriveFont(Font.BOLD));
+            } else if (text.contains(":-") || text.contains(": -")) {
+                label.setForeground(new Color(220, 53, 69)); // Crimson red
+                label.setFont(label.getFont().deriveFont(Font.BOLD));
+            } else {
+                label.setForeground(Color.BLACK);
+            }
+            
+            label.setBorder(BorderFactory.createEmptyBorder(2, 5, 2, 5));
+            return label;
+        }
     }
 }

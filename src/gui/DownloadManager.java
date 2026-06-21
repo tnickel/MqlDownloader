@@ -25,6 +25,7 @@ public class DownloadManager {
     private final ButtonPanelManager buttonManager;
     private final MqlDownloadProtokoll downloadProtokoll;
     private WebDriver currentDriver;
+    private volatile SignalDownloader activeDownloader; // Fix #1: Stop-Signal-Propagation
     private volatile boolean stopRequested;
     private Thread downloadThread;
     private boolean limitReachedLogged = false; // Flag um mehrfaches Loggen zu verhindern
@@ -76,6 +77,7 @@ public class DownloadManager {
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
                 downloader.setStopFlag(stopRequested);
                 downloader.setDownloadProtokoll(downloadProtokoll);
+                activeDownloader = downloader; // Fix #1: Referenz halten fuer Stop-Propagation
                 
                 // Fortschritt der Schutzwartezeit an GUI-Progressbar übermitteln
                 downloader.setWaitCallback(new downloader.WaitCallback() {
@@ -187,6 +189,11 @@ public class DownloadManager {
     public void stopDownload() {
         logHandler.log("STOPPE Download-Prozess...");
         stopRequested = true;
+        // Fix #1: Stop-Signal auch an aktiven Downloader propagieren
+        SignalDownloader currentDownloader = activeDownloader;
+        if (currentDownloader != null) {
+            currentDownloader.setStopFlag(true);
+        }
         buttonManager.getStopButton().setEnabled(false);
         
         new Thread(() -> {
@@ -233,6 +240,7 @@ public class DownloadManager {
      * VERBESSERTE cleanupDownload Methode mit thread-sicherem Logging
      */
     private void cleanupDownload() {
+        activeDownloader = null; // Fix #1: Referenz freigeben
         if (currentDriver != null) {
             try {
                 logging.LoggerManager.safeLog("Schließe WebDriver...");
