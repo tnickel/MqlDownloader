@@ -63,7 +63,8 @@ if (-not $sourceJars) {
 $sourceJar = $sourceJars[0]
 $targetPaths = @(
     "D:\git\MQL\MqlDownloader\tmp\MqlDownloaderApp.jar",
-    "\\ds918\Forex\tmp\MqlDownloaderApp.jar"
+    "\\ds918\Forex\tmp\MqlDownloaderApp.jar",
+    "C:\Forex\MqlAnalyzer\bin\MqlDownloaderApp.jar"
 )
 
 foreach ($targetPath in $targetPaths) {

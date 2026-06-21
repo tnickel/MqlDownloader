@@ -57,7 +57,7 @@ public class MqlDownloaderGui extends JFrame {
         setTitle("MQL Signal Downloader");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
-        setSize(800, 600);
+        setSize(1000, 650);
 
         // Top panel für Buttons - KOMPAKTER LAYOUT
         JPanel topPanel = new JPanel(new GridLayout(4, 1, 5, 5));
@@ -103,7 +103,7 @@ public class MqlDownloaderGui extends JFrame {
             "Abonnenten-Aenderungen",
             javax.swing.border.TitledBorder.LEFT,
             javax.swing.border.TitledBorder.TOP));
-        subscriberChangesScrollPane.setPreferredSize(new Dimension(220, 300));
+        subscriberChangesScrollPane.setPreferredSize(new Dimension(380, 300));
 
         JPanel sidePanel = new JPanel(new BorderLayout(5, 5));
         sidePanel.add(statisticsButtonPanel, BorderLayout.NORTH);
