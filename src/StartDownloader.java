@@ -49,7 +49,7 @@ public class StartDownloader {
      */
     public void initializeDownloader() throws IOException {
         try {
-            // Prüfe ob WebDriver noch gesund ist
+            // Pr\u00fcfe ob WebDriver noch gesund ist
             if (!webDriverManager.isDriverHealthy(driver)) {
                 logger.warn("WebDriver ist nicht gesund, starte Neuinitialisierung...");
                 closeDriver();
@@ -58,9 +58,9 @@ public class StartDownloader {
             
             Credentials credentials = configManager.getCredentials();
             
-            // Verwende die echten Credentials falls verfügbar, sonst Platzhalter
+            // Verwende die echten Credentials falls verf\u00fcgbar, sonst Platzhalter
             if (credentials.getUsername().isEmpty() || credentials.getPassword().isEmpty()) {
-                logger.warn("Keine gültigen Credentials konfiguriert, verwende Standardwerte");
+                logger.warn("Keine g\u00fcltigen Credentials konfiguriert, verwende Standardwerte");
                 credentials = new Credentials("username", "password");
             }
             
@@ -76,7 +76,7 @@ public class StartDownloader {
     /**
      * Wechselt die MQL-Version mit robuster Fehlerbehandlung
      * 
-     * @param version Die gewünschte MQL-Version ("mt4" oder "mt5")
+     * @param version Die gew\u00fcnschte MQL-Version ("mt4" oder "mt5")
      * @throws IOException bei Konfigurationsfehlern
      */
     public void switchMqlVersion(String version) throws IOException {
@@ -104,7 +104,7 @@ public class StartDownloader {
                 throw new IllegalStateException("Downloader muss erst initialisiert werden");
             }
             
-            // Prüfe WebDriver-Gesundheit vor dem Start
+            // Pr\u00fcfe WebDriver-Gesundheit vor dem Start
             if (!webDriverManager.isDriverHealthy(driver)) {
                 logger.warn("WebDriver ist nicht gesund vor Download-Start, versuche Recovery...");
                 
@@ -133,13 +133,13 @@ public class StartDownloader {
                 throw new RuntimeException("Kritischer Download-Fehler", e);
             } else {
                 logger.warn("Nicht-kritischer Fehler - Download-Prozess wurde gestoppt");
-                // Könnte hier Recovery versuchen oder Benutzer benachrichtigen
+                // K\u00f6nnte hier Recovery versuchen oder Benutzer benachrichtigen
             }
         }
     }
 
     /**
-     * Prüft, ob es sich um einen kritischen Download-Fehler handelt
+     * Pr\u00fcft, ob es sich um einen kritischen Download-Fehler handelt
      * 
      * @param e Die aufgetretene Exception
      * @return true wenn es ein kritischer Fehler ist
@@ -156,17 +156,17 @@ public class StartDownloader {
     }
 
     /**
-     * Schließt den WebDriver sauber mit Cleanup
+     * Schlie\u00dft den WebDriver sauber mit Cleanup
      */
     public void closeDriver() {
         try {
             if (driver != null) {
-                logger.info("Schließe WebDriver...");
+                logger.info("Schlie\u00dfe WebDriver...");
                 driver.quit();
                 logger.info("WebDriver erfolgreich geschlossen");
             }
         } catch (Exception e) {
-            logger.warn("Fehler beim Schließen des WebDrivers: {}", e.getMessage());
+            logger.warn("Fehler beim Schlie\u00dfen des WebDrivers: {}", e.getMessage());
         } finally {
             driver = null;
             
@@ -183,13 +183,13 @@ public class StartDownloader {
     }
 
     /**
-     * Führt einen vollständigen Neustart des WebDrivers durch
-     * Nützlich bei schwerwiegenden Problemen
+     * F\u00fchrt einen vollst\u00e4ndigen Neustart des WebDrivers durch
+     * N\u00fctzlich bei schwerwiegenden Problemen
      */
     public void restartWebDriver() {
-        logger.info("Führe vollständigen WebDriver-Neustart durch...");
+        logger.info("F\u00fchre vollst\u00e4ndigen WebDriver-Neustart durch...");
         
-        // Schließe aktuellen WebDriver
+        // Schlie\u00dfe aktuellen WebDriver
         closeDriver();
         
         // Warte kurz
@@ -215,27 +215,27 @@ public class StartDownloader {
     }
 
     /**
-     * Prüft den Gesundheitszustand des Systems
+     * Pr\u00fcft den Gesundheitszustand des Systems
      * 
-     * @return true wenn alle Komponenten funktionsfähig sind
+     * @return true wenn alle Komponenten funktionsf\u00e4hig sind
      */
     public boolean isSystemHealthy() {
         try {
-            // Prüfe WebDriver
+            // Pr\u00fcfe WebDriver
             if (driver == null || !webDriverManager.isDriverHealthy(driver)) {
                 logger.warn("WebDriver ist nicht gesund");
                 return false;
             }
             
-            // Prüfe Downloader
+            // Pr\u00fcfe Downloader
             if (downloader == null) {
                 logger.warn("Downloader ist nicht initialisiert");
                 return false;
             }
             
-            // Prüfe Konfiguration
+            // Pr\u00fcfe Konfiguration
             if (configManager == null) {
-                logger.warn("ConfigurationManager ist nicht verfügbar");
+                logger.warn("ConfigurationManager ist nicht verf\u00fcgbar");
                 return false;
             }
             
@@ -259,7 +259,7 @@ public class StartDownloader {
     }
 
     /**
-     * Getter für den ConfigurationManager
+     * Getter f\u00fcr den ConfigurationManager
      * 
      * @return ConfigurationManager-Instanz
      */
@@ -268,7 +268,7 @@ public class StartDownloader {
     }
 
     /**
-     * Getter für den WebDriverManager
+     * Getter f\u00fcr den WebDriverManager
      * 
      * @return WebDriverManager-Instanz  
      */
@@ -277,7 +277,7 @@ public class StartDownloader {
     }
 
     /**
-     * Hauptmethode für Standalone-Ausführung
+     * Hauptmethode f\u00fcr Standalone-Ausf\u00fchrung
      * 
      * @param args Kommandozeilenargumente
      */
@@ -291,7 +291,7 @@ public class StartDownloader {
             // Initialisiere Downloader
             starter.initializeDownloader();
             
-            // Starte Download (nur bei direkter Ausführung)
+            // Starte Download (nur bei direkter Ausf\u00fchrung)
             if (args.length > 0 && "autostart".equals(args[0])) {
                 starter.startDownload();
             } else {

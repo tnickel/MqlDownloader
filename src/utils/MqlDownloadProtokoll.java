@@ -21,7 +21,7 @@ public class MqlDownloadProtokoll {
     }
 
     /**
-     * Löscht die Protokolldatei für die angegebene MQL-Version
+     * L\u00f6scht die Protokolldatei f\u00fcr die angegebene MQL-Version
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      */
@@ -35,25 +35,25 @@ public class MqlDownloadProtokoll {
             Files.createFile(path);
             log(mqlVersion, "=".repeat(80));
             log(mqlVersion, "MQL DOWNLOAD PROTOKOLL - " + mqlVersion.toUpperCase());
-            log(mqlVersion, "Protokoll zurückgesetzt am " + LocalDateTime.now().format(formatter));
+            log(mqlVersion, "Protokoll zur\u00fcckgesetzt am " + LocalDateTime.now().format(formatter));
             log(mqlVersion, "=".repeat(80));
-            logger.info("Protokoll für {} wurde zurückgesetzt", mqlVersion);
+            logger.info("Protokoll f\u00fcr {} wurde zur\u00fcckgesetzt", mqlVersion);
         } catch (IOException e) {
-            logger.error("Fehler beim Zurücksetzen des Protokolls für {}: {}", mqlVersion, e.getMessage());
+            logger.error("Fehler beim Zur\u00fccksetzen des Protokolls f\u00fcr {}: {}", mqlVersion, e.getMessage());
         }
     }
 
     /**
-     * Löscht alle Protokolldateien (MQL4 und MQL5)
+     * L\u00f6scht alle Protokolldateien (MQL4 und MQL5)
      */
     public void resetAllProtokolle() {
         resetProtokoll("mql4");
         resetProtokoll("mql5");
-        logger.info("Alle Protokolle wurden zurückgesetzt");
+        logger.info("Alle Protokolle wurden zur\u00fcckgesetzt");
     }
 
     /**
-     * Protokolliert eine Nachricht für die angegebene MQL-Version
+     * Protokolliert eine Nachricht f\u00fcr die angegebene MQL-Version
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param message Die zu protokollierende Nachricht
@@ -68,9 +68,9 @@ public class MqlDownloadProtokoll {
             
             String logEntry = LocalDateTime.now().format(formatter) + " | " + message + System.lineSeparator();
             Files.write(path, logEntry.getBytes(), StandardOpenOption.APPEND);
-            logger.debug("Protokolleintrag für {}: {}", mqlVersion, message);
+            logger.debug("Protokolleintrag f\u00fcr {}: {}", mqlVersion, message);
         } catch (IOException e) {
-            logger.error("Fehler beim Schreiben in das Protokoll für {}: {}", mqlVersion, e.getMessage());
+            logger.error("Fehler beim Schreiben in das Protokoll f\u00fcr {}: {}", mqlVersion, e.getMessage());
         }
     }
 
@@ -100,7 +100,7 @@ public class MqlDownloadProtokoll {
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param signalProvider Der Name des Signalproviders
-     * @param reason Der Grund für den Fehlschlag
+     * @param reason Der Grund f\u00fcr den Fehlschlag
      * @param index Der Index des Providers in der Liste
      */
     public void logFailure(String mqlVersion, String signalProvider, String reason, int index) {
@@ -112,7 +112,7 @@ public class MqlDownloadProtokoll {
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param signalProvider Der Name des Signalproviders
-     * @param reason Der Grund für den Fehlschlag
+     * @param reason Der Grund f\u00fcr den Fehlschlag
      */
     public void logFailure(String mqlVersion, String signalProvider, String reason) {
         log(mqlVersion, "ERROR: '" + signalProvider + "' - " + reason);
@@ -172,7 +172,7 @@ public class MqlDownloadProtokoll {
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param totalProcessed Gesamtanzahl verarbeiteter Provider
      * @param successful Anzahl erfolgreicher Downloads
-     * @param skipped Anzahl übersprungener Provider
+     * @param skipped Anzahl \u00fcbersprungener Provider
      * @param failed Anzahl fehlgeschlagener Downloads
      * @param pagesProcessed Anzahl verarbeiteter Seiten
      */
@@ -199,9 +199,9 @@ public class MqlDownloadProtokoll {
      * @param signalProvider Der Name des Signalproviders
      * @param providerId Die Provider-ID
      * @param htmlFile Name der HTML-Datei
-     * @param htmlSize Größe der HTML-Datei in KB
+     * @param htmlSize Gr\u00f6\u00dfe der HTML-Datei in KB
      * @param csvFile Name der CSV-Datei (kann null sein)
-     * @param csvSize Größe der CSV-Datei in KB (kann 0 sein)
+     * @param csvSize Gr\u00f6\u00dfe der CSV-Datei in KB (kann 0 sein)
      */
     public void logFileDetails(String mqlVersion, String signalProvider, String providerId, 
                               String htmlFile, long htmlSize, String csvFile, long csvSize) {
@@ -221,7 +221,7 @@ public class MqlDownloadProtokoll {
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param errorType Art des Fehlers
-     * @param recoveryAction Durchgeführte Recovery-Aktion
+     * @param recoveryAction Durchgef\u00fchrte Recovery-Aktion
      * @param success Erfolg der Recovery
      */
     public void logRecoveryAttempt(String mqlVersion, String errorType, String recoveryAction, boolean success) {
@@ -234,18 +234,18 @@ public class MqlDownloadProtokoll {
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
      * @param event Art des Ereignisses
-     * @param details Zusätzliche Details
+     * @param details Zus\u00e4tzliche Details
      */
     public void logSystemEvent(String mqlVersion, String event, String details) {
         log(mqlVersion, String.format("SYSTEM: %s - %s", event, details));
     }
 
     /**
-     * Gibt den Pfad zur Protokolldatei für die angegebene MQL-Version zurück
+     * Gibt den Pfad zur Protokolldatei f\u00fcr die angegebene MQL-Version zur\u00fcck
      * KORRIGIERT: Verwendet jetzt korrekt den mqlVersion Parameter
      *
      * @param mqlVersion Die MQL-Version (mql4 oder mql5)
-     * @return Der vollständige Pfad zur Protokolldatei
+     * @return Der vollst\u00e4ndige Pfad zur Protokolldatei
      */
     private String getFilename(String mqlVersion) {
         return Paths.get(downloadPath, mqlVersion.toLowerCase() + "download.txt").toString();

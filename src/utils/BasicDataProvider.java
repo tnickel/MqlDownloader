@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 /**
- * Klasse für grundlegende Datenwerte die vom MPDD Calculator benötigt werden.
- * Diese Klasse enthält nur die essentiellen Methoden ohne komplexe Berechnungen.
+ * Klasse f\u00fcr grundlegende Datenwerte die vom MPDD Calculator ben\u00f6tigt werden.
+ * Diese Klasse enth\u00e4lt nur die essentiellen Methoden ohne komplexe Berechnungen.
  */
 public class BasicDataProvider {
     private static final Logger LOGGER = Logger.getLogger(BasicDataProvider.class.getName());
@@ -18,17 +18,17 @@ public class BasicDataProvider {
     }
     
     /**
-     * Holt die monatlichen Profit-Prozentsätze für einen Provider
+     * Holt die monatlichen Profit-Prozents\u00e4tze f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
-     * @return Map mit Jahr/Monat als Schlüssel und Profit-Prozentsatz als Wert
+     * @return Map mit Jahr/Monat als Schl\u00fcssel und Profit-Prozentsatz als Wert
      */
     public Map<String, Double> getMonthlyProfitPercentages(String fileName) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         Map<String, Double> monthlyProfits = new HashMap<>();
         
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
             return monthlyProfits;
         }
         
@@ -55,7 +55,7 @@ public class BasicDataProvider {
     }
     
     /**
-     * Holt den Equity Drawdown für einen Provider
+     * Holt den Equity Drawdown f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Equity Drawdown in Prozent
@@ -63,8 +63,8 @@ public class BasicDataProvider {
     public double getEquityDrawdown(String fileName) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
-            // Standardwert zurückgeben, um Division durch Null zu vermeiden
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
+            // Standardwert zur\u00fcckgeben, um Division durch Null zu vermeiden
             return 1.0;
         }
         
@@ -76,7 +76,7 @@ public class BasicDataProvider {
             
             // Stelle sicher, dass der Wert positiv ist (wir erwarten einen positiven Prozentsatz)
             if (value <= 0.0) {
-                LOGGER.warning("EquityDrawdown ist 0 oder negativ: " + value + " für " + fileName);
+                LOGGER.warning("EquityDrawdown ist 0 oder negativ: " + value + " f\u00fcr " + fileName);
                 return 1.0; // Standardwert, um Division durch Null zu vermeiden
             }
             
@@ -88,7 +88,7 @@ public class BasicDataProvider {
     }
     
     /**
-     * Holt die Balance für einen Provider
+     * Holt die Balance f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Balance als double-Wert
@@ -96,7 +96,7 @@ public class BasicDataProvider {
     public double getBalance(String fileName) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
             return 0.0;
         }
         
@@ -112,7 +112,7 @@ public class BasicDataProvider {
     }
     
     /**
-     * Holt den grafischen Equity Drawdown für einen Provider
+     * Holt den grafischen Equity Drawdown f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Equity Drawdown Graphic als double-Wert
@@ -120,7 +120,7 @@ public class BasicDataProvider {
     public double getEquityDrawdownGraphic(String fileName) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
             return 0.0;
         }
         
@@ -144,7 +144,7 @@ public class BasicDataProvider {
     public double get3MPDD(String fileName) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
             return 0.0;
         }
         
@@ -160,7 +160,7 @@ public class BasicDataProvider {
     }
     
     /**
-     * Holt MPDD-Werte für verschiedene Zeiträume (6, 9, 12 Monate)
+     * Holt MPDD-Werte f\u00fcr verschiedene Zeitr\u00e4ume (6, 9, 12 Monate)
      * 
      * @param fileName Name der Provider-Datei
      * @param months Anzahl der Monate (6, 9, 12)
@@ -169,7 +169,7 @@ public class BasicDataProvider {
     public double getMPDD(String fileName, int months) {
         Map<String, String> data = fileDataReader.getFileData(fileName);
         if (data.isEmpty()) {
-            LOGGER.warning("Keine Daten für " + fileName + " gefunden");
+            LOGGER.warning("Keine Daten f\u00fcr " + fileName + " gefunden");
             return 0.0;
         }
         
@@ -186,7 +186,7 @@ public class BasicDataProvider {
     }
     
     /**
-     * Erstellt einen einfachen Tooltip für MPDD-Werte 
+     * Erstellt einen einfachen Tooltip f\u00fcr MPDD-Werte 
      * (Da detaillierte Berechnung nicht mehr stattfindet)
      * 
      * @param fileName Name der Provider-Datei

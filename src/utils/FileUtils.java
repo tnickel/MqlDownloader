@@ -43,9 +43,9 @@ public class FileUtils {
     }
     
     /**
-     * Überprüft und korrigiert die Dateinummern, indem immer die Nummer der HTML-Datei
+     * \u00dcberpr\u00fcft und korrigiert die Dateinummern, indem immer die Nummer der HTML-Datei
      * als die korrekte Nummer verwendet wird.
-     * @param directoryPath Verzeichnis, in dem die Dateien überprüft werden sollen
+     * @param directoryPath Verzeichnis, in dem die Dateien \u00fcberpr\u00fcft werden sollen
      * @return Liste der korrigierten Dateien
      */
     public static List<String> correctFileNumbers(String directoryPath) {
@@ -79,7 +79,7 @@ public class FileUtils {
             }
         }
         
-        // Überprüfe CSV- und TXT-Dateien und korrigiere sie
+        // \u00dcberpr\u00fcfe CSV- und TXT-Dateien und korrigiere sie
         correctFileType(directory, htmlFileNumbers, "csv", correctedFiles);
         correctFileType(directory, htmlFileNumbers, "txt", correctedFiles);
         
@@ -107,7 +107,7 @@ public class FileUtils {
                 String currentNumber = matcher.group(1);
                 String baseName = fileName.substring(0, fileName.length() - matcher.group(0).length());
                 
-                // Überprüfe, ob wir eine HTML-Datei mit dem gleichen Basisnamen haben
+                // \u00dcberpr\u00fcfe, ob wir eine HTML-Datei mit dem gleichen Basisnamen haben
                 if (htmlFileNumbers.containsKey(baseName)) {
                     String correctNumber = htmlFileNumbers.get(baseName);
                     
@@ -132,7 +132,7 @@ public class FileUtils {
     }
     
     /**
-     * Überprüft und korrigiert die Dateinummern in allen MQL-Verzeichnissen.
+     * \u00dcberpr\u00fcft und korrigiert die Dateinummern in allen MQL-Verzeichnissen.
      * @param baseDownloadPath Basis-Downloadpfad
      * @return Liste der korrigierten Dateien
      */

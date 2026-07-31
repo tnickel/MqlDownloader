@@ -44,7 +44,7 @@ public class ConversionManager {
                     logHandler.log("Konvertierung erfolgreich abgeschlossen!");
                 });
             } catch (Exception e) {
-                logHandler.logError("Fehler während der Konvertierung: " + e.getMessage(), e);
+                logHandler.logError("Fehler w\u00e4hrend der Konvertierung: " + e.getMessage(), e);
             } finally {
                 cleanupConversion();
             }

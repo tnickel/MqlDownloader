@@ -46,19 +46,19 @@ public class StabilityCalculator {
                 double relativeStdDev = Math.abs(mean) < 0.0001 ? 1.0 : stdDeviation / (Math.abs(mean) + 0.0001);
                 details.append("Relative Standardabweichung: ").append(String.format("%.2f", relativeStdDev)).append("<br>");
                 double baseStability = Math.max(1.0, 100.0 * (1.0 - relativeStdDev));
-                details.append("Basis-Stabilitätswert: ").append(String.format("%.2f", baseStability)).append("<br>");
+                details.append("Basis-Stabilit\u00e4tswert: ").append(String.format("%.2f", baseStability)).append("<br>");
                 double dataQualityFactor = profitValues.size() / 3.0;
-                details.append("Datenqualitätsfaktor: ").append(String.format("%.2f", dataQualityFactor)).append("<br>");
+                details.append("Datenqualit\u00e4tsfaktor: ").append(String.format("%.2f", dataQualityFactor)).append("<br>");
                 double finalStability = Math.max(1.0, Math.min(100.0, baseStability * (0.7 + 0.3 * dataQualityFactor)));
                 StabilityResult result = new StabilityResult(finalStability, details.toString());
                 contentCache.cacheStabilityResult(fileName, result);
                 return result;
             }
-            StabilityResult result = new StabilityResult(1.0, "Nicht genügend Monatswerte verfügbar<br>Gefundene Werte:<br>" + String.join("<br>", lastMonths));
+            StabilityResult result = new StabilityResult(1.0, "Nicht gen\u00fcgend Monatswerte verf\u00fcgbar<br>Gefundene Werte:<br>" + String.join("<br>", lastMonths));
             contentCache.cacheStabilityResult(fileName, result);
             return result;
         } catch (Exception e) {
-            logger.error("Fehler bei der Stabilitätsberechnung für " + fileName, e);
+            logger.error("Fehler bei der Stabilit\u00e4tsberechnung f\u00fcr " + fileName, e);
             StabilityResult result = new StabilityResult(1.0, "Fehler bei der Berechnung: " + e.getMessage());
             contentCache.cacheStabilityResult(fileName, result);
             return result;

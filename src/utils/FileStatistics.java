@@ -16,14 +16,14 @@ public class FileStatistics {
      * Analysiert das Alter von HTML-Dateien in einem Verzeichnis.
      * 
      * @param directory Das zu analysierende Verzeichnis
-     * @param maxDays Die maximale Anzahl von Tagen für die Analyse
-     * @return Eine Map mit dem Alter in Tagen als Schlüssel und der Anzahl der Dateien als Wert
+     * @param maxDays Die maximale Anzahl von Tagen f\u00fcr die Analyse
+     * @return Eine Map mit dem Alter in Tagen als Schl\u00fcssel und der Anzahl der Dateien als Wert
      */
     public static Map<Integer, Integer> analyzeFileAge(String directory, int maxDays) {
         logger.info("Analysiere Verzeichnis: {}", directory);
         Map<Integer, Integer> ageDistribution = new HashMap<>();
         
-        // Initialisiere Verteilung mit 0 für jeden Tag
+        // Initialisiere Verteilung mit 0 f\u00fcr jeden Tag
         for (int i = 0; i <= maxDays; i++) {
             ageDistribution.put(i, 0);
         }
@@ -50,7 +50,7 @@ public class FileStatistics {
             // Begrenzen auf maxDays
             int bucket = Math.min(ageInDays, maxDays);
             
-            // Zähler erhöhen
+            // Z\u00e4hler erh\u00f6hen
             ageDistribution.put(bucket, ageDistribution.get(bucket) + 1);
             totalFiles++;
         }

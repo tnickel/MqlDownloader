@@ -6,7 +6,7 @@ import java.util.Map;
 import java.util.logging.Logger;
 
 /**
- * Adapter-Klasse, die HtmlParser-Funktionalität für MPDDCalculator bereitstellt
+ * Adapter-Klasse, die HtmlParser-Funktionalit\u00e4t f\u00fcr MPDDCalculator bereitstellt
  */
 public class HtmlDatabase {
     private static final Logger LOGGER = Logger.getLogger(HtmlDatabase.class.getName());
@@ -18,10 +18,10 @@ public class HtmlDatabase {
     }
     
     /**
-     * Holt die monatlichen Profit-Prozentsätze für einen Provider
+     * Holt die monatlichen Profit-Prozents\u00e4tze f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
-     * @return Map mit Jahr/Monat als Schlüssel und Profit-Prozentsatz als Wert
+     * @return Map mit Jahr/Monat als Schl\u00fcssel und Profit-Prozentsatz als Wert
      */
     public Map<String, Double> getMonthlyProfitPercentages(String fileName) {
         Map<String, Double> monthlyProfits = new HashMap<>();
@@ -31,7 +31,7 @@ public class HtmlDatabase {
         	 List<String> allMonthsDetails  = htmlParser.getAllMonthsDetails(fileName);
             
             if (allMonthsDetails.isEmpty()) {
-                LOGGER.warning("Keine Monatsdetails für " + fileName + " gefunden");
+                LOGGER.warning("Keine Monatsdetails f\u00fcr " + fileName + " gefunden");
                 return monthlyProfits;
             }
             
@@ -50,14 +50,14 @@ public class HtmlDatabase {
             }
             
         } catch (Exception e) {
-            LOGGER.severe("Fehler beim Laden der monatlichen Profite für " + fileName + ": " + e.getMessage());
+            LOGGER.severe("Fehler beim Laden der monatlichen Profite f\u00fcr " + fileName + ": " + e.getMessage());
         }
         
         return monthlyProfits;
     }
     
     /**
-     * Holt den Equity Drawdown für einen Provider
+     * Holt den Equity Drawdown f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Equity Drawdown in Prozent
@@ -68,7 +68,7 @@ public class HtmlDatabase {
             
             // Stelle sicher, dass der Wert positiv ist (wir erwarten einen positiven Prozentsatz)
             if (drawdown <= 0.0) {
-                LOGGER.warning("EquityDrawdown ist 0 oder negativ: " + drawdown + " für " + fileName);
+                LOGGER.warning("EquityDrawdown ist 0 oder negativ: " + drawdown + " f\u00fcr " + fileName);
                 return 1.0; // Standardwert, um Division durch Null zu vermeiden
             }
             
@@ -80,7 +80,7 @@ public class HtmlDatabase {
     }
     
     /**
-     * Holt die Balance für einen Provider
+     * Holt die Balance f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Balance als double-Wert
@@ -95,7 +95,7 @@ public class HtmlDatabase {
     }
     
     /**
-     * Holt den grafischen Equity Drawdown für einen Provider
+     * Holt den grafischen Equity Drawdown f\u00fcr einen Provider
      * 
      * @param fileName Name der Provider-Datei
      * @return Equity Drawdown Graphic als double-Wert

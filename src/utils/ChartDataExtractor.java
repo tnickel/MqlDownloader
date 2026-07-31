@@ -23,7 +23,7 @@ import org.jsoup.select.Elements;
 public class ChartDataExtractor {
     private static final Logger logger = LogManager.getLogger(ChartDataExtractor.class);
     
-    // Pattern für rote Linien im Drawdown-Chart
+    // Pattern f\u00fcr rote Linien im Drawdown-Chart
     private static final Pattern[] RED_LINE_PATTERNS = {
     	    Pattern.compile("<path[^>]*class=\"s-path-line[^\"]*\"[^>]*d=\"([^\"]+)\"[^>]*style=\"[^\"]*stroke:\\s*red[^\"]*\"", Pattern.CASE_INSENSITIVE | Pattern.DOTALL),
     	    Pattern.compile("<path[^>]*class=\"s-path-line c-1906qq7\"[^>]*d=\"([^\"]+)\"", Pattern.CASE_INSENSITIVE | Pattern.DOTALL),
@@ -32,7 +32,7 @@ public class ChartDataExtractor {
     	};
     
     /**
-     * Schätzt die Y-Achsen-Skala aus SVG-Elementen wenn das normale Pattern fehlschlägt
+     * Sch\u00e4tzt die Y-Achsen-Skala aus SVG-Elementen wenn das normale Pattern fehlschl\u00e4gt
      */
   
     private double[] estimateYScaleFromSVG(String svgContent) {
@@ -80,38 +80,38 @@ public class ChartDataExtractor {
                             }
                         }
                     } catch (NumberFormatException e) {
-                        logger.warn("Ungültiger Prozentwert gefunden: " + text);
+                        logger.warn("Ung\u00fcltiger Prozentwert gefunden: " + text);
                     }
                 }
             }
 
             if (topY != Double.MAX_VALUE && bottomY != Double.MIN_VALUE) {
-                logger.info(String.format("Finale geschätzte Y-Skala: topY=%.2f (%.2f%%), bottomY=%.2f (%.2f%%)",
+                logger.info(String.format("Finale gesch\u00e4tzte Y-Skala: topY=%.2f (%.2f%%), bottomY=%.2f (%.2f%%)",
                         topY, topPercent, bottomY, bottomPercent));
                 return new double[]{topY, bottomY, topPercent, bottomPercent};
             }
 
         } catch (Exception e) {
-            logger.error("Fehler bei der Y-Skala Schätzung: ", e);
+            logger.error("Fehler bei der Y-Skala Sch\u00e4tzung: ", e);
         }
 
         return null;
     }
     
- // Explizite Skalierungsfunktion für präzise Ergebnisse
+ // Explizite Skalierungsfunktion f\u00fcr pr\u00e4zise Ergebnisse
     private double scaleToPercent(double yValue, double topY, double bottomY, double topPercent, double bottomPercent) {
         double normalized = (yValue - topY) / (bottomY - topY);
         return topPercent + normalized * (bottomPercent - topPercent);
     }
 
     
-    // Pattern für Y-Achsenbeschriftungen (Drawdown-Prozentwerte) - flexibler für verschiedene Attribute
+    // Pattern f\u00fcr Y-Achsenbeschriftungen (Drawdown-Prozentwerte) - flexibler f\u00fcr verschiedene Attribute
     private static final Pattern Y_AXIS_TICK_PATTERN = Pattern.compile(
         "<g class=\"s-tick[^\"]*\"[^>]*transform=\"translate\\(0,\\s*([\\d.]+)\\)\"[^>]*>\\s*<text[^>]*>([\\d.]+)%</text>",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
     );
     
-    // Pattern für MonthProfitProz
+    // Pattern f\u00fcr MonthProfitProz
     private static final Pattern MONTH_PROFIT_PATTERN = Pattern.compile(
         "MonthProfitProz=([^\n]+)",
         Pattern.CASE_INSENSITIVE | Pattern.DOTALL
@@ -127,7 +127,7 @@ public class ChartDataExtractor {
         List<ChartPoint> chartData = new ArrayList<>();
         String html = contentCache.getHtmlContent(fileName);
         if (html == null) {
-            logger.warn("HTML-Inhalt ist null für " + fileName);
+            logger.warn("HTML-Inhalt ist null f\u00fcr " + fileName);
             return chartData;
         }
         
@@ -160,18 +160,18 @@ public class ChartDataExtractor {
         // SVG als String extrahieren
         String svgContent = svgElement.outerHtml();
         
-        // Y-Achsen-Ticks extrahieren (für die Skala)
+        // Y-Achsen-Ticks extrahieren (f\u00fcr die Skala)
         double[] yScale = extractYAxisScale(svgContent);
         if (yScale == null) {
             logger.warn("Konnte keine Y-Achsen-Skala aus dem SVG extrahieren");
-            // ALLGEMEINE Fallback-Strategie: Versuche die Y-Achsen-Werte aus dem SVG selbst zu schätzen
+            // ALLGEMEINE Fallback-Strategie: Versuche die Y-Achsen-Werte aus dem SVG selbst zu sch\u00e4tzen
             yScale = estimateYScaleFromSVG(svgContent);
             if (yScale == null) {
                 // Letzter Fallback: Standard-Bereich 0-30%
                 yScale = new double[]{32.0, 300.0, 0.0, 30.0}; // topY, bottomY, topPercent, bottomPercent
                 logger.warn("Verwende Standard-Fallback-Y-Achsen-Skala (0-30%)");
             } else {
-                logger.info("Y-Achsen-Skala aus SVG geschätzt");
+                logger.info("Y-Achsen-Skala aus SVG gesch\u00e4tzt");
             }
         }
         
@@ -191,7 +191,7 @@ public class ChartDataExtractor {
         
         logger.info("Anzahl der extrahierten Pfadpunkte: " + pathPoints.size());
         
-        // Bereichsgrenzen für X-Koordinaten bestimmen
+        // Bereichsgrenzen f\u00fcr X-Koordinaten bestimmen
         double minX = Double.MAX_VALUE;
         double maxX = Double.MIN_VALUE;
         for (double[] point : pathPoints) {
@@ -206,13 +206,13 @@ public class ChartDataExtractor {
         logger.info("Gesamtzeitraum in Tagen: " + totalDays + 
                    " (" + dateRange[0] + " bis " + dateRange[1] + ")");
         
-        // Formatter für die Datumsausgabe
+        // Formatter f\u00fcr die Datumsausgabe
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
         
         
         
         // Punkte verarbeiten und in ChartPoint-Objekte umwandeln
-        // Dabei ALLE Punkte beibehalten und korrekt über die Zeit verteilen
+        // Dabei ALLE Punkte beibehalten und korrekt \u00fcber die Zeit verteilen
         for (int i = 0; i < pathPoints.size(); i++) {
             double[] point = pathPoints.get(i);
             double x = point[0];
@@ -223,11 +223,11 @@ public class ChartDataExtractor {
             if (maxX > minX) {
                 normalizedX = (x - minX) / (maxX - minX);
             } else {
-                normalizedX = (double) i / (pathPoints.size() - 1); // Gleichmäßige Verteilung falls alle X gleich
+                normalizedX = (double) i / (pathPoints.size() - 1); // Gleichm\u00e4\u00dfige Verteilung falls alle X gleich
             }
             normalizedX = Math.min(1.0, Math.max(0.0, normalizedX)); // Auf [0,1] begrenzen
             
-            // Berechne das Datum für diesen Punkt
+            // Berechne das Datum f\u00fcr diesen Punkt
             long daysToAdd = Math.round(normalizedX * (totalDays - 1));
             LocalDate pointDate = dateRange[0].plusDays(daysToAdd);
             
@@ -239,7 +239,7 @@ public class ChartDataExtractor {
             chartData.add(new ChartPoint(dateStr, drawdownPercent));
         }
         
-        // Jetzt für Punkte mit gleichem Datum: 5 Minuten zwischen den Punkten hinzufügen
+        // Jetzt f\u00fcr Punkte mit gleichem Datum: 5 Minuten zwischen den Punkten hinzuf\u00fcgen
         List<ChartPoint> finalChartData = new ArrayList<>();
         Map<String, Integer> dateCounters = new HashMap<>();
         
@@ -248,12 +248,12 @@ public class ChartDataExtractor {
             int counter = dateCounters.getOrDefault(originalDate, 0);
             
             if (counter == 0) {
-                // Erster Punkt für dieses Datum - behält das ursprüngliche Datum
+                // Erster Punkt f\u00fcr dieses Datum - beh\u00e4lt das urspr\u00fcngliche Datum
                 finalChartData.add(point);
             } else {
-                // Weitere Punkte für dieses Datum - füge 5 Minuten * counter hinzu
+                // Weitere Punkte f\u00fcr dieses Datum - f\u00fcge 5 Minuten * counter hinzu
                 // Da ChartPoint nur das Datum speichert, nicht die Zeit, verwenden wir trotzdem das gleiche Datum
-                // Die 5-Minuten-Logik ist mehr konzeptionell für die spätere Verwendung
+                // Die 5-Minuten-Logik ist mehr konzeptionell f\u00fcr die sp\u00e4tere Verwendung
                 finalChartData.add(point);
             }
             
@@ -262,7 +262,7 @@ public class ChartDataExtractor {
         
         chartData = finalChartData;
         
-        logger.info("Anzahl der endgültigen ChartPoints: " + chartData.size());
+        logger.info("Anzahl der endg\u00fcltigen ChartPoints: " + chartData.size());
         return chartData;
     }
     
@@ -290,21 +290,21 @@ public class ChartDataExtractor {
             if (parts.length == 2) {
                 String monthStr = parts[0].trim();
                 try {
-                    // Format ist YYYY/MM, aber wir brauchen ein vollständiges Datum
+                    // Format ist YYYY/MM, aber wir brauchen ein vollst\u00e4ndiges Datum
                     YearMonth ym = YearMonth.parse(monthStr, formatter);
                     
-                    // Für den Anfang des Bereichs: Erster Tag des Monats
+                    // F\u00fcr den Anfang des Bereichs: Erster Tag des Monats
                     if (earliest == null || ym.atDay(1).isBefore(earliest)) {
                         earliest = ym.atDay(1);
                     }
                     
-                    // Für das Ende des Bereichs: Letzter Tag des Monats
+                    // F\u00fcr das Ende des Bereichs: Letzter Tag des Monats
                     LocalDate lastDayOfMonth = ym.atEndOfMonth();
                     if (latest == null || lastDayOfMonth.isAfter(latest)) {
                         latest = lastDayOfMonth;
                     }
                 } catch (DateTimeParseException e) {
-                    logger.warn("Ungültiges Datumsformat in MonthProfitProz: " + monthStr);
+                    logger.warn("Ung\u00fcltiges Datumsformat in MonthProfitProz: " + monthStr);
                 }
             }
         }
@@ -384,7 +384,7 @@ public class ChartDataExtractor {
             return points;
         }
         
-        // Regulärer Ausdruck für Zahlen (mit oder ohne Vorzeichen, Dezimalstellen)
+        // Regul\u00e4rer Ausdruck f\u00fcr Zahlen (mit oder ohne Vorzeichen, Dezimalstellen)
         Pattern numberPattern = Pattern.compile("[+-]?\\d*\\.?\\d+");
         
         // Aufteilung in Befehle
@@ -400,7 +400,7 @@ public class ChartDataExtractor {
             char cmdChar = command.charAt(0);
             String params = command.substring(1).trim();
             
-            // Prüfe, ob es ein relativer Befehl ist
+            // Pr\u00fcfe, ob es ein relativer Befehl ist
             boolean isRelative = Character.isLowerCase(cmdChar);
             cmdChar = Character.toUpperCase(cmdChar);
             
@@ -573,15 +573,15 @@ public class ChartDataExtractor {
     }
     
     private double[] extractYAxisScale(String svgContent) {
-        // Mehrere Pattern versuchen für verschiedene HTML-Strukturen
+        // Mehrere Pattern versuchen f\u00fcr verschiedene HTML-Strukturen
         Pattern[] patterns = {
-            // Ursprüngliches Pattern
+            // Urspr\u00fcngliches Pattern
             Pattern.compile("<g class=\"s-tick[^\"]*\"[^>]*transform=\"translate\\(0,\\s*([\\d.]+)\\)\"[^>]*>\\s*<text[^>]*>([\\d.]+)%</text>", 
                            Pattern.CASE_INSENSITIVE | Pattern.DOTALL),
-            // Pattern für text mit Attributen wie x="-28"
+            // Pattern f\u00fcr text mit Attributen wie x="-28"
             Pattern.compile("<g class=\"s-tick[^\"]*\"[^>]*transform=\"translate\\(0,\\s*([\\d.]+)\\)\"[^>]*>\\s*<text[^>]*x=\"[^\"]*\"[^>]*>([\\d.]+)%</text>", 
                            Pattern.CASE_INSENSITIVE | Pattern.DOTALL),
-            // Pattern für s-tick-X Klassen  
+            // Pattern f\u00fcr s-tick-X Klassen  
             Pattern.compile("<g class=\"s-tick s-tick-[\\d.]+[^\"]*\"[^>]*transform=\"translate\\(0,\\s*([\\d.]+)\\)\"[^>]*>.*?<text[^>]*>([\\d.]+)%</text>", 
                            Pattern.CASE_INSENSITIVE | Pattern.DOTALL)
         };

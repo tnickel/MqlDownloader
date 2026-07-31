@@ -23,10 +23,10 @@ public class FileDataReader {
     }
     
     /**
-     * Liest die Daten aus einer .txt-Datei und gibt sie als Map zurück
+     * Liest die Daten aus einer .txt-Datei und gibt sie als Map zur\u00fcck
      * 
      * @param fileName Name der Provider-HTML-Datei (wird zu .txt konvertiert)
-     * @return Map mit Schlüssel-Wert-Paaren aus der .txt-Datei
+     * @return Map mit Schl\u00fcssel-Wert-Paaren aus der .txt-Datei
      */
     public Map<String, String> getFileData(String fileName) {
         Map<String, String> data = new HashMap<>();
@@ -46,12 +46,12 @@ public class FileDataReader {
                 while ((line = reader.readLine()) != null) {
                     line = line.trim();
                     
-                    // Überspringe leere Zeilen und Kommentarzeilen
+                    // \u00dcberspringe leere Zeilen und Kommentarzeilen
                     if (line.isEmpty() || line.startsWith("*") || line.startsWith("-")) {
                         continue;
                     }
                     
-                    // Parse Schlüssel=Wert Paare
+                    // Parse Schl\u00fcssel=Wert Paare
                     if (line.contains("=")) {
                         String[] parts = line.split("=", 2);
                         if (parts.length == 2) {
@@ -63,7 +63,7 @@ public class FileDataReader {
                 }
             }
             
-            LOGGER.fine("Daten aus " + txtPath + " gelesen: " + data.size() + " Einträge");
+            LOGGER.fine("Daten aus " + txtPath + " gelesen: " + data.size() + " Eintr\u00e4ge");
             
         } catch (IOException e) {
             LOGGER.severe("Fehler beim Lesen der Datei " + fileName + ": " + e.getMessage());
@@ -73,7 +73,7 @@ public class FileDataReader {
     }
     
     /**
-     * Prüft, ob eine .txt-Datei für den gegebenen HTML-Dateinamen existiert
+     * Pr\u00fcft, ob eine .txt-Datei f\u00fcr den gegebenen HTML-Dateinamen existiert
      * 
      * @param fileName Name der Provider-HTML-Datei
      * @return true wenn die entsprechende .txt-Datei existiert
@@ -88,7 +88,7 @@ public class FileDataReader {
      * Holt einen spezifischen Wert aus der .txt-Datei
      * 
      * @param fileName Name der Provider-HTML-Datei
-     * @param key Der Schlüssel des gewünschten Werts
+     * @param key Der Schl\u00fcssel des gew\u00fcnschten Werts
      * @return Der Wert oder null wenn nicht gefunden
      */
     public String getValue(String fileName, String key) {
@@ -100,7 +100,7 @@ public class FileDataReader {
      * Holt einen Wert als Double aus der .txt-Datei
      * 
      * @param fileName Name der Provider-HTML-Datei
-     * @param key Der Schlüssel des gewünschten Werts
+     * @param key Der Schl\u00fcssel des gew\u00fcnschten Werts
      * @param defaultValue Standardwert wenn nicht gefunden oder nicht parsebar
      * @return Der Wert als Double
      */
@@ -110,7 +110,7 @@ public class FileDataReader {
             try {
                 return Double.parseDouble(value.replace(",", "."));
             } catch (NumberFormatException e) {
-                LOGGER.warning("Konnte Wert nicht zu Double konvertieren: " + value + " für Schlüssel: " + key);
+                LOGGER.warning("Konnte Wert nicht zu Double konvertieren: " + value + " f\u00fcr Schl\u00fcssel: " + key);
             }
         }
         return defaultValue;

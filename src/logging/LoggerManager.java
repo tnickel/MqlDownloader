@@ -28,7 +28,7 @@ public class LoggerManager {
         }
         isInitialized = true;
         
-        System.out.println("Übergebener configPath: " + configPath);
+        System.out.println("\u00dcbergebener configPath: " + configPath);
         System.out.println("Arbeitsverzeichnis: " + System.getProperty("user.dir"));
         File log4jConfigFile = new File(configPath);
         System.out.println("Absoluter Pfad der Konfigurationsdatei: " + log4jConfigFile.getAbsolutePath());
@@ -83,11 +83,11 @@ public class LoggerManager {
     }
     
     /**
-     * SICHERE und EINFACHE Flush-Methode ohne gefährliche Appender-Manipulationen
+     * SICHERE und EINFACHE Flush-Methode ohne gef\u00e4hrliche Appender-Manipulationen
      */
     public static void flushAllLogs() {
         if (shutdownInProgress) {
-            return; // Verhindere Flush-Versuche während Shutdown
+            return; // Verhindere Flush-Versuche w\u00e4hrend Shutdown
         }
         
         boolean lockAcquired = false;
@@ -95,7 +95,7 @@ public class LoggerManager {
             // Versuche Lock mit Timeout zu bekommen
             lockAcquired = flushLock.tryLock(500, TimeUnit.MILLISECONDS);
             if (!lockAcquired) {
-                System.err.println("LoggerManager: Konnte Flush-Lock nicht bekommen, überspringe Flush");
+                System.err.println("LoggerManager: Konnte Flush-Lock nicht bekommen, \u00fcberspringe Flush");
                 return;
             }
             
@@ -112,9 +112,9 @@ public class LoggerManager {
                             try {
                                 java.lang.reflect.Method flushMethod = appenderClass.getMethod("flush");
                                 flushMethod.invoke(appender);
-                                return; // Erfolgreich - beende für diesen Appender
+                                return; // Erfolgreich - beende f\u00fcr diesen Appender
                             } catch (NoSuchMethodException e) {
-                                // flush() nicht verfügbar, versuche Manager-Methode
+                                // flush() nicht verf\u00fcgbar, versuche Manager-Methode
                             }
                             
                             // Methode 2: Versuche getManager() und dann flush()
@@ -126,10 +126,10 @@ public class LoggerManager {
                                     managerFlushMethod.invoke(manager);
                                 }
                             } catch (Exception e) {
-                                // Manager-Flush nicht verfügbar - ignorieren
+                                // Manager-Flush nicht verf\u00fcgbar - ignorieren
                             }
                             
-                            // ENTFERNT: stop/start Mechanismus der den Logger beschädigt hat
+                            // ENTFERNT: stop/start Mechanismus der den Logger besch\u00e4digt hat
                             
                         } catch (Exception e) {
                             // Nur System.err verwenden um Log-Rekursion zu vermeiden
@@ -170,14 +170,14 @@ public class LoggerManager {
     }
     
     /**
-     * Thread-sichere Logging-Methode für kritische Situationen
+     * Thread-sichere Logging-Methode f\u00fcr kritische Situationen
      */
     public static void safeLog(String message) {
         try {
             if (!shutdownInProgress && isInitialized) {
                 logger.info(message);
             } else {
-                // Fallback auf System.out wenn Logger nicht verfügbar
+                // Fallback auf System.out wenn Logger nicht verf\u00fcgbar
                 System.out.println("[SAFE-LOG] " + message);
             }
         } catch (Exception e) {
@@ -195,7 +195,7 @@ public class LoggerManager {
             if (!shutdownInProgress && isInitialized) {
                 logger.error(message, throwable);
             } else {
-                // Fallback auf System.err wenn Logger nicht verfügbar
+                // Fallback auf System.err wenn Logger nicht verf\u00fcgbar
                 System.err.println("[SAFE-LOG-ERROR] " + message);
                 if (throwable != null) {
                     throwable.printStackTrace();
@@ -212,7 +212,7 @@ public class LoggerManager {
     }
     
     /**
-     * SICHERE Shutdown-Methode ohne gefährliche Appender-Manipulationen
+     * SICHERE Shutdown-Methode ohne gef\u00e4hrliche Appender-Manipulationen
      */
     public static void safeShutdown() {
         if (shutdownInProgress) {
@@ -250,7 +250,7 @@ public class LoggerManager {
                                                 managerFlushMethod.invoke(manager);
                                             }
                                         } catch (Exception ex) {
-                                            // Ignore - keine Flush-Methode verfügbar
+                                            // Ignore - keine Flush-Methode verf\u00fcgbar
                                         }
                                     }
                                 } catch (Exception e) {
@@ -265,7 +265,7 @@ public class LoggerManager {
                 System.out.flush();
                 System.err.flush();
                 
-                // Kurze Wartezeit für finale Writes
+                // Kurze Wartezeit f\u00fcr finale Writes
                 Thread.sleep(200);
                 
                 System.out.println("LoggerManager: Sicherer Shutdown abgeschlossen - Logger bleiben aktiv");
@@ -279,7 +279,7 @@ public class LoggerManager {
         } catch (Exception e) {
             System.err.println("LoggerManager: Fehler beim sicheren Shutdown: " + e.getMessage());
         } finally {
-            // Reset Shutdown-Flag nach Wartezeit für zukünftige Verwendung
+            // Reset Shutdown-Flag nach Wartezeit f\u00fcr zuk\u00fcnftige Verwendung
             new Thread(() -> {
                 try {
                     Thread.sleep(1000);
@@ -292,7 +292,7 @@ public class LoggerManager {
     }
     
     /**
-     * Status-Prüfung
+     * Status-Pr\u00fcfung
      */
     public static boolean isShutdownInProgress() {
         return shutdownInProgress;

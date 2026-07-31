@@ -12,7 +12,6 @@ import javax.swing.JLabel;
 import javax.swing.DefaultListCellRenderer;
 import java.awt.FlowLayout;
 import java.awt.GridLayout;
-import java.io.File;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -23,6 +22,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -30,6 +30,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import config.ConfigurationManager;
+import utils.AutoSchedulerManager;
 
 public class MqlDownloaderGui extends JFrame {
     private static final Logger logger = LogManager.getLogger(MqlDownloaderGui.class);
@@ -38,7 +39,11 @@ public class MqlDownloaderGui extends JFrame {
     private final ButtonPanelManager buttonManager;
     private final DownloadManager downloadManager;
     private final ConversionManager conversionManager;
+    private final AutoSchedulerManager autoScheduler;
     private JButton statisticsButton;
+    private JButton abonnentenStatistikButton;
+    private JToggleButton autoModeToggleButton;
+    private JLabel autoModeInfoLabel;
     private DefaultListModel<String> subscriberChangesListModel;
     private JList<String> subscriberChangesList;
 
@@ -48,20 +53,27 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager = new ButtonPanelManager(configManager);
         downloadManager = new DownloadManager(configManager, logHandler, buttonManager, this);
         conversionManager = new ConversionManager(configManager, logHandler, buttonManager);
+        autoScheduler = new AutoSchedulerManager(this::handleDoAllButton);
         
         initializeGui();
         setupEventHandlers();
+        
+        // Restore saved AutoMode state on startup
+        if (configManager.isAutoMode()) {
+            autoModeToggleButton.setSelected(true);
+            toggleAutoMode(true);
+        }
     }
 
     private void initializeGui() {
         setTitle("MQL Signal Downloader");
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout(10, 10));
-        setSize(1000, 650);
+        setSize(1020, 680);
 
-        // Top panel für Buttons - KOMPAKTER LAYOUT
-        JPanel topPanel = new JPanel(new GridLayout(4, 1, 5, 5));
-        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Kleinere Padding
+        // Top panel fuer Buttons - KOMPAKTER LAYOUT (5 Zeilen)
+        JPanel topPanel = new JPanel(new GridLayout(5, 1, 5, 5));
+        topPanel.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
 
         // Erste Zeile: MQL4 und MQL5 horizontal nebeneinander
         JPanel downloadPanel = new JPanel(new GridLayout(1, 2, 10, 0));
@@ -86,10 +98,26 @@ public class MqlDownloaderGui extends JFrame {
         checkboxPanel.add(buttonManager.getSubscribersOnlyCheckbox());
         topPanel.add(checkboxPanel);
 
-        // Statistik-Button (rechts neben dem Log-Panel)
+        // Fuenfte Zeile: Automatikmodus (Freitag 18:00 Uhr) Panel
+        autoModeToggleButton = new JToggleButton("Automatikmodus: AUS");
+        autoModeToggleButton.setFont(new Font("Arial", Font.BOLD, 12));
+        autoModeToggleButton.setFocusPainted(false);
+
+        autoModeInfoLabel = new JLabel("(Einmal pro Woche am Freitag um 18:00 Uhr automatisch ausfÃ¼hren)");
+        autoModeInfoLabel.setFont(new Font("Arial", Font.ITALIC, 11));
+        autoModeInfoLabel.setForeground(Color.DARK_GRAY);
+
+        JPanel autoModePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 2));
+        autoModePanel.add(autoModeToggleButton);
+        autoModePanel.add(autoModeInfoLabel);
+        topPanel.add(autoModePanel);
+
+        // Statistik-Buttons (rechts neben dem Log-Panel)
         statisticsButton = createStatisticsButton();
-        JPanel statisticsButtonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        abonnentenStatistikButton = createAbonnentenStatistikButton();
+        JPanel statisticsButtonPanel = new JPanel(new GridLayout(2, 1, 5, 5));
         statisticsButtonPanel.add(statisticsButton);
+        statisticsButtonPanel.add(abonnentenStatistikButton);
 
         // Sidebar fuer Abonnenten-Aenderungen
         subscriberChangesListModel = new DefaultListModel<>();
@@ -103,23 +131,21 @@ public class MqlDownloaderGui extends JFrame {
             "Abonnenten-Aenderungen",
             javax.swing.border.TitledBorder.LEFT,
             javax.swing.border.TitledBorder.TOP));
-        subscriberChangesScrollPane.setPreferredSize(new Dimension(380, 300));
+        subscriberChangesScrollPane.setPreferredSize(new Dimension(380, 260));
 
         JPanel sidePanel = new JPanel(new BorderLayout(5, 5));
         sidePanel.add(statisticsButtonPanel, BorderLayout.NORTH);
         sidePanel.add(subscriberChangesScrollPane, BorderLayout.CENTER);
 
-
-
         // Main Panel zusammenbauen
         JPanel mainPanel = new JPanel(new BorderLayout(5, 5));
         mainPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
         mainPanel.add(topPanel, BorderLayout.NORTH);
-        mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER); // Bekommt jetzt VIEL mehr Platz!
+        mainPanel.add(logHandler.getScrollPane(), BorderLayout.CENTER);
         mainPanel.add(sidePanel, BorderLayout.EAST);
         mainPanel.add(buttonManager.createProgressPanel(), BorderLayout.SOUTH);
 
-        // Zum Frame hinzufügen
+        // Zum Frame hinzufuegen
         add(mainPanel);
 
         // Menu Bar initialisieren
@@ -129,7 +155,7 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getStopButton().setEnabled(false);
 
         // Initiale Log Nachricht
-        logHandler.log("Anwendung gestartet. Bereit für Operationen.");
+        logHandler.log("Anwendung gestartet. Bereit fuer Operationen.");
     }
 
     private JButton createStatisticsButton() {
@@ -139,7 +165,18 @@ public class MqlDownloaderGui extends JFrame {
         button.setForeground(java.awt.Color.BLACK);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
-        button.setToolTipText("Zeigt eine Statistik über das Alter der heruntergeladenen Dateien an");
+        button.setToolTipText("Zeigt eine Statistik ueber das Alter der heruntergeladenen Dateien an");
+        return button;
+    }
+
+    private JButton createAbonnentenStatistikButton() {
+        JButton button = new JButton("Abonnenten-Statistik (Zug\u00e4nge / Abg\u00e4nge)");
+        button.setFont(new java.awt.Font("Arial", java.awt.Font.BOLD, 12));
+        button.setBackground(new java.awt.Color(34, 139, 34)); // Forest green
+        button.setForeground(java.awt.Color.WHITE);
+        button.setFocusPainted(false);
+        button.setBorderPainted(true);
+        button.setToolTipText("Zeigt eine detaillierte, sortierbare \u00dcbersicht der Abonnenten-Zug\u00e4nge und Abg\u00e4nge mit Verlaufs-Chart an");
         return button;
     }
 
@@ -156,13 +193,40 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getConvertButton().addActionListener(e -> conversionManager.startConversion());
         buttonManager.getDoAllButton().addActionListener(e -> handleDoAllButton());
         
-        // Neuer Event-Handler für den Statistik-Button
         statisticsButton.addActionListener(e -> showStatisticsDialog());
+        abonnentenStatistikButton.addActionListener(e -> showSubscriberStatisticsDialog());
+        autoModeToggleButton.addActionListener(e -> toggleAutoMode(autoModeToggleButton.isSelected()));
+    }
+
+    private void toggleAutoMode(boolean active) {
+        configManager.setAutoMode(active);
+        if (active) {
+            autoModeToggleButton.setText("Automatikmodus: AN");
+            autoModeToggleButton.setBackground(new Color(34, 139, 34)); // Forest green
+            autoModeToggleButton.setForeground(Color.WHITE);
+            autoScheduler.start();
+            String nextRun = AutoSchedulerManager.getNextRunDateFormatted();
+            autoModeInfoLabel.setText("<html><b>Automatikmodus AKTIV</b> (Jeden Fr. 18:00 Uhr) | N\u00e4chste Ausf\u00fchrung: " + nextRun + "</html>");
+            logHandler.log("Automatikmodus AKTIVIERT: Geplant fuer jeden Freitag um 18:00 Uhr. Naechster Durchlauf: " + nextRun);
+        } else {
+            autoModeToggleButton.setText("Automatikmodus: AUS");
+            autoModeToggleButton.setBackground(new Color(220, 220, 220));
+            autoModeToggleButton.setForeground(Color.BLACK);
+            autoScheduler.stop();
+            autoModeInfoLabel.setText("(Einmal pro Woche am Freitag um 18:00 Uhr automatisch ausfÃ¼hren)");
+            logHandler.log("Automatikmodus DEAKTIVIERT.");
+        }
     }
     
     private void showStatisticsDialog() {
         logHandler.log("Zeige Download-Statistik an...");
         StatisticsDialog dialog = new StatisticsDialog(this, configManager);
+        dialog.setVisible(true);
+    }
+
+    private void showSubscriberStatisticsDialog() {
+        logHandler.log("Zeige Abonnenten-Statistik...");
+        SubscriberStatisticsDialog dialog = new SubscriberStatisticsDialog(this, downloadManager.getDatabaseManager());
         dialog.setVisible(true);
     }
 
@@ -174,8 +238,6 @@ public class MqlDownloaderGui extends JFrame {
 
         Thread allProcessesThread = new Thread(() -> {
             try {
-                // Start des Gesamtprozesses - ohne vorheriges Loeschen der Dateien
-
                 logHandler.log("Starte MQL4 Download...");
                 downloadManager.startDownload("MQL4");
                 downloadManager.waitForDownloadCompletion();
@@ -209,37 +271,6 @@ public class MqlDownloaderGui extends JFrame {
         allProcessesThread.start();
     }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     private void disableAllButtons() {
         buttonManager.getDoAllButton().setEnabled(false);
         buttonManager.getMql4Button().setEnabled(false);
@@ -250,12 +281,16 @@ public class MqlDownloaderGui extends JFrame {
         buttonManager.getDownloadDaysField().setEnabled(false);
         buttonManager.getSubscribersOnlyCheckbox().setEnabled(false);
         statisticsButton.setEnabled(false);
+        abonnentenStatistikButton.setEnabled(false);
+        autoModeToggleButton.setEnabled(false);
     }
 
     private void enableAllButtons() {
         buttonManager.resetButtons();
         buttonManager.getDoAllButton().setEnabled(true);
-        statisticsButton.setEnabled(true);  // Statistik-Button wieder aktivieren
+        statisticsButton.setEnabled(true);
+        abonnentenStatistikButton.setEnabled(true);
+        autoModeToggleButton.setEnabled(true);
     }
 
     private JMenuBar createMenuBar() {
@@ -267,9 +302,13 @@ public class MqlDownloaderGui extends JFrame {
         
         JMenuItem statsItem = new JMenuItem("Download Statistics");
         statsItem.addActionListener(e -> showStatisticsDialog());
+
+        JMenuItem subStatsItem = new JMenuItem("Abonnenten Statistics");
+        subStatsItem.addActionListener(e -> showSubscriberStatisticsDialog());
         
         fileMenu.add(setupItem);
-        fileMenu.add(statsItem);  // Auch im Menü zugänglich machen
+        fileMenu.add(statsItem);
+        fileMenu.add(subStatsItem);
         menuBar.add(fileMenu);
         
         return menuBar;
@@ -291,6 +330,7 @@ public class MqlDownloaderGui extends JFrame {
             gui.setVisible(true);
         });
     }
+
     public void addSubscriberChange(String change) {
         SwingUtilities.invokeLater(() -> {
             subscriberChangesListModel.addElement(change);
@@ -314,13 +354,13 @@ public class MqlDownloaderGui extends JFrame {
             String text = (String) value;
             
             if (text.startsWith("[NEW]")) {
-                label.setForeground(new Color(0, 120, 215)); // Nice premium blue
+                label.setForeground(new Color(0, 120, 215));
                 label.setFont(label.getFont().deriveFont(Font.BOLD));
             } else if (text.contains(":+")) {
-                label.setForeground(new Color(40, 167, 69)); // Forest green
+                label.setForeground(new Color(40, 167, 69));
                 label.setFont(label.getFont().deriveFont(Font.BOLD));
             } else if (text.contains(":-") || text.contains(": -")) {
-                label.setForeground(new Color(220, 53, 69)); // Crimson red
+                label.setForeground(new Color(220, 53, 69));
                 label.setFont(label.getFont().deriveFont(Font.BOLD));
             } else {
                 label.setForeground(Color.BLACK);

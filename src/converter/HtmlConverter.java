@@ -55,7 +55,7 @@ public class HtmlConverter {
         // Konvertierungs-Log initialisieren
         initializeConversionLog();
         
-        // Zähler zurücksetzen
+        // Z\u00e4hler zur\u00fccksetzen
         deletedProvidersCount = 0;
         processedProvidersCount = 0;
         
@@ -88,10 +88,10 @@ public class HtmlConverter {
         logger.info("Starte Verarbeitung von MQL5-Dateien...");
         currentFile = processDirectory(mql5Path, currentFile, totalFiles);
         
-        // Abschließende Log-Einträge
+        // Abschlie\u00dfende Log-Eintr\u00e4ge
         finalizeConversionLog();
         
-        updateProgress(100, "Konvertierung abgeschlossen - " + processedProvidersCount + " Provider verarbeitet, " + deletedProvidersCount + " Provider gelöscht (3MPDD < 0.5)");
+        updateProgress(100, "Konvertierung abgeschlossen - " + processedProvidersCount + " Provider verarbeitet, " + deletedProvidersCount + " Provider gel\u00f6scht (3MPDD < 0.5)");
     }
     
     public void setProgressCallback(ConversionProgress callback) {
@@ -121,7 +121,7 @@ public class HtmlConverter {
                     deleteRelatedFiles(htmlFile.toString());
                     deletedProvidersCount++;
                     String providerName = extractProviderName(htmlFile.toString());
-                    logProviderAction(providerName, 0.0, "FEHLER BEIM PARSEN (Gelöscht)", htmlFile.toString());
+                    logProviderAction(providerName, 0.0, "FEHLER BEIM PARSEN (Gel\u00f6scht)", htmlFile.toString());
                 }
                 currentFile++;
                 updateProgress(
@@ -145,7 +145,7 @@ public class HtmlConverter {
         if (!Files.exists(directory)) {
             return 0;
         }
-        // NUR direkte Dateien zählen, KEINE Unterverzeichnisse
+        // NUR direkte Dateien z\u00e4hlen, KEINE Unterverzeichnisse
         int count = (int) Files.list(directory)
             .filter(path -> Files.isRegularFile(path))
             .filter(path -> path.toString().endsWith("_root.html"))
@@ -164,22 +164,22 @@ public class HtmlConverter {
         
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
         
-        // OPTIMIERUNG: Zuerst 3MPDD berechnen und prüfen ob < 0.5
+        // OPTIMIERUNG: Zuerst 3MPDD berechnen und pr\u00fcfen ob < 0.5
         double mpdd3 = calculate3MPDD(htmlFileName);
         boolean skipFilter = (configManager != null) && configManager.isSubscribersOnly();
         
         if (!skipFilter && mpdd3 < 0.5) {
-            logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) für " + htmlFileName + " - Dateien werden gelöscht");
+            logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) f\u00fcr " + htmlFileName + " - Dateien werden gel\u00f6scht");
             deleteRelatedFiles(htmlFileName);
             
-            // Log-Eintrag für gelöschten Provider mit Dateipfad
-            logProviderAction(providerName, mpdd3, "GELÖSCHT - 3MPDD < 0.5", htmlFileName);
+            // Log-Eintrag f\u00fcr gel\u00f6schten Provider mit Dateipfad
+            logProviderAction(providerName, mpdd3, "GEL\u00d6SCHT - 3MPDD < 0.5", htmlFileName);
             deletedProvidersCount++;
             
             return; // Keine weitere Verarbeitung
         }
         
-        logger.info("3MPDD OK (" + String.format("%.4f", mpdd3) + " >= 0.5) für " + htmlFileName + " - Vollständige Verarbeitung");
+        logger.info("3MPDD OK (" + String.format("%.4f", mpdd3) + " >= 0.5) f\u00fcr " + htmlFileName + " - Vollst\u00e4ndige Verarbeitung");
         
         double balance = htmlParser.getBalance(htmlFileName);
         int subscribers = htmlParser.getSubscribers(htmlFileName);
@@ -194,7 +194,7 @@ public class HtmlConverter {
         
         List<ChartPoint> drawdownPoints = htmlParser.getDrawdownChartData(htmlFileName);
         
-        // Erstelle die vollständige .txt-Datei
+        // Erstelle die vollst\u00e4ndige .txt-Datei
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
         output.append("Subscribers=").append(subscribers).append("\n");
@@ -216,10 +216,10 @@ public class HtmlConverter {
         }
         output.append("\n");
         
-        // Füge 3MPDD hinzu (bereits berechnet)
+        // F\u00fcge 3MPDD hinzu (bereits berechnet)
         output.append("3MPDD=").append(String.format("%.4f", mpdd3)).append("\n");
         
-        // Füge den Rest hinzu
+        // F\u00fcge den Rest hinzu
         output.append("********************************\n\n");
         output.append("Drawdown Chart Data=\n");
         if (drawdownPoints.isEmpty()) {
@@ -247,22 +247,22 @@ public class HtmlConverter {
                                                  .trim();
             output.append(cleanDetails).append("\n");
         } else {
-            output.append("Nicht genügend Daten verfügbar für detaillierte Stabilitätsanalyse\n");
+            output.append("Nicht gen\u00fcgend Daten verf\u00fcgbar f\u00fcr detaillierte Stabilit\u00e4tsanalyse\n");
         }
         output.append("********************************");
         
-        // Schreibe die vollständige Datei mit 3MPDD
+        // Schreibe die vollst\u00e4ndige Datei mit 3MPDD
         Files.writeString(txtFile, output.toString());
         
-        // Log-Eintrag für verarbeiteten Provider mit Dateipfad
-        logProviderAction(providerName, mpdd3, "OK - Vollständig verarbeitet", htmlFileName);
+        // Log-Eintrag f\u00fcr verarbeiteten Provider mit Dateipfad
+        logProviderAction(providerName, mpdd3, "OK - Vollst\u00e4ndig verarbeitet", htmlFileName);
         processedProvidersCount++;
         
         logger.info("Successfully converted " + htmlFile.getFileName() + " to " + txtFile.getFileName() + " with 3MPDD: " + String.format("%.4f", mpdd3));
     }
     
     /**
-     * Berechnet den 3MPDD-Wert für eine HTML-Datei
+     * Berechnet den 3MPDD-Wert f\u00fcr eine HTML-Datei
      * 
      * @param htmlFileName Pfad zur HTML-Datei
      * @return 3MPDD-Wert
@@ -272,17 +272,17 @@ public class HtmlConverter {
             // Verwende den MPDDCalculator um 3MPDD zu berechnen
             double mpdd = mpddCalculator.calculate3MPDD(htmlFileName);
             
-            logger.info("3MPDD berechnet für " + htmlFileName + ": " + String.format("%.4f", mpdd));
+            logger.info("3MPDD berechnet f\u00fcr " + htmlFileName + ": " + String.format("%.4f", mpdd));
             return mpdd;
             
         } catch (Exception e) {
-            logger.error("Fehler beim Berechnen von 3MPDD für " + htmlFileName + ": " + e.getMessage(), e);
+            logger.error("Fehler beim Berechnen von 3MPDD f\u00fcr " + htmlFileName + ": " + e.getMessage(), e);
             return 0.0;
         }
     }
     
     /**
-     * Löscht alle zugehörigen Dateien eines Signalproviders (.html, .csv, .txt)
+     * L\u00f6scht alle zugeh\u00f6rigen Dateien eines Signalproviders (.html, .csv, .txt)
      * 
      * @param htmlFileName Pfad zur HTML-Datei
      */
@@ -290,48 +290,48 @@ public class HtmlConverter {
         try {
             Path htmlPath = Paths.get(htmlFileName);
             
-            // Pfade für entsprechende CSV- und TXT-Dateien erzeugen
+            // Pfade f\u00fcr entsprechende CSV- und TXT-Dateien erzeugen
             String baseName = htmlFileName.replace("_root.html", "");
             Path csvPath = Paths.get(baseName + ".csv");
             Path txtPath = Paths.get(baseName + "_root.txt");
             
-            // Dateien löschen, wenn sie existieren
+            // Dateien l\u00f6schen, wenn sie existieren
             int deletedCount = 0;
             
             if (Files.exists(htmlPath)) {
                 Files.delete(htmlPath);
-                logger.info("Gelöscht: " + htmlPath);
+                logger.info("Gel\u00f6scht: " + htmlPath);
                 deletedCount++;
             }
             
             if (Files.exists(csvPath)) {
                 Files.delete(csvPath);
-                logger.info("Gelöscht: " + csvPath);
+                logger.info("Gel\u00f6scht: " + csvPath);
                 deletedCount++;
             }
             
             if (Files.exists(txtPath)) {
                 Files.delete(txtPath);
-                logger.info("Gelöscht: " + txtPath);
+                logger.info("Gel\u00f6scht: " + txtPath);
                 deletedCount++;
             }
             
-            logger.info("Signalprovider mit schlechtem 3MPDD entfernt: " + deletedCount + " Dateien gelöscht für " + baseName);
+            logger.info("Signalprovider mit schlechtem 3MPDD entfernt: " + deletedCount + " Dateien gel\u00f6scht f\u00fcr " + baseName);
             
         } catch (IOException e) {
-            logger.error("Fehler beim Löschen der Dateien für " + htmlFileName + ": " + e.getMessage(), e);
+            logger.error("Fehler beim L\u00f6schen der Dateien f\u00fcr " + htmlFileName + ": " + e.getMessage(), e);
         }
     }
     
     /**
-     * Getter für den MPDDCalculator (für externe Verwendung)
+     * Getter f\u00fcr den MPDDCalculator (f\u00fcr externe Verwendung)
      */
     public MPDDCalculator getMPDDCalculator() {
         return mpddCalculator;
     }
     
     /**
-     * Getter für den BasicDataProvider (für externe Verwendung)
+     * Getter f\u00fcr den BasicDataProvider (f\u00fcr externe Verwendung)
      */
     public BasicDataProvider getBasicDataProvider() {
         return basicDataProvider;
@@ -346,7 +346,7 @@ public class HtmlConverter {
             logHeader.append("=".repeat(120)).append("\n");
             logHeader.append("CONVERSION LOG - ").append(java.time.LocalDateTime.now().toString()).append("\n");
             logHeader.append("=".repeat(120)).append("\n");
-            logHeader.append("HINWEIS: Provider mit 3MPDD < 0.5 werden automatisch gelöscht\n");
+            logHeader.append("HINWEIS: Provider mit 3MPDD < 0.5 werden automatisch gel\u00f6scht\n");
             logHeader.append("=".repeat(120)).append("\n");
             logHeader.append(String.format("%-35s | %-10s | %-25s | %s\n", "PROVIDER NAME", "3MPDD", "AKTION", "DATEIPFAD"));
             logHeader.append("-".repeat(120)).append("\n");
@@ -364,7 +364,7 @@ public class HtmlConverter {
      */
     private void logProviderAction(String providerName, double mpdd3, String action, String filePath) {
         try {
-            // Relativen Pfad erstellen für bessere Lesbarkeit
+            // Relativen Pfad erstellen f\u00fcr bessere Lesbarkeit
             String relativePath = filePath.replace(downloadPath, "").replace("\\", "/");
             if (relativePath.startsWith("/")) {
                 relativePath = relativePath.substring(1);
@@ -384,7 +384,7 @@ public class HtmlConverter {
     }
     
     /**
-     * Schreibt die abschließenden Statistiken in das Logfile
+     * Schreibt die abschlie\u00dfenden Statistiken in das Logfile
      */
     private void finalizeConversionLog() {
         try {
@@ -392,7 +392,7 @@ public class HtmlConverter {
             logFooter.append("-".repeat(120)).append("\n");
             logFooter.append("ZUSAMMENFASSUNG:\n");
             logFooter.append("Provider verarbeitet: ").append(processedProvidersCount).append("\n");
-            logFooter.append("Provider gelöscht: ").append(deletedProvidersCount).append(" (3MPDD < 0.5)\n");
+            logFooter.append("Provider gel\u00f6scht: ").append(deletedProvidersCount).append(" (3MPDD < 0.5)\n");
             logFooter.append("Gesamt Provider: ").append(processedProvidersCount + deletedProvidersCount).append("\n");
             logFooter.append("=".repeat(120)).append("\n");
             
@@ -432,14 +432,14 @@ public class HtmlConverter {
     }
     
     /**
-     * Getter für die Anzahl der gelöschten Provider
+     * Getter f\u00fcr die Anzahl der gel\u00f6schten Provider
      */
     public int getDeletedProvidersCount() {
         return deletedProvidersCount;
     }
     
     /**
-     * Getter für die Anzahl der verarbeiteten Provider
+     * Getter f\u00fcr die Anzahl der verarbeiteten Provider
      */
     public int getProcessedProvidersCount() {
         return processedProvidersCount;

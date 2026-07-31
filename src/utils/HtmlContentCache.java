@@ -23,7 +23,7 @@ public class HtmlContentCache {
     }
     
     public String getHtmlContent(String fileName) {
-        // Prüfe zuerst, ob der Inhalt bereits im Cache ist
+        // Pr\u00fcfe zuerst, ob der Inhalt bereits im Cache ist
         if (contentCache.containsKey(fileName)) {
             return contentCache.get(fileName);
         }
@@ -42,7 +42,7 @@ public class HtmlContentCache {
                 content = Files.readString(filePath, StandardCharsets.UTF_8);
             } catch (MalformedInputException e) {
                 // Bei UTF-8-Fehler, versuche andere Kodierungen
-                logger.warn("UTF-8 Lesefehler für Datei: " + fileName + ", versuche andere Kodierungen");
+                logger.warn("UTF-8 Lesefehler f\u00fcr Datei: " + fileName + ", versuche andere Kodierungen");
                 
                 // Versuche mit ISO-8859-1 (Latin-1) zu lesen
                 try {
@@ -52,19 +52,19 @@ public class HtmlContentCache {
                     try {
                         content = Files.readString(filePath, Charset.forName("windows-1252"));
                     } catch (Exception e3) {
-                        // Versuche binär zu lesen und in UTF-8 zu konvertieren
+                        // Versuche bin\u00e4r zu lesen und in UTF-8 zu konvertieren
                         try {
                             byte[] bytes = Files.readAllBytes(filePath);
                             content = new String(bytes, StandardCharsets.ISO_8859_1);
                         } catch (Exception e4) {
-                            logger.error("Alle Leseversuche fehlgeschlagen für Datei: " + fileName, e4);
+                            logger.error("Alle Leseversuche fehlgeschlagen f\u00fcr Datei: " + fileName, e4);
                             return null;
                         }
                     }
                 }
             }
             
-            // Füge den gelesenen Inhalt zum Cache hinzu
+            // F\u00fcge den gelesenen Inhalt zum Cache hinzu
             if (content != null) {
                 contentCache.put(fileName, content);
             }
@@ -79,20 +79,20 @@ public class HtmlContentCache {
     /**
      * Speichert ein StabilityResult-Objekt im Cache.
      * 
-     * @param fileName Der Dateiname als Schlüssel für den Cache
+     * @param fileName Der Dateiname als Schl\u00fcssel f\u00fcr den Cache
      * @param result Das zu speichernde StabilityResult-Objekt
      */
     public void cacheStabilityResult(String fileName, StabilityResult result) {
         if (fileName != null && result != null) {
             stabilityCache.put(fileName, result);
-            logger.debug("StabilityResult für Datei im Cache gespeichert: " + fileName);
+            logger.debug("StabilityResult f\u00fcr Datei im Cache gespeichert: " + fileName);
         }
     }
     
     /**
      * Holt ein StabilityResult-Objekt aus dem Cache.
      * 
-     * @param fileName Der Dateiname als Schlüssel für den Cache
+     * @param fileName Der Dateiname als Schl\u00fcssel f\u00fcr den Cache
      * @return Das gespeicherte StabilityResult-Objekt oder null, wenn keines vorhanden ist
      */
     public StabilityResult getCachedStabilityResult(String fileName) {
@@ -100,9 +100,9 @@ public class HtmlContentCache {
     }
     
     /**
-     * Prüft, ob ein StabilityResult für den angegebenen Dateinamen im Cache vorhanden ist.
+     * Pr\u00fcft, ob ein StabilityResult f\u00fcr den angegebenen Dateinamen im Cache vorhanden ist.
      * 
-     * @param fileName Der zu prüfende Dateiname
+     * @param fileName Der zu pr\u00fcfende Dateiname
      * @return true, wenn ein Eintrag im Cache existiert, sonst false
      */
     public boolean hasStabilityResultCache(String fileName) {
@@ -110,11 +110,11 @@ public class HtmlContentCache {
     }
     
     /**
-     * Löscht alle zwischengespeicherten Daten.
+     * L\u00f6scht alle zwischengespeicherten Daten.
      */
     public void clearCache() {
         contentCache.clear();
         stabilityCache.clear();
-        logger.info("Cache wurde vollständig geleert");
+        logger.info("Cache wurde vollst\u00e4ndig geleert");
     }
 }

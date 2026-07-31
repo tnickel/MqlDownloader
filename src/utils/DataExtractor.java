@@ -40,7 +40,7 @@ public class DataExtractor {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) {
-                String errorMessage = "HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName;
+                String errorMessage = "HTML-Inhalt konnte nicht geladen werden f\u00fcr Datei: " + fileName;
                 logger.error(errorMessage);
                 deleteRelatedFiles(fileName);
                 throw new RuntimeException(errorMessage);
@@ -79,26 +79,26 @@ public class DataExtractor {
                     balance = Double.parseDouble(balanceStr);
                     return balance;
                 } else {
-                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden für Datei: " + fileName;
+                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden f\u00fcr Datei: " + fileName;
                     logger.error(errorMessage);
                     deleteRelatedFiles(fileName);
                     throw new RuntimeException(errorMessage);
                 }
             }
         } catch (Exception e) {
-            String errorMessage = "Fehler beim Extrahieren der Balance für " + fileName + ": " + e.getMessage();
+            String errorMessage = "Fehler beim Extrahieren der Balance f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
         }
     }
     
-    // Methode: Löscht die zugehörigen Dateien (root.html, .csv und .txt) bei Fehlern
+    // Methode: L\u00f6scht die zugeh\u00f6rigen Dateien (root.html, .csv und .txt) bei Fehlern
     private boolean deleteRelatedFiles(String fileName) {
         try {
             Path htmlPath = Paths.get(fileName);
             
-            // Pfade für entsprechende CSV- und TXT-Dateien erzeugen
+            // Pfade f\u00fcr entsprechende CSV- und TXT-Dateien erzeugen
             String baseName = fileName.replace("_root.html", "");
             Path csvPath = Paths.get(baseName + ".csv");
             Path txtPath = Paths.get(baseName + "_root.txt");
@@ -107,27 +107,27 @@ public class DataExtractor {
             
             if (Files.exists(htmlPath)) {
                 Files.delete(htmlPath);
-                logger.info("Gelöscht: " + htmlPath);
+                logger.info("Gel\u00f6scht: " + htmlPath);
             }
             
             if (Files.exists(csvPath)) {
                 Files.delete(csvPath);
-                logger.info("Gelöscht: " + csvPath);
+                logger.info("Gel\u00f6scht: " + csvPath);
             }
             
             if (Files.exists(txtPath)) {
                 Files.delete(txtPath);
-                logger.info("Gelöscht: " + txtPath);
+                logger.info("Gel\u00f6scht: " + txtPath);
             }
             
             return success;
         } catch (IOException e) {
-            logger.error("Fehler beim Löschen der Dateien: " + e.getMessage(), e);
+            logger.error("Fehler beim L\u00f6schen der Dateien: " + e.getMessage(), e);
             return false;
         }
     }
     
-    // Hilfsmethode zum Extrahieren des Kontexts um ein Schlüsselwort
+    // Hilfsmethode zum Extrahieren des Kontexts um ein Schl\u00fcsselwort
     private String extractContextAroundKeyword(String content, String keyword) {
         int index = content.indexOf(keyword);
         if (index != -1) {
@@ -135,10 +135,10 @@ public class DataExtractor {
             int end = Math.min(content.length(), index + keyword.length() + 100);
             return content.substring(start, end);
         }
-        return "Schlüsselwort nicht gefunden";
+        return "Schl\u00fcsselwort nicht gefunden";
     }
     
-    // Getter für Equity Drawdown aus der Grafik
+    // Getter f\u00fcr Equity Drawdown aus der Grafik
     public double getEquityDrawdownGraphic(String fileName) {
         try {
             List<ChartPoint> data = chartExtractor.getDrawdownChartData(fileName);
@@ -161,10 +161,10 @@ public class DataExtractor {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) {
                 deleteRelatedFiles(fileName);
-                throw new RuntimeException("HTML-Inhalt konnte nicht geladen werden für Datei: " + fileName);
+                throw new RuntimeException("HTML-Inhalt konnte nicht geladen werden f\u00fcr Datei: " + fileName);
             }
 
-            // Pattern 1: Originalformat mit korrektem "Rückgang"
+            // Pattern 1: Originalformat mit korrektem "R\u00fcckgang"
             Pattern pattern = Pattern.compile("Maximaler R\u00fcckgang:</tspan><tspan[^>]*>(\\d+(?:\\.\\d+)?)%</tspan>");
             Matcher matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
@@ -174,7 +174,7 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Pattern 2: Flexiblerer Ausdruck für ähnliche Formate
+            // Pattern 2: Flexiblerer Ausdruck f\u00fcr \u00e4hnliche Formate
             pattern = Pattern.compile("Maximaler R\u00fcckgang:(?:</tspan>)?(?:<[^>]*>)?(\\d+(?:[,.]\\d+)?)%");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
@@ -184,17 +184,17 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Pattern 3: Suche nach verkrüppeltem Format "Maximaler...Rüg: XX.X%"
+            // Pattern 3: Suche nach verkr\u00fcppeltem Format "Maximaler...R\u00fcg: XX.X%"
             pattern = Pattern.compile("Maximaler[^<]*</tspan><tspan[^>]*>R.g:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
                 String ddStr = matcher.group(1).replace(",", ".");
                 equityDrawdown = Double.parseDouble(ddStr);
-                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 3 - verkrüppelt): " + equityDrawdown);
+                logger.info("Equity Drawdown erfolgreich extrahiert (Pattern 3 - verkr\u00fcppelt): " + equityDrawdown);
                 return equityDrawdown;
             }
             
-            // Pattern 4: NEU - Robustes Pattern für UTF-8-Kodierungsprobleme
+            // Pattern 4: NEU - Robustes Pattern f\u00fcr UTF-8-Kodierungsprobleme
             // Sucht nach "Maximaler" gefolgt von beliebigen Zeichen bis zum ":" und dann Prozentwert
             pattern = Pattern.compile("Maximaler[^<]*</tspan><tspan[^>]*>[^:]*:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
             matcher = pattern.matcher(htmlContent);
@@ -215,8 +215,8 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Pattern 6: NEU - Spezifisch für das beobachtete HTML-Format
-            // >Maximaler</tspan><tspan dy="17" x="75">Rückgang: 14.1%</tspan>
+            // Pattern 6: NEU - Spezifisch f\u00fcr das beobachtete HTML-Format
+            // >Maximaler</tspan><tspan dy="17" x="75">R\u00fcckgang: 14.1%</tspan>
             pattern = Pattern.compile(">Maximaler</tspan><tspan[^>]*>[^:]*:\\s*(\\d+(?:[,.]\\d+)?)%</tspan>");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
@@ -226,8 +226,8 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Pattern 7: NEU - Fallback für Fälle wo nur der Prozentwert nach "Maximaler" relevant ist
-            // Sucht nach "Maximaler" und dann dem ersten Prozentwert in der Nähe
+            // Pattern 7: NEU - Fallback f\u00fcr F\u00e4lle wo nur der Prozentwert nach "Maximaler" relevant ist
+            // Sucht nach "Maximaler" und dann dem ersten Prozentwert in der N\u00e4he
             pattern = Pattern.compile("Maximaler[\\s\\S]{0,200}?(\\d+(?:[,.]\\d+)?)%");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
@@ -237,11 +237,11 @@ public class DataExtractor {
                 return equityDrawdown;
             }
             
-            // Debug-Ausgabe für Fehlerbehebung - erweitert um mehr Kontext
+            // Debug-Ausgabe f\u00fcr Fehlerbehebung - erweitert um mehr Kontext
             String context = extractContextAroundKeyword(htmlContent, "Maximaler");
             logger.debug("HTML-Inhalt um 'Maximaler': " + context);
             
-            // Zusätzliche Debug-Ausgabe: Suche nach beliebigen Prozentzeichen in der Nähe von "Maximaler"
+            // Zus\u00e4tzliche Debug-Ausgabe: Suche nach beliebigen Prozentzeichen in der N\u00e4he von "Maximaler"
             pattern = Pattern.compile("Maximaler[\\s\\S]{0,500}");
             matcher = pattern.matcher(htmlContent);
             if (matcher.find()) {
@@ -249,20 +249,20 @@ public class DataExtractor {
             }
             
             // Wenn kein Equity Drawdown gefunden wurde
-            String errorMessage = "Equity Drawdown konnte nicht extrahiert werden für Datei: " + fileName;
+            String errorMessage = "Equity Drawdown konnte nicht extrahiert werden f\u00fcr Datei: " + fileName;
             logger.error(errorMessage);
             deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage);
             
         } catch (Exception e) {
-            String errorMessage = "Fehler beim Extrahieren des Equity Drawdown für " + fileName + ": " + e.getMessage();
+            String errorMessage = "Fehler beim Extrahieren des Equity Drawdown f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
         }
     }
     
-    // Getter für durchschnittlichen 3-Monats-Profit
+    // Getter f\u00fcr durchschnittlichen 3-Monats-Profit
     public double getAvr3MonthProfit(String fileName, MonthDetailsExtractor monthExtractor) {
         try {
             List<String> lastMonths = monthExtractor.getLastThreeMonthsDetails(fileName);
@@ -276,14 +276,14 @@ public class DataExtractor {
                     try {
                         sum += Double.parseDouble(valueStr);
                     } catch (NumberFormatException e) {
-                        logger.warn("Ungültiger Monatswert: " + valueStr);
+                        logger.warn("Ung\u00fcltiger Monatswert: " + valueStr);
                     }
                 }
             }
             avr3MonthProfit = lastMonths.isEmpty() ? 0.0 : sum / lastMonths.size();
             return avr3MonthProfit;
         } catch (Exception e) {
-            String errorMessage = "Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits für " + fileName + ": " + e.getMessage();
+            String errorMessage = "Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
@@ -302,7 +302,7 @@ public class DataExtractor {
         }
     }
     
-    // Getter und Setter für Eigenschaften
+    // Getter und Setter f\u00fcr Eigenschaften
     public void setBalance(double balance) {
         this.balance = balance;
     }
@@ -370,10 +370,10 @@ public class DataExtractor {
                     return subscribers;
                 }
             } else {
-                logger.warn("Abonnenten/Subscribers konnten nicht extrahiert werden für Datei: " + fileName);
+                logger.warn("Abonnenten/Subscribers konnten nicht extrahiert werden f\u00fcr Datei: " + fileName);
             }
         } catch (Exception e) {
-            logger.warn("Fehler beim Extrahieren der Abonnenten für " + fileName + ": " + e.getMessage());
+            logger.warn("Fehler beim Extrahieren der Abonnenten f\u00fcr " + fileName + ": " + e.getMessage());
         }
         return 0;
     }

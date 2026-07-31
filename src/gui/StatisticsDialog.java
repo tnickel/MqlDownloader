@@ -37,9 +37,9 @@ public class StatisticsDialog extends JDialog {
     private static final int MAX_DAYS = 30;
     
     /**
-     * Konstruktor für den Statistik-Dialog.
+     * Konstruktor f\u00fcr den Statistik-Dialog.
      * 
-     * @param parent Das übergeordnete Frame
+     * @param parent Das \u00fcbergeordnete Frame
      * @param configManager Der ConfigurationManager
      */
     public StatisticsDialog(JFrame parent, ConfigurationManager configManager) {
@@ -54,7 +54,7 @@ public class StatisticsDialog extends JDialog {
     private void initializeComponents() {
         setLayout(new BorderLayout(10, 10));
         
-        // Layout geändert zu 2 Zeilen, 1 Spalte für untereinander angeordnete Grafiken
+        // Layout ge\u00e4ndert zu 2 Zeilen, 1 Spalte f\u00fcr untereinander angeordnete Grafiken
         JPanel mainPanel = new JPanel(new GridLayout(2, 1, 10, 20)); 
         mainPanel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
         
@@ -72,7 +72,7 @@ public class StatisticsDialog extends JDialog {
         ChartPanel mql5ChartPanel = new ChartPanel(mql5Chart);
         mql5ChartPanel.setPreferredSize(new Dimension(700, 250)); // Breiteres Format
         
-        // Zum Panel hinzufügen
+        // Zum Panel hinzuf\u00fcgen
         mainPanel.add(mql4ChartPanel);
         mainPanel.add(mql5ChartPanel);
         
@@ -81,16 +81,16 @@ public class StatisticsDialog extends JDialog {
         statsPanel.add(createSummaryPanel("MQL4 Statistik", mql4Stats));
         statsPanel.add(createSummaryPanel("MQL5 Statistik", mql5Stats));
         
-        // Schließen-Button
+        // Schlie\u00dfen-Button
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton closeButton = new JButton("Schließen");
+        JButton closeButton = new JButton("Schlie\u00dfen");
         closeButton.addActionListener(e -> dispose());
         buttonPanel.add(closeButton);
         
-        // Alles zusammenfügen
+        // Alles zusammenf\u00fcgen
         add(mainPanel, BorderLayout.CENTER);
         
-        // Stats und Button in einem südlichen Panel
+        // Stats und Button in einem s\u00fcdlichen Panel
         JPanel southPanel = new JPanel(new BorderLayout());
         southPanel.add(statsPanel, BorderLayout.CENTER);
         southPanel.add(buttonPanel, BorderLayout.SOUTH);
@@ -98,7 +98,7 @@ public class StatisticsDialog extends JDialog {
         
         // Dialog konfigurieren
         pack();
-        setSize(800, 700); // Größerer Dialog für bessere Lesbarkeit
+        setSize(800, 700); // Gr\u00f6\u00dferer Dialog f\u00fcr bessere Lesbarkeit
         setResizable(true);
         setLocationRelativeTo(getParent());
         logger.info("Statistik-Dialog initialisiert");
@@ -128,7 +128,7 @@ public class StatisticsDialog extends JDialog {
     }
     
     /**
-     * Zählt die Dateien in einem bestimmten Altersbereich.
+     * Z\u00e4hlt die Dateien in einem bestimmten Altersbereich.
      * 
      * @param stats Die Statistik-Daten
      * @param minDays Die minimale Anzahl von Tagen
@@ -155,7 +155,7 @@ public class StatisticsDialog extends JDialog {
     private JFreeChart createAgeChart(Map<Integer, Integer> stats, String title, String xAxisLabel, String yAxisLabel) {
         DefaultCategoryDataset dataset = new DefaultCategoryDataset();
         
-        // Klarere Kategorie-Namen für die ersten 7 Tage
+        // Klarere Kategorie-Namen f\u00fcr die ersten 7 Tage
         dataset.addValue(stats.getOrDefault(0, 0), "Dateien", "Heute");
         dataset.addValue(stats.getOrDefault(1, 0), "Dateien", "1 Tag");
         dataset.addValue(stats.getOrDefault(2, 0), "Dateien", "2 Tage");
@@ -164,11 +164,11 @@ public class StatisticsDialog extends JDialog {
         dataset.addValue(stats.getOrDefault(5, 0), "Dateien", "5 Tage");
         dataset.addValue(stats.getOrDefault(6, 0), "Dateien", "6 Tage");
         
-        // Wöchentlicher Granularität für den Rest mit verbesserten Labels
+        // W\u00f6chentlicher Granularit\u00e4t f\u00fcr den Rest mit verbesserten Labels
         dataset.addValue(countFilesInRange(stats, 7, 13), "Dateien", "1 Woche");
         dataset.addValue(countFilesInRange(stats, 14, 20), "Dateien", "2 Wochen");
         dataset.addValue(countFilesInRange(stats, 21, 27), "Dateien", "3 Wochen");
-        dataset.addValue(countFilesInRange(stats, 28, MAX_DAYS), "Dateien", "Älter");
+        dataset.addValue(countFilesInRange(stats, 28, MAX_DAYS), "Dateien", "\u00c4lter");
         
         JFreeChart chart = ChartFactory.createBarChart(
             title,
@@ -184,7 +184,7 @@ public class StatisticsDialog extends JDialog {
         // Anpassung des Diagramms
         chart.setBackgroundPaint(Color.white);
         
-        // Titel in größerer Schriftart
+        // Titel in gr\u00f6\u00dferer Schriftart
         TextTitle textTitle = chart.getTitle();
         textTitle.setFont(new Font("SansSerif", Font.BOLD, 16));
         
@@ -195,15 +195,15 @@ public class StatisticsDialog extends JDialog {
         
         // X-Achse besser formatieren
         CategoryAxis domainAxis = plot.getDomainAxis();
-        domainAxis.setTickLabelFont(new Font("SansSerif", Font.PLAIN, 12)); // Größere Schrift
+        domainAxis.setTickLabelFont(new Font("SansSerif", Font.PLAIN, 12)); // Gr\u00f6\u00dfere Schrift
         domainAxis.setCategoryMargin(0.3); // Mehr Platz zwischen Kategorien
         
         // Y-Achse als ganze Zahlen formatieren
         NumberAxis rangeAxis = (NumberAxis) plot.getRangeAxis();
         rangeAxis.setStandardTickUnits(NumberAxis.createIntegerTickUnits());
-        rangeAxis.setTickLabelFont(new Font("SansSerif", Font.PLAIN, 12)); // Größere Schrift
+        rangeAxis.setTickLabelFont(new Font("SansSerif", Font.PLAIN, 12)); // Gr\u00f6\u00dfere Schrift
         
-        // Farben für die Balken
+        // Farben f\u00fcr die Balken
         BarRenderer renderer = (BarRenderer) plot.getRenderer();
         renderer.setSeriesPaint(0, new Color(65, 105, 225));  // Royal Blue
         renderer.setDrawBarOutline(true);

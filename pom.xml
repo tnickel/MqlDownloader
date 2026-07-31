@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>MqlDownloader</groupId>
     <artifactId>MqlDownloader</artifactId>
-    <version>0.0.32-SNAPSHOT</version>
+    <version>0.0.33-SNAPSHOT</version>
     
     <properties>
         <project.build.sourceEncoding>ISO-8859-1</project.build.sourceEncoding>
@@ -109,6 +109,7 @@
 
     </dependencies>
 </project>
+
 
 
 

@@ -45,6 +45,10 @@ public class DownloadManager {
         this.databaseManager = new database.DatabaseManager(configManager.getRootDirPath());
     }
 
+    public database.DatabaseManager getDatabaseManager() {
+        return databaseManager;
+    }
+
     public void startDownload(String version) {
         logHandler.log("=== STARTE " + version + " DOWNLOAD-PROZESS ===");
         stopRequested = false;
@@ -56,7 +60,7 @@ public class DownloadManager {
         logHandler.log("Download-Verzeichnis: " + downloadPath);
         configManager.setDownloadPath(downloadPath);
         
-        // Protokoll für die aktuelle MQL-Version zurücksetzen
+        // Protokoll f\u00fcr die aktuelle MQL-Version zur\u00fccksetzen
         String mqlVersionProtokoll = version.toLowerCase();
         downloadProtokoll.resetProtokoll(mqlVersionProtokoll);
         downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD-PROZESS GESTARTET ===");
@@ -89,7 +93,7 @@ public class DownloadManager {
                 downloader.setSubscriberChangeCallback(change -> gui.addSubscriberChange(change));
                 activeDownloader = downloader; // Fix #1: Referenz halten fuer Stop-Propagation
                 
-                // Fortschritt der Schutzwartezeit an GUI-Progressbar übermitteln
+                // Fortschritt der Schutzwartezeit an GUI-Progressbar \u00fcbermitteln
                 downloader.setWaitCallback(new downloader.WaitCallback() {
                     @Override
                     public void onWait(int elapsedMs, int totalMs) {
@@ -135,7 +139,7 @@ public class DownloadManager {
                     SwingUtilities.invokeLater(() -> {
                         buttonManager.updateCounter(version, count);
                         
-                        // Detailliertes Progress-Logging (nur für wichtige Meilensteine)
+                        // Detailliertes Progress-Logging (nur f\u00fcr wichtige Meilensteine)
                         if (count % 5 == 0 || count <= 3) { // Alle 5 Provider oder die ersten 3
                             logHandler.log(String.format("Fortschritt %s: %d/%d Provider verarbeitet", 
                                          version, count, limit));
@@ -169,7 +173,7 @@ public class DownloadManager {
 
             } catch (Exception e) {
                 if (!stopRequested) {
-                    String errorMsg = "Fehler während " + version + " Download: " + e.getMessage();
+                    String errorMsg = "Fehler w\u00e4hrend " + version + " Download: " + e.getMessage();
                     logHandler.logError(errorMsg, e);
                     logging.LoggerManager.safeLogError(errorMsg, e);
                     downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD MIT FEHLER BEENDET === " + e.getMessage());
@@ -190,12 +194,12 @@ public class DownloadManager {
                             downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD MANUELL GESTOPPT ===");
                         } else {
                             logHandler.log("=== " + version + " DOWNLOAD BEENDET ===");
-                            downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD REGULÄR BEENDET ===");
+                            downloadProtokoll.log(mqlVersionProtokoll, "=== DOWNLOAD REGUL\u00c4R BEENDET ===");
                         }
                     });
                 }
                 
-                // Cleanup falls noch nicht durch Limit-Erreichen ausgelöst
+                // Cleanup falls noch nicht durch Limit-Erreichen ausgel\u00f6st
                 if (!limitReachedLogged) {
                     cleanupDownload();
                 }
@@ -244,14 +248,14 @@ public class DownloadManager {
         buttonManager.getMql5LimitField().setEnabled(false);
         buttonManager.getDownloadDaysField().setEnabled(false);
         
-        activeButton.setBackground(new Color(144, 238, 144)); // Hellgrün für aktiven Download
+        activeButton.setBackground(new Color(144, 238, 144)); // Hellgr\u00fcn f\u00fcr aktiven Download
         activeButton.setEnabled(false);
         inactiveButton.setEnabled(false);
-        inactiveButton.setBackground(new Color(200, 200, 200)); // Grau für inaktiven Button
+        inactiveButton.setBackground(new Color(200, 200, 200)); // Grau f\u00fcr inaktiven Button
         buttonManager.getStopButton().setEnabled(true);
         
         // Update Button Text to show active state
-        activeButton.setText(version + " (LÄUFT...)");
+        activeButton.setText(version + " (L\u00c4UFT...)");
     }
 
     /**
@@ -261,11 +265,11 @@ public class DownloadManager {
         activeDownloader = null; // Fix #1: Referenz freigeben
         if (currentDriver != null) {
             try {
-                logging.LoggerManager.safeLog("Schließe WebDriver...");
+                logging.LoggerManager.safeLog("Schlie\u00dfe WebDriver...");
                 currentDriver.quit();
                 logging.LoggerManager.safeLog("WebDriver erfolgreich geschlossen");
             } catch (Exception e) {
-                logging.LoggerManager.safeLogError("Fehler beim Schließen des WebDrivers: " + e.getMessage(), e);
+                logging.LoggerManager.safeLogError("Fehler beim Schlie\u00dfen des WebDrivers: " + e.getMessage(), e);
             } finally {
                 currentDriver = null;
             }
@@ -285,7 +289,7 @@ public class DownloadManager {
             buttonManager.getMql4Button().setText("MQL4 Download");
             buttonManager.getMql5Button().setText("MQL5 Download");
             
-            logHandler.log("UI-Status zurückgesetzt - Bereit für neue Downloads");
+            logHandler.log("UI-Status zur\u00fcckgesetzt - Bereit f\u00fcr neue Downloads");
         });
     }
 
