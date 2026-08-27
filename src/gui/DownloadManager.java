@@ -286,8 +286,8 @@ public class DownloadManager {
             buttonManager.getCurrentFileField().setText("Inaktiv / Bereit");
             
             // Reset button texts
-            buttonManager.getMql4Button().setText("MQL4 Download");
-            buttonManager.getMql5Button().setText("MQL5 Download");
+            buttonManager.getMql4Button().setText("MQL4 herunterladen");
+            buttonManager.getMql5Button().setText("MQL5 herunterladen");
             
             logHandler.log("UI-Status zur\u00fcckgesetzt - Bereit f\u00fcr neue Downloads");
         });

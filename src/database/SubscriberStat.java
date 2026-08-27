@@ -8,12 +8,12 @@ public class SubscriberStat {
     private final String signalName;
     private final int subscribers;
     private final int latestChange;
-    private final int weekChange;
-    private final int monthChange;
+    private final Integer weekChange;
+    private final Integer monthChange;
     private final Timestamp lastUpdated;
     private final String url;
 
-    public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, int weekChange, int monthChange, Timestamp lastUpdated, String url) {
+    public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Integer weekChange, Integer monthChange, Timestamp lastUpdated, String url) {
         this.signalId = signalId;
         this.mqlVersion = mqlVersion;
         this.signalName = signalName;
@@ -26,7 +26,7 @@ public class SubscriberStat {
     }
 
     public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Timestamp lastUpdated, String url) {
-        this(signalId, mqlVersion, signalName, subscribers, latestChange, latestChange, latestChange, lastUpdated, url);
+        this(signalId, mqlVersion, signalName, subscribers, latestChange, null, null, lastUpdated, url);
     }
 
     public String getSignalId() {
@@ -49,11 +49,11 @@ public class SubscriberStat {
         return latestChange;
     }
 
-    public int getWeekChange() {
+    public Integer getWeekChange() {
         return weekChange;
     }
 
-    public int getMonthChange() {
+    public Integer getMonthChange() {
         return monthChange;
     }
 

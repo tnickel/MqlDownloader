@@ -117,7 +117,7 @@ public class WebDriverManager {
         options.setExperimentalOption("prefs", prefs);
         options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         
-        // Eindeutige user-data-dir (l�st das Hauptproblem)
+        // Eindeutige user-data-dir (löst das Hauptproblem)
         options.addArguments("--user-data-dir=" + currentUserDataDir);
         
         // Robustheit-Optionen
@@ -135,9 +135,9 @@ public class WebDriverManager {
         options.addArguments("--disable-features=TranslateUI");
         options.addArguments("--disable-ipc-flooding-protection");
         
-        // Stabilit�t und Performance
+        // Stabilität und Performance
         options.addArguments("--max_old_space_size=4096");
-        options.addArguments("--remote-debugging-port=0"); // Zuf�lliger Port
+        options.addArguments("--remote-debugging-port=0"); // Zufälliger Port
         options.addArguments("--disable-web-security");
         options.addArguments("--allow-running-insecure-content");
         
@@ -173,7 +173,7 @@ public class WebDriverManager {
     }
 
     /**
-     * Bereinigt die aktuelle Session und entfernt tempor�re Dateien
+     * Bereinigt die aktuelle Session und entfernt temporäre Dateien
      */
     public void cleanupSession() {
         cleanupPreviousSession();
@@ -199,27 +199,27 @@ public class WebDriverManager {
     }
 
     /**
-     * L�scht ein Verzeichnis rekursiv
+     * Löscht ein Verzeichnis rekursiv
      * 
-     * @param path Pfad zum zu l�schenden Verzeichnis
-     * @throws IOException bei Fehlern beim L�schen
+     * @param path Pfad zum zu löschenden Verzeichnis
+      * @throws IOException bei Fehlern beim Löschen
      */
     private void deleteDirectoryRecursively(Path path) throws IOException {
         if (Files.exists(path)) {
             Files.walk(path)
-                .sorted((a, b) -> b.compareTo(a)) // Sortiere absteigend f�r korrekte L�schung
+                .sorted((a, b) -> b.compareTo(a)) // Sortiere absteigend für korrekte Löschung
                 .forEach(p -> {
                     try {
                         Files.delete(p);
                     } catch (IOException e) {
-                        logger.debug("Konnte Datei/Verzeichnis nicht l�schen: {} - {}", p, e.getMessage());
+                        logger.debug("Konnte Datei/Verzeichnis nicht löschen: {} - {}", p, e.getMessage());
                     }
                 });
         }
     }
 
     /**
-     * Pr�ft, ob es sich um einen kritischen Fehler handelt, bei dem nicht retry werden sollte
+     * Prüft, ob es sich um einen kritischen Fehler handelt, bei dem kein Retry sinnvoll ist
      * 
      * @param exception Die aufgetretene Exception
      * @return true wenn es ein kritischer Fehler ist
@@ -227,7 +227,7 @@ public class WebDriverManager {
     private boolean isCriticalError(Exception exception) {
         String message = exception.getMessage().toLowerCase();
         
-        // Kritische Fehler, bei denen kein Retry helfen w�rde
+        // Kritische Fehler, bei denen kein Retry helfen würde
         return message.contains("no such file or directory") ||
                message.contains("permission denied") ||
                message.contains("access denied") ||
@@ -246,12 +246,12 @@ public class WebDriverManager {
     public WebDriver recoverWebDriver(WebDriver oldDriver) {
         logger.info("Starte WebDriver-Recovery...");
         
-        // Schlie�e den alten WebDriver sauber
+        // Schließe den alten WebDriver sauber
         if (oldDriver != null) {
             try {
                 oldDriver.quit();
             } catch (Exception e) {
-                logger.warn("Fehler beim Schlie�en des alten WebDrivers: {}", e.getMessage());
+                logger.warn("Fehler beim Schließen des alten WebDrivers: {}", e.getMessage());
             }
         }
         
@@ -259,7 +259,7 @@ public class WebDriverManager {
         cleanupPreviousSession();
         
         try {
-            Thread.sleep(3000); // L�ngere Pause f�r Recovery
+            Thread.sleep(3000); // Längere Pause für Recovery
             return initializeDriver();
         } catch (Exception e) {
             logger.error("WebDriver-Recovery fehlgeschlagen: {}", e.getMessage());
@@ -268,10 +268,10 @@ public class WebDriverManager {
     }
 
     /**
-     * Pr�ft, ob ein WebDriver noch funktionsf�hig ist
+     * Prüft, ob ein WebDriver noch funktionsfähig ist
      * 
-     * @param driver Der zu pr�fende WebDriver
-     * @return true wenn der WebDriver funktionsf�hig ist
+     * @param driver Der zu prüfende WebDriver
+      * @return true wenn der WebDriver funktionsfähig ist
      */
     public boolean isDriverHealthy(WebDriver driver) {
         if (driver == null) {
@@ -289,7 +289,7 @@ public class WebDriverManager {
     }
 
     /**
-     * Getter f�r die aktuelle user-data-dir (f�r Debugging)
+     * Getter für die aktuelle user-data-dir (für Debugging)
      * 
      * @return Aktueller Pfad zur user-data-dir
      */

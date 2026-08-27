@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.image.BufferedImage;
 import javax.swing.text.AbstractDocument;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
@@ -33,8 +34,14 @@ public class ButtonPanelManager {
     }
 
     private void initializeComponents() {
-        mql4Button = createStyledButton("MQL4 Download");
-        mql5Button = createStyledButton("MQL5 Download");
+        mql4Button = createStyledButton(
+                "MQL4 herunterladen",
+                smallIcon("FileView.directoryIcon"),
+                "Startet den Download der MQL4-Signale");
+        mql5Button = createStyledButton(
+                "MQL5 herunterladen",
+                smallIcon("FileView.directoryIcon"),
+                "Startet den Download der MQL5-Signale");
         stopButton = createStopButton();
         convertButton = createConvertButton();
         doAllButton = createDoAllButton();
@@ -46,7 +53,7 @@ public class ButtonPanelManager {
         convertStatusLabel.setVisible(false);
         
         subscribersOnlyCheckbox = new JCheckBox("Nur mit Abonnenten laden (3MPDD-Filter aus)");
-        subscribersOnlyCheckbox.setFont(new Font("Arial", Font.BOLD, 12));
+        subscribersOnlyCheckbox.setFont(subscribersOnlyCheckbox.getFont().deriveFont(Font.BOLD, 12f));
         subscribersOnlyCheckbox.setSelected(configManager.isSubscribersOnly());
         subscribersOnlyCheckbox.addActionListener(e -> {
             configManager.setSubscribersOnly(subscribersOnlyCheckbox.isSelected());
@@ -54,7 +61,7 @@ public class ButtonPanelManager {
 
         currentFileField = new JTextField("Inaktiv / Bereit");
         currentFileField.setEditable(false);
-        currentFileField.setFont(new Font("Arial", Font.PLAIN, 12));
+        currentFileField.setFont(currentFileField.getFont().deriveFont(Font.PLAIN, 12f));
         currentFileField.setBackground(new Color(245, 245, 245));
         currentFileField.setBorder(BorderFactory.createTitledBorder("Aktueller Download / Datei:"));
     }
@@ -65,12 +72,12 @@ public class ButtonPanelManager {
         panel.add(mql4Button);
         
         JLabel limitLabel = new JLabel("Limit:");
-        limitLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        limitLabel.setFont(limitLabel.getFont().deriveFont(Font.PLAIN, 14f));
         panel.add(limitLabel);
         
         mql4LimitField = new JTextField(5);
         mql4LimitField.setText(String.valueOf(configManager.getMql4Limit()));
-        mql4LimitField.setFont(new Font("Arial", Font.PLAIN, 14));
+        mql4LimitField.setFont(mql4LimitField.getFont().deriveFont(Font.PLAIN, 14f));
         addLimitFieldListener(mql4LimitField, true);
         panel.add(mql4LimitField);
         
@@ -86,12 +93,12 @@ public class ButtonPanelManager {
         panel.add(mql5Button);
         
         JLabel limitLabel = new JLabel("Limit:");
-        limitLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        limitLabel.setFont(limitLabel.getFont().deriveFont(Font.PLAIN, 14f));
         panel.add(limitLabel);
         
         mql5LimitField = new JTextField(5);
         mql5LimitField.setText(String.valueOf(configManager.getMql5Limit()));
-        mql5LimitField.setFont(new Font("Arial", Font.PLAIN, 14));
+        mql5LimitField.setFont(mql5LimitField.getFont().deriveFont(Font.PLAIN, 14f));
         addLimitFieldListener(mql5LimitField, false);
         panel.add(mql5LimitField);
         
@@ -105,13 +112,13 @@ public class ButtonPanelManager {
     public JPanel createDownloadDaysPanel() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 20, 5));
         
-        JLabel daysLabel = new JLabel("Download only if older than (days):");
-        daysLabel.setFont(new Font("Arial", Font.PLAIN, 14));
+        JLabel daysLabel = new JLabel("Nur herunterladen, wenn \u00e4lter als (Tage):");
+        daysLabel.setFont(daysLabel.getFont().deriveFont(Font.PLAIN, 14f));
         panel.add(daysLabel);
         
         downloadDaysField = new JTextField(5);
         downloadDaysField.setText(String.valueOf(configManager.getDownloadDays()));
-        downloadDaysField.setFont(new Font("Arial", Font.PLAIN, 14));
+        downloadDaysField.setFont(downloadDaysField.getFont().deriveFont(Font.PLAIN, 14f));
         downloadDaysField.setToolTipText("<html>Legt fest, wie alt die Dateien sein m\u00fcssen, bevor sie neu heruntergeladen werden.<br>"+
                                           "Dies ist eine Optimierungsma\u00dfnahme, um den Download-Prozess zu beschleunigen.<br>"+
                                           "Bei einem Wert von 5 werden Dateien, die j\u00fcnger als 5 Tage sind, nicht erneut heruntergeladen.<br>"+
@@ -213,51 +220,86 @@ public class ButtonPanelManager {
         });
     }
 
-    private JButton createStyledButton(String text) {
-        JButton button = new JButton(text);
-        button.setFont(new Font("Arial", Font.BOLD, 14));
+    private JButton createStyledButton(String text, Icon icon, String tooltip) {
+        JButton button = new JButton(text, icon);
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 14f));
         button.setBackground(new Color(240, 240, 240));
         button.setForeground(Color.BLACK);
         button.setFocusPainted(false);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText(tooltip);
         return button;
     }
 
+    private Icon smallIcon(String uiKey) {
+        Icon icon = UIManager.getIcon(uiKey);
+        if (icon == null || (icon.getIconWidth() <= 18 && icon.getIconHeight() <= 18)) {
+            return icon;
+        }
+
+        BufferedImage source = new BufferedImage(
+                icon.getIconWidth(), icon.getIconHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics = source.createGraphics();
+        try {
+            icon.paintIcon(null, graphics, 0, 0);
+        } finally {
+            graphics.dispose();
+        }
+
+        double scale = Math.min(18d / icon.getIconWidth(), 18d / icon.getIconHeight());
+        int width = Math.max(1, (int) Math.round(icon.getIconWidth() * scale));
+        int height = Math.max(1, (int) Math.round(icon.getIconHeight() * scale));
+        return new ImageIcon(source.getScaledInstance(width, height, Image.SCALE_SMOOTH));
+    }
+
     private JButton createStopButton() {
-        JButton button = new JButton("Stop Download");
-        button.setFont(new Font("Arial", Font.BOLD, 14));
+        JButton button = new JButton(
+                "Download stoppen",
+                smallIcon("OptionPane.errorIcon"));
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 14f));
         button.setBackground(new Color(220, 53, 69));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("Stoppt laufende Downloads");
         return button;
     }
 
     private JButton createConvertButton() {
-        JButton button = new JButton("Convert");
-        button.setFont(new Font("Arial", Font.BOLD, 14));
+        JButton button = new JButton(
+                "Konvertieren",
+                smallIcon("FileView.fileIcon"));
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 14f));
         button.setBackground(new Color(65, 105, 225));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("Konvertiert heruntergeladene HTML-Dateien");
         return button;
     }
 
     private JButton createDoAllButton() {
-        JButton button = new JButton("Do all at Once");
-        button.setFont(new Font("Arial", Font.BOLD, 14));
+        JButton button = new JButton(
+                "Alles ausf\u00fchren",
+                smallIcon("OptionPane.informationIcon"));
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 14f));
         button.setBackground(new Color(50, 205, 50));
         button.setForeground(Color.WHITE);
         button.setFocusPainted(false);
         button.setBorderPainted(true);
         button.setOpaque(true);
+        button.setHorizontalTextPosition(SwingConstants.RIGHT);
+        button.setToolTipText("F\u00fchrt alle Schritte nacheinander aus");
         return button;
     }
 
     private JLabel createCounterLabel() {
         JLabel label = new JLabel("0");
-        label.setFont(new Font("Arial", Font.BOLD, 14));
+        label.setFont(label.getFont().deriveFont(Font.BOLD, 14f));
         label.setForeground(new Color(255, 215, 0));
         label.setBackground(new Color(70, 70, 70));
         label.setOpaque(true);

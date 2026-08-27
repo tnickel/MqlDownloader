@@ -11,7 +11,7 @@ public class SetupDialog extends JDialog {
     private JSpinner maxWaitSpinner;
 
     public SetupDialog(JFrame parent, ConfigurationManager configManager) {
-        super(parent, "Setup", true);
+        super(parent, "Einstellungen", true);
         this.configManager = configManager;
         initializeComponents();
     }
@@ -28,7 +28,7 @@ public class SetupDialog extends JDialog {
         JPanel speedPanel = new JPanel(new GridBagLayout());
         speedPanel.setBorder(BorderFactory.createTitledBorder(
             BorderFactory.createEtchedBorder(),
-            "Download Speed Configuration",
+            "Download-Geschwindigkeit",
             TitledBorder.LEFT,
             TitledBorder.TOP));
 
@@ -39,7 +39,7 @@ public class SetupDialog extends JDialog {
         // Min Wait Time
         gbc.gridx = 0;
         gbc.gridy = 0;
-        speedPanel.add(new JLabel("Min Wait (seconds):"), gbc);
+        speedPanel.add(new JLabel("Min. Wartezeit (Sekunden):"), gbc);
 
         SpinnerNumberModel minModel = new SpinnerNumberModel(
             configManager.getMinWaitTime() / 1000, // current
@@ -54,7 +54,7 @@ public class SetupDialog extends JDialog {
         // Max Wait Time
         gbc.gridx = 0;
         gbc.gridy = 1;
-        speedPanel.add(new JLabel("Max Wait (seconds):"), gbc);
+        speedPanel.add(new JLabel("Max. Wartezeit (Sekunden):"), gbc);
 
         SpinnerNumberModel maxModel = new SpinnerNumberModel(
             configManager.getMaxWaitTime() / 1000, // current
@@ -73,7 +73,7 @@ public class SetupDialog extends JDialog {
         JPanel pathPanel = new JPanel(new GridBagLayout());
         pathPanel.setBorder(BorderFactory.createTitledBorder(
             BorderFactory.createEtchedBorder(),
-            "Path Information",
+            "Download-Pfad",
             TitledBorder.LEFT,
             TitledBorder.TOP));
 
@@ -96,8 +96,8 @@ public class SetupDialog extends JDialog {
 
         // Buttons Panel
         JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        JButton saveButton = new JButton("Save");
-        JButton cancelButton = new JButton("Cancel");
+        JButton saveButton = new JButton("Speichern");
+        JButton cancelButton = new JButton("Abbrechen");
 
         saveButton.addActionListener(e -> saveAndClose());
         cancelButton.addActionListener(e -> dispose());

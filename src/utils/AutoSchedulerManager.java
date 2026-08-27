@@ -1,8 +1,11 @@
 package utils;
 
-import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
+import java.time.DayOfWeek;
+import java.time.Duration;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.TemporalAdjusters;
+import java.util.Locale;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -19,22 +22,34 @@ public class AutoSchedulerManager {
     }
 
     public synchronized void start() {
-        stop(); // Cancel any existing schedule
-        scheduler = Executors.newSingleThreadScheduledExecutor();
+        stop();
+        scheduler = Executors.newSingleThreadScheduledExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "mql-automatikmodus");
+            thread.setDaemon(true);
+            return thread;
+        });
+        scheduleNextRun();
+    }
 
-        long initialDelay = getMillisUntilNextFriday18();
-        long period = 7L * 24 * 60 * 60 * 1000; // 7 days in ms
+    private synchronized void scheduleNextRun() {
+        if (scheduler == null || scheduler.isShutdown()) {
+            return;
+        }
 
-        scheduler.scheduleAtFixedRate(() -> {
+        long delay = getMillisUntilNextFriday18();
+        logger.info("Automatikmodus gestartet. N\u00e4chste Ausf\u00fchrung in "
+                + (delay / 1000 / 60) + " Minuten (" + getNextRunDateFormatted() + ")");
+
+        scheduler.schedule(() -> {
             try {
                 logger.info("Automatikmodus getriggert: Geplante Ausf\u00fchrung startet...");
                 task.run();
             } catch (Exception e) {
                 logger.error("Fehler im Automatikmodus-Scheduler", e);
+            } finally {
+                scheduleNextRun();
             }
-        }, initialDelay, period, TimeUnit.MILLISECONDS);
-
-        logger.info("Automatikmodus gestartet. N\u00e4chste Ausf\u00fchrung in " + (initialDelay / 1000 / 60) + " Minuten (" + getNextRunDateFormatted() + ")");
+        }, delay, TimeUnit.MILLISECONDS);
     }
 
     public synchronized void stop() {
@@ -50,27 +65,28 @@ public class AutoSchedulerManager {
     }
 
     public static long getMillisUntilNextFriday18() {
-        Calendar now = Calendar.getInstance();
-        Calendar target = Calendar.getInstance();
-        target.set(Calendar.HOUR_OF_DAY, 18);
-        target.set(Calendar.MINUTE, 0);
-        target.set(Calendar.SECOND, 0);
-        target.set(Calendar.MILLISECOND, 0);
+        ZonedDateTime now = ZonedDateTime.now();
+        return Duration.between(now, getNextRun(now)).toMillis();
+    }
 
-        int daysUntilFriday = (Calendar.FRIDAY - now.get(Calendar.DAY_OF_WEEK) + 7) % 7;
-        target.add(Calendar.DAY_OF_YEAR, daysUntilFriday);
+    static ZonedDateTime getNextRun(ZonedDateTime now) {
+        ZonedDateTime target = now
+                .with(TemporalAdjusters.nextOrSame(DayOfWeek.FRIDAY))
+                .withHour(18)
+                .withMinute(0)
+                .withSecond(0)
+                .withNano(0);
 
-        if (target.before(now) || target.equals(now)) {
-            target.add(Calendar.DAY_OF_YEAR, 7);
+        if (!target.isAfter(now)) {
+            target = target.plusWeeks(1);
         }
-
-        return target.getTimeInMillis() - now.getTimeInMillis();
+        return target;
     }
 
     public static String getNextRunDateFormatted() {
-        long delayMs = getMillisUntilNextFriday18();
-        Date nextDate = new Date(System.currentTimeMillis() + delayMs);
-        SimpleDateFormat sdf = new SimpleDateFormat("EEE, dd.MM.yyyy 'um' HH:mm 'Uhr'");
-        return sdf.format(nextDate);
+        ZonedDateTime target = getNextRun(ZonedDateTime.now());
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(
+                "EEE, dd.MM.yyyy 'um' HH:mm 'Uhr'", Locale.GERMAN);
+        return formatter.format(target);
     }
 }
