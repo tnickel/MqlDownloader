@@ -9,8 +9,11 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.sql.Timestamp;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -378,6 +381,40 @@ public class DatabaseManager {
                          " (" + normalizedMqlVersion + ")", e);
         }
         return history;
+    }
+
+    /**
+     * Loads all subscriber history points in one query, grouped by signal identity.
+     * Map keys are {@link #subscriberHistoryKey(String, String)}.
+     */
+    public synchronized Map<String, List<SubscriberHistoryPoint>> getAllSubscriberHistories() {
+        Map<String, List<SubscriberHistoryPoint>> histories = new HashMap<>();
+        String sql = "SELECT signal_id, mql_version, timestamp, subscribers, change_amount " +
+                     "FROM subscriber_history ORDER BY signal_id, mql_version, timestamp ASC, id ASC";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql);
+             ResultSet rs = stmt.executeQuery()) {
+            while (rs.next()) {
+                String signalId = rs.getString("signal_id");
+                String mqlVersion = rs.getString("mql_version");
+                String key = subscriberHistoryKey(signalId, mqlVersion);
+                histories.computeIfAbsent(key, ignored -> new ArrayList<>())
+                        .add(new SubscriberHistoryPoint(rs.getTimestamp("timestamp"),
+                                                        rs.getInt("subscribers"),
+                                                        rs.getInt("change_amount")));
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching all subscriber histories", e);
+            return Collections.emptyMap();
+        }
+        return histories;
+    }
+
+    /** Stable map key for signal_id + mql_version (version lowercased). */
+    public static String subscriberHistoryKey(String signalId, String mqlVersion) {
+        String id = signalId == null ? "" : signalId.trim();
+        String version = mqlVersion == null ? "" : mqlVersion.trim().toLowerCase(Locale.ROOT);
+        return id + '\0' + version;
     }
 
     /** Compatibility bridge that refuses ambiguous identities instead of mixing versions. */

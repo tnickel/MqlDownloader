@@ -66,6 +66,10 @@ class DatabaseManagerTest {
         assertEquals(0, mql4History.get(2).getChangeAmount());
         assertEquals(1, mql5History.size());
         assertEquals(20, mql5History.get(0).getSubscribers());
+
+        Map<String, List<SubscriberHistoryPoint>> allHistories = manager.getAllSubscriberHistories();
+        assertEquals(3, allHistories.get(DatabaseManager.subscriberHistoryKey("same-id", "mql4")).size());
+        assertEquals(1, allHistories.get(DatabaseManager.subscriberHistoryKey("same-id", "mql5")).size());
     }
 
     @Test
