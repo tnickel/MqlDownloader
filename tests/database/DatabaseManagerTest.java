@@ -123,6 +123,50 @@ class DatabaseManagerTest {
         assertNull(stat.getMonthChange());
     }
 
+    @Test
+    void storesAndClearsRiskPerSignalIdentity() {
+        DatabaseManager manager = new DatabaseManager(tempDirectory.toString());
+        manager.checkAndUpdateSubscribers("risk-id", "mql4", "RiskFour", 5, null);
+        manager.checkAndUpdateSubscribers("risk-id", "mql5", "RiskFive", 6, null);
+
+        assertTrue(manager.updateSignalRisk("risk-id", "MQL4", "hoch"));
+        assertTrue(manager.updateSignalRisk("risk-id", "mql5", "  niedrig  "));
+
+        Map<String, SubscriberStat> byVersion = manager.getAllSubscriberStatistics().stream()
+                .collect(Collectors.toMap(SubscriberStat::getMqlVersion, Function.identity()));
+        assertEquals("hoch", byVersion.get("mql4").getRisk());
+        assertEquals("niedrig", byVersion.get("mql5").getRisk());
+
+        // Risiko ist identitätsbezogen: mql5 bleibt unverändert
+        assertTrue(manager.updateSignalRisk("risk-id", "mql4", ""));
+        byVersion = manager.getAllSubscriberStatistics().stream()
+                .collect(Collectors.toMap(SubscriberStat::getMqlVersion, Function.identity()));
+        assertNull(byVersion.get("mql4").getRisk());
+        assertEquals("niedrig", byVersion.get("mql5").getRisk());
+    }
+
+    @Test
+    void storesAndClearsRowColorPerSignalIdentity() {
+        DatabaseManager manager = new DatabaseManager(tempDirectory.toString());
+        manager.checkAndUpdateSubscribers("color-id", "mql4", "ColorFour", 5, null);
+        manager.checkAndUpdateSubscribers("color-id", "mql5", "ColorFive", 6, null);
+
+        assertTrue(manager.updateRowColor("color-id", "MQL4", "RED"));
+        assertTrue(manager.updateRowColor("color-id", "mql5", "LIGHT_GREEN"));
+
+        Map<String, SubscriberStat> byVersion = manager.getAllSubscriberStatistics().stream()
+                .collect(Collectors.toMap(SubscriberStat::getMqlVersion, Function.identity()));
+        assertEquals("RED", byVersion.get("mql4").getRowColor());
+        assertEquals("LIGHT_GREEN", byVersion.get("mql5").getRowColor());
+
+        // Zeilenfarbe ist identitätsbezogen: mql5 bleibt unverändert
+        assertTrue(manager.updateRowColor("color-id", "mql4", null));
+        byVersion = manager.getAllSubscriberStatistics().stream()
+                .collect(Collectors.toMap(SubscriberStat::getMqlVersion, Function.identity()));
+        assertNull(byVersion.get("mql4").getRowColor());
+        assertEquals("LIGHT_GREEN", byVersion.get("mql5").getRowColor());
+    }
+
     private void insertSnapshot(PreparedStatement insert, String signalId, int subscribers,
                                 int changeAmount, Timestamp reference, int ageDays) throws Exception {
         insert.setString(1, signalId);

@@ -12,8 +12,18 @@ public class SubscriberStat {
     private final Integer monthChange;
     private final Timestamp lastUpdated;
     private final String url;
+    private final String risk;
+    private final String rowColor;
 
     public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Integer weekChange, Integer monthChange, Timestamp lastUpdated, String url) {
+        this(signalId, mqlVersion, signalName, subscribers, latestChange, weekChange, monthChange, lastUpdated, url, null, null);
+    }
+
+    public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Integer weekChange, Integer monthChange, Timestamp lastUpdated, String url, String risk) {
+        this(signalId, mqlVersion, signalName, subscribers, latestChange, weekChange, monthChange, lastUpdated, url, risk, null);
+    }
+
+    public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Integer weekChange, Integer monthChange, Timestamp lastUpdated, String url, String risk, String rowColor) {
         this.signalId = signalId;
         this.mqlVersion = mqlVersion;
         this.signalName = signalName;
@@ -23,6 +33,8 @@ public class SubscriberStat {
         this.monthChange = monthChange;
         this.lastUpdated = lastUpdated;
         this.url = (url != null && !url.trim().isEmpty()) ? url : "https://www.mql5.com/en/signals/" + signalId;
+        this.risk = risk;
+        this.rowColor = rowColor;
     }
 
     public SubscriberStat(String signalId, String mqlVersion, String signalName, int subscribers, int latestChange, Timestamp lastUpdated, String url) {
@@ -63,5 +75,15 @@ public class SubscriberStat {
 
     public String getUrl() {
         return url;
+    }
+
+    /** Manuell gepflegter Risiko-Wert (kann null sein). */
+    public String getRisk() {
+        return risk;
+    }
+
+    /** Manuell gesetzte Zeilenfarbe/Farbklasse (kann null sein). */
+    public String getRowColor() {
+        return rowColor;
     }
 }

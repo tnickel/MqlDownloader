@@ -238,7 +238,7 @@ public class MqlDownloaderGui extends JFrame {
 
     private void showSubscriberStatisticsDialog() {
         logHandler.log("Zeige Abonnenten-Statistik...");
-        SubscriberStatisticsDialog dialog = new SubscriberStatisticsDialog(this, downloadManager.getDatabaseManager());
+        SubscriberStatisticsDialog dialog = new SubscriberStatisticsDialog(this, downloadManager.getDatabaseManager(), configManager);
         dialog.setVisible(true);
     }
 

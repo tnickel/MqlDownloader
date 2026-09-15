@@ -32,6 +32,7 @@ public class ConfigurationManager {
     private static final String KEY_DOWNLOAD_DAYS = "downloadDays";
     private static final String KEY_SUBSCRIBERS_ONLY = "subscribersOnly";
     private static final String KEY_AUTO_MODE = "autoMode";
+    private static final String KEY_ANALYSE_PATH = "analysePath";
     
     private static final int DEFAULT_MIN_WAIT = 4000; // 4 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
@@ -192,6 +193,31 @@ public class ConfigurationManager {
         props.setProperty(KEY_AUTO_MODE, String.valueOf(val));
         saveProperties(props, "MQL Downloader Konfiguration");
         logger.info("Automatikmodus aktualisiert auf: " + val);
+    }
+
+    /**
+     * Verzeichnis, in dem die Testreport-PDFs zu den Signalen liegen.
+     * Ein leerer String bedeutet: nicht konfiguriert (Spalte bleibt leer).
+     */
+    public String getAnalysePath() {
+        Properties props = loadProperties();
+        String path = props.getProperty(KEY_ANALYSE_PATH, "");
+        return path != null ? path.trim() : "";
+    }
+
+    public void setAnalysePath(String path) {
+        String normalized = path != null ? path.trim() : "";
+        while (normalized.endsWith("\\") && normalized.length() > 3) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        Properties props = loadProperties();
+        props.setProperty(KEY_ANALYSE_PATH, normalized);
+        saveProperties(props, "MQL Downloader Konfiguration");
+        if (normalized.isEmpty()) {
+            logger.info("Analyse-Verzeichnis zur\u00fcckgesetzt (leer)");
+        } else {
+            logger.info("Analyse-Verzeichnis aktualisiert auf: " + normalized);
+        }
     }
 
     public void initializeDirectories() {

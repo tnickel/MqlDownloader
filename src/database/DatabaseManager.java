@@ -53,6 +53,8 @@ public class DatabaseManager {
                                 "PRIMARY KEY (signal_id, mql_version)" +
                                 ")";
         String alterTableSql = "ALTER TABLE signal_subscribers ADD COLUMN IF NOT EXISTS url VARCHAR(500)";
+        String alterRiskColumnSql = "ALTER TABLE signal_subscribers ADD COLUMN IF NOT EXISTS risk VARCHAR(200)";
+        String alterRowColorColumnSql = "ALTER TABLE signal_subscribers ADD COLUMN IF NOT EXISTS row_color VARCHAR(20)";
         String createHistoryTableSql = "CREATE TABLE IF NOT EXISTS subscriber_history (" +
                                        "id BIGINT AUTO_INCREMENT PRIMARY KEY, " +
                                        "signal_id VARCHAR(100) NOT NULL, " +
@@ -71,6 +73,8 @@ public class DatabaseManager {
              Statement stmt = conn.createStatement()) {
             stmt.execute(createTableSql);
             stmt.execute(alterTableSql);
+            stmt.execute(alterRiskColumnSql);
+            stmt.execute(alterRowColorColumnSql);
             stmt.execute(createHistoryTableSql);
             stmt.execute(alterHistoryTableSql);
             migrateSignalIdentity(conn);
@@ -301,7 +305,7 @@ public class DatabaseManager {
         // cadence can place the closest observation 3.5 days from the target.
         String weekComparison = comparisonSnapshotSql(7, 2);
         String monthComparison = comparisonSnapshotSql(30, 4);
-        String sql = "SELECT s.signal_id, s.mql_version, s.signal_name, s.subscribers, s.last_updated, s.url, " +
+        String sql = "SELECT s.signal_id, s.mql_version, s.signal_name, s.subscribers, s.last_updated, s.url, s.risk, s.row_color, " +
                      "COALESCE((SELECT h.change_amount FROM subscriber_history h WHERE h.signal_id = s.signal_id AND h.mql_version = s.mql_version ORDER BY h.timestamp DESC, h.id DESC LIMIT 1), 0) AS latest_change, " +
                      "s.subscribers - (" + weekComparison + ") AS week_change, " +
                      "s.subscribers - (" + monthComparison + ") AS month_change " +
@@ -325,12 +329,87 @@ public class DatabaseManager {
                 Integer weekChange = weekValue == null ? null : weekValue.intValue();
                 Integer monthChange = monthValue == null ? null : monthValue.intValue();
                 stats.add(new SubscriberStat(signalId, mqlVersion, name, subscribers,
-                                              latestChange, weekChange, monthChange, lastUpdated, url));
+                                              latestChange, weekChange, monthChange, lastUpdated, url,
+                                              rs.getString("risk"), rs.getString("row_color")));
             }
         } catch (SQLException e) {
             logger.error("Error fetching subscriber statistics", e);
         }
         return stats;
+    }
+
+    /**
+     * Speichert den manuell gepflegten Risiko-Wert eines Signals.
+     * Ein leerer/Null-Wert l\u00f6scht den Eintrag.
+     *
+     * @return true, wenn der Wert geschrieben wurde
+     */
+    public synchronized boolean updateSignalRisk(String signalId, String mqlVersion, String risk) {
+        String normalizedSignalId;
+        String normalizedMqlVersion;
+        try {
+            normalizedSignalId = requireIdentityPart(signalId, "signalId");
+            normalizedMqlVersion = normalizeMqlVersion(mqlVersion);
+        } catch (IllegalArgumentException e) {
+            logger.error("Cannot update risk: " + e.getMessage());
+            return false;
+        }
+
+        String normalizedRisk = risk != null ? risk.trim() : "";
+        String sql = "UPDATE signal_subscribers SET risk = ? WHERE signal_id = ? AND mql_version = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, normalizedRisk.isEmpty() ? null : normalizedRisk);
+            stmt.setString(2, normalizedSignalId);
+            stmt.setString(3, normalizedMqlVersion);
+            int updated = stmt.executeUpdate();
+            if (updated == 0) {
+                logger.warn("Risk update matched no row for signal " + normalizedSignalId +
+                            " (" + normalizedMqlVersion + ")");
+            }
+            return updated > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating risk for signal " + normalizedSignalId +
+                         " (" + normalizedMqlVersion + ")", e);
+            return false;
+        }
+    }
+
+    /**
+     * Speichert die manuell gesetzte Zeilenfarbe eines Signals (Farbklasse).
+     * Ein leerer/Null-Wert entfernt die Markierung.
+     *
+     * @return true, wenn der Wert geschrieben wurde
+     */
+    public synchronized boolean updateRowColor(String signalId, String mqlVersion, String colorName) {
+        String normalizedSignalId;
+        String normalizedMqlVersion;
+        try {
+            normalizedSignalId = requireIdentityPart(signalId, "signalId");
+            normalizedMqlVersion = normalizeMqlVersion(mqlVersion);
+        } catch (IllegalArgumentException e) {
+            logger.error("Cannot update row color: " + e.getMessage());
+            return false;
+        }
+
+        String normalizedColor = colorName != null ? colorName.trim() : "";
+        String sql = "UPDATE signal_subscribers SET row_color = ? WHERE signal_id = ? AND mql_version = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, normalizedColor.isEmpty() ? null : normalizedColor);
+            stmt.setString(2, normalizedSignalId);
+            stmt.setString(3, normalizedMqlVersion);
+            int updated = stmt.executeUpdate();
+            if (updated == 0) {
+                logger.warn("Row color update matched no row for signal " + normalizedSignalId +
+                            " (" + normalizedMqlVersion + ")");
+            }
+            return updated > 0;
+        } catch (SQLException e) {
+            logger.error("Error updating row color for signal " + normalizedSignalId +
+                         " (" + normalizedMqlVersion + ")", e);
+            return false;
+        }
     }
 
     /**

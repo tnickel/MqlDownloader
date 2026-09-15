@@ -1,5 +1,6 @@
 package gui;
 
+import config.ConfigurationManager;
 import database.DatabaseManager;
 import database.SubscriberHistoryPoint;
 import database.SubscriberStat;
@@ -7,12 +8,16 @@ import database.SubscriberStat;
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
+import javax.swing.table.TableCellRenderer;
 import javax.swing.table.TableRowSorter;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Path2D;
+import java.awt.image.BufferedImage;
+import java.io.File;
 import java.net.URI;
+import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -22,16 +27,33 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.regex.Pattern;
 
 public class SubscriberStatisticsDialog extends JDialog {
     private static final String UNKNOWN_CHANGE_TOOLTIP =
             "Kein belastbarer Vergleichswert für diesen Zeitraum vorhanden.";
     private static final Comparator<Integer> NULL_SAFE_INTEGER_COMPARATOR =
             Comparator.nullsFirst(Integer::compareTo);
-    private static final int URL_COLUMN = 8;
-    private static final int SPARKLINE_COLUMN = 7;
+    private static final int RISK_COLUMN = 3;
+    private static final int SPARKLINE_COLUMN = 8;
+    private static final int REPORTS_COLUMN = 9;
+    private static final int URL_COLUMN = 10;
+
+    // Stabile Farb-Schl\u00fcssel f\u00fcr die Datenbank und die zugeh\u00f6rigen Anzeigefarben
+    private static final String COLOR_LIGHT_GREEN = "LIGHT_GREEN";
+    private static final String COLOR_YELLOW = "YELLOW";
+    private static final String COLOR_ORANGE = "ORANGE";
+    private static final String COLOR_RED = "RED";
+    private static final Color ROW_COLOR_LIGHT_GREEN = new Color(198, 239, 206);
+    private static final Color ROW_COLOR_YELLOW = new Color(255, 235, 156);
+    private static final Color ROW_COLOR_ORANGE = new Color(255, 204, 153);
+    private static final Color ROW_COLOR_RED = new Color(255, 153, 153);
 
     private final DatabaseManager databaseManager;
+    private final ConfigurationManager configManager;
+    private final ExecutorService dbSaveExecutor = Executors.newSingleThreadExecutor();
     private JTable statsTable;
     private DefaultTableModel tableModel;
     private TableRowSorter<DefaultTableModel> sorter;
@@ -40,10 +62,13 @@ public class SubscriberStatisticsDialog extends JDialog {
     private JButton refreshButton;
     private SwingWorker<StatsLoadResult, Void> loadWorker;
     private List<SubscriberStat> currentStatsList = new ArrayList<>();
+    /** Zeilenfarben (Farb-Schl\u00fcssel oder null), parallel zu currentStatsList indiziert. */
+    private final List<String> rowColorNames = new ArrayList<>();
 
-    public SubscriberStatisticsDialog(JFrame parent, DatabaseManager databaseManager) {
+    public SubscriberStatisticsDialog(JFrame parent, DatabaseManager databaseManager, ConfigurationManager configManager) {
         super(parent, "Abonnentenstatistik", true);
         this.databaseManager = databaseManager;
+        this.configManager = configManager;
         initializeComponents();
         loadData();
     }
@@ -79,37 +104,59 @@ public class SubscriberStatisticsDialog extends JDialog {
                 "Signalprovider Name",
                 "Version",
                 "Abonnenten",
+                "Risiko",
                 "Seit letzter Messung",
                 "7 Tage",
                 "30 Tage",
                 "Letzte Messung",
                 "30 Tage Verlauf",
+                "Testreports",
                 "URL"
         };
 
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
             public boolean isCellEditable(int row, int column) {
-                return false; // Table read-only
+                return column == RISK_COLUMN; // nur Risiko manuell editierbar
+            }
+
+            @Override
+            public void setValueAt(Object aValue, int row, int column) {
+                super.setValueAt(aValue, row, column);
+                if (column == RISK_COLUMN) {
+                    persistRisk(row, aValue);
+                }
             }
 
             @Override
             public Class<?> getColumnClass(int columnIndex) {
                 switch (columnIndex) {
                     case 2:
-                    case 3:
                     case 4:
                     case 5:
+                    case 6:
                         return Integer.class;
                     case SPARKLINE_COLUMN:
                         return SparklineData.class;
+                    case REPORTS_COLUMN:
+                        return TestReports.class;
                     default:
                         return String.class;
                 }
             }
         };
 
-        statsTable = new JTable(tableModel);
+        statsTable = new JTable(tableModel) {
+            @Override
+            public Component prepareRenderer(TableCellRenderer renderer, int viewRow, int viewCol) {
+                Component component = super.prepareRenderer(renderer, viewRow, viewCol);
+                Color rowColor = rowColorForModelRow(convertRowIndexToModel(viewRow));
+                if (rowColor != null && !isCellSelected(viewRow, viewCol)) {
+                    component.setBackground(rowColor);
+                }
+                return component;
+            }
+        };
         statsTable.setFont(systemFont("Table.font", Font.PLAIN, 12f));
         statsTable.setRowHeight(36);
         statsTable.getTableHeader().setFont(systemFont("TableHeader.font", Font.BOLD, 12f));
@@ -118,37 +165,51 @@ public class SubscriberStatisticsDialog extends JDialog {
         sorter = new TableRowSorter<>(tableModel);
         // Custom Comparators for proper numerical sorting
         sorter.setComparator(2, NULL_SAFE_INTEGER_COMPARATOR);
-        sorter.setComparator(3, NULL_SAFE_INTEGER_COMPARATOR);
         sorter.setComparator(4, NULL_SAFE_INTEGER_COMPARATOR);
         sorter.setComparator(5, NULL_SAFE_INTEGER_COMPARATOR);
+        sorter.setComparator(6, NULL_SAFE_INTEGER_COMPARATOR);
         sorter.setComparator(SPARKLINE_COLUMN, Comparator.nullsFirst(
                 Comparator.comparingInt(SparklineData::netChange)));
+        sorter.setComparator(REPORTS_COLUMN, Comparator.nullsFirst(
+                Comparator.comparingInt(TestReports::count)));
         statsTable.setRowSorter(sorter);
 
         // Renderers
         statsTable.getColumnModel().getColumn(1).setCellRenderer(new AlignmentCellRenderer(SwingConstants.CENTER));
         statsTable.getColumnModel().getColumn(2).setCellRenderer(new AlignmentCellRenderer(SwingConstants.RIGHT));
-        statsTable.getColumnModel().getColumn(3).setCellRenderer(new ChangeCellRenderer());
+        statsTable.getColumnModel().getColumn(RISK_COLUMN).setCellRenderer(new RiskCellRenderer());
         statsTable.getColumnModel().getColumn(4).setCellRenderer(new ChangeCellRenderer());
         statsTable.getColumnModel().getColumn(5).setCellRenderer(new ChangeCellRenderer());
+        statsTable.getColumnModel().getColumn(6).setCellRenderer(new ChangeCellRenderer());
         statsTable.getColumnModel().getColumn(SPARKLINE_COLUMN).setCellRenderer(new SparklineCellRenderer());
+        statsTable.getColumnModel().getColumn(REPORTS_COLUMN).setCellRenderer(new ReportsCellRenderer());
         statsTable.getColumnModel().getColumn(URL_COLUMN).setCellRenderer(new UrlCellRenderer());
+
+        // Risk editor: Doppelklick startet die Eingabe, Enter/Fokusverlust schließt ab
+        DefaultCellEditor riskEditor = new DefaultCellEditor(new JTextField());
+        riskEditor.setClickCountToStart(2);
+        statsTable.getColumnModel().getColumn(RISK_COLUMN).setCellEditor(riskEditor);
 
         // Column widths
         statsTable.getColumnModel().getColumn(0).setPreferredWidth(200);
         statsTable.getColumnModel().getColumn(1).setPreferredWidth(55);
         statsTable.getColumnModel().getColumn(2).setPreferredWidth(80);
-        statsTable.getColumnModel().getColumn(3).setPreferredWidth(100);
-        statsTable.getColumnModel().getColumn(4).setPreferredWidth(85);
+        statsTable.getColumnModel().getColumn(RISK_COLUMN).setPreferredWidth(90);
+        statsTable.getColumnModel().getColumn(4).setPreferredWidth(100);
         statsTable.getColumnModel().getColumn(5).setPreferredWidth(85);
-        statsTable.getColumnModel().getColumn(6).setPreferredWidth(135);
+        statsTable.getColumnModel().getColumn(6).setPreferredWidth(85);
+        statsTable.getColumnModel().getColumn(7).setPreferredWidth(135);
         statsTable.getColumnModel().getColumn(SPARKLINE_COLUMN).setPreferredWidth(143);
+        statsTable.getColumnModel().getColumn(REPORTS_COLUMN).setPreferredWidth(85);
         statsTable.getColumnModel().getColumn(URL_COLUMN).setPreferredWidth(115);
 
         // Click & Double Click Listener
         statsTable.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    return; // Rechtsklick geh\u00f6rt zum Kontextmen\u00fc
+                }
                 int row = statsTable.getSelectedRow();
                 int col = statsTable.getSelectedColumn();
                 if (row != -1 && col != -1) {
@@ -158,11 +219,46 @@ public class SubscriberStatisticsDialog extends JDialog {
                         SubscriberStat stat = currentStatsList.get(modelRow);
                         if (modelCol == URL_COLUMN) { // Click on URL column
                             openUrlInBrowser(stat.getUrl());
-                        } else if (e.getClickCount() == 2) {
+                        } else if (modelCol == REPORTS_COLUMN) { // Click auf ein Report-Icon
+                            openReportAt(row, col, modelRow, e.getX());
+                        } else if (modelCol != RISK_COLUMN && e.getClickCount() == 2) {
                             openHistoryChart(stat);
                         }
                     }
                 }
+            }
+        });
+
+        // Rechtsklick: Kontextmen\u00fc zum Setzen der Zeilenfarbe
+        JPopupMenu rowColorPopup = new JPopupMenu();
+        rowColorPopup.add(colorMenuItem("Hellgr\u00fcn", ROW_COLOR_LIGHT_GREEN, COLOR_LIGHT_GREEN));
+        rowColorPopup.add(colorMenuItem("Gelb", ROW_COLOR_YELLOW, COLOR_YELLOW));
+        rowColorPopup.add(colorMenuItem("Orange", ROW_COLOR_ORANGE, COLOR_ORANGE));
+        rowColorPopup.add(colorMenuItem("Rot", ROW_COLOR_RED, COLOR_RED));
+        rowColorPopup.addSeparator();
+        JMenuItem noColorItem = new JMenuItem("Keine Farbe");
+        noColorItem.setToolTipText("Markierung der Zeile entfernen");
+        noColorItem.addActionListener(e -> applyRowColor(null));
+        rowColorPopup.add(noColorItem);
+        statsTable.setComponentPopupMenu(rowColorPopup);
+        statsTable.addMouseListener(new MouseAdapter() {
+            private void selectRowAt(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    int viewRow = statsTable.rowAtPoint(e.getPoint());
+                    if (viewRow != -1 && !statsTable.isRowSelected(viewRow)) {
+                        statsTable.setRowSelectionInterval(viewRow, viewRow);
+                    }
+                }
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                selectRowAt(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                selectRowAt(e);
             }
         });
 
@@ -243,9 +339,11 @@ public class SubscriberStatisticsDialog extends JDialog {
             protected StatsLoadResult doInBackground() {
                 List<SubscriberStat> stats = databaseManager.getAllSubscriberStatistics();
                 Map<String, List<SubscriberHistoryPoint>> histories = databaseManager.getAllSubscriberHistories();
+                List<TestReports> reports = scanAnalyseReports(stats != null ? stats : Collections.<SubscriberStat>emptyList());
                 return new StatsLoadResult(
                         stats != null ? new ArrayList<>(stats) : new ArrayList<>(),
-                        histories != null ? histories : Collections.emptyMap());
+                        histories != null ? histories : Collections.emptyMap(),
+                        reports);
             }
 
             @Override
@@ -279,40 +377,51 @@ public class SubscriberStatisticsDialog extends JDialog {
 
     private void applyData(StatsLoadResult result) {
         currentStatsList.clear();
+        rowColorNames.clear();
         tableModel.setRowCount(0);
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd.MM.yyyy HH:mm:ss");
         Map<String, List<SubscriberHistoryPoint>> histories =
                 result.histories != null ? result.histories : Collections.emptyMap();
 
-        for (SubscriberStat stat : result.stats) {
+        for (int i = 0; i < result.stats.size(); i++) {
+            SubscriberStat stat = result.stats.get(i);
             if (stat == null) {
                 continue;
             }
             currentStatsList.add(stat);
+            rowColorNames.add(stat.getRowColor());
             String dateStr = stat.getLastUpdated() != null ? sdf.format(stat.getLastUpdated()) : "–";
             String key = DatabaseManager.subscriberHistoryKey(stat.getSignalId(), stat.getMqlVersion());
             List<SubscriberHistoryPoint> history = histories.getOrDefault(key, Collections.emptyList());
+            TestReports reports = result.reports != null && i < result.reports.size()
+                    ? result.reports.get(i) : TestReports.EMPTY;
             tableModel.addRow(new Object[]{
                     stat.getSignalName(),
                     stat.getMqlVersion() != null ? stat.getMqlVersion().toUpperCase(Locale.ROOT) : "–",
                     stat.getSubscribers(),
+                    stat.getRisk() != null ? stat.getRisk() : "",
                     stat.getLatestChange(),
                     stat.getWeekChange(),
                     stat.getMonthChange(),
                     dateStr,
                     SparklineData.fromLast30Days(history, stat.getSubscribers(), stat.getLastUpdated()),
+                    reports,
                     stat.getUrl()
             });
         }
 
-        // Sort descending by Month column (5) by default, then Week column (4)
+        // Sort descending by Month column (6) by default, then Week column (5)
         List<RowSorter.SortKey> sortKeys = new ArrayList<>();
+        sortKeys.add(new RowSorter.SortKey(6, SortOrder.DESCENDING));
         sortKeys.add(new RowSorter.SortKey(5, SortOrder.DESCENDING));
-        sortKeys.add(new RowSorter.SortKey(4, SortOrder.DESCENDING));
         sorter.setSortKeys(sortKeys);
 
-        statusLabel.setText("Gesamt Provider in Datenbank: " + currentStatsList.size());
+        String status = "Gesamt Provider in Datenbank: " + currentStatsList.size();
+        if (configManager == null || configManager.getAnalysePath().isEmpty()) {
+            status += "  |  Analyse-Verzeichnis nicht konfiguriert (siehe Einstellungen)";
+        }
+        statusLabel.setText(status);
     }
 
     @Override
@@ -320,6 +429,7 @@ public class SubscriberStatisticsDialog extends JDialog {
         if (loadWorker != null && !loadWorker.isDone()) {
             loadWorker.cancel(true);
         }
+        dbSaveExecutor.shutdown();
         super.dispose();
     }
 
@@ -330,6 +440,158 @@ public class SubscriberStatisticsDialog extends JDialog {
         } else {
             sorter.setRowFilter(RowFilter.regexFilter("(?i)" + java.util.regex.Pattern.quote(text)));
         }
+    }
+
+    /**
+     * Sucht im konfigurierten Analyse-Verzeichnis je Signal PDF-Dateien, deren
+     * Dateiname die exakte Signal-ID enth\u00e4lt (als eigene Zifferngruppe).
+     * Die R\u00fcckgabe ist parallel zur \u00fcbergebenen Statistik-Liste indiziert.
+     */
+    private List<TestReports> scanAnalyseReports(List<SubscriberStat> stats) {
+        List<TestReports> result = new ArrayList<>(Collections.nCopies(stats.size(), TestReports.EMPTY));
+        String analyseDirPath = configManager != null ? configManager.getAnalysePath() : "";
+        if (analyseDirPath.isEmpty() || stats.isEmpty()) {
+            return result;
+        }
+        File[] pdfFiles = new File(analyseDirPath)
+                .listFiles((dir, name) -> name != null && name.toLowerCase(Locale.ROOT).endsWith(".pdf"));
+        if (pdfFiles == null) {
+            return result; // Verzeichnis nicht vorhanden oder nicht lesbar
+        }
+
+        for (int i = 0; i < stats.size(); i++) {
+            SubscriberStat stat = stats.get(i);
+            if (stat == null || stat.getSignalId() == null || stat.getSignalId().trim().isEmpty()) {
+                continue;
+            }
+            String signalId = stat.getSignalId().trim();
+            Pattern idPattern = Pattern.compile("(?<!\\d)" + Pattern.quote(signalId) + "(?!\\d)");
+            List<Path> matches = new ArrayList<>();
+            for (File pdf : pdfFiles) {
+                if (idPattern.matcher(pdf.getName()).find()) {
+                    matches.add(pdf.toPath());
+                }
+            }
+            if (!matches.isEmpty()) {
+                matches.sort(Comparator.comparing(
+                        path -> path.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
+                result.set(i, new TestReports(matches));
+            }
+        }
+        return result;
+    }
+
+    /** Ermittelt das geklickte Report-Icon anhand der X-Position in der Zelle. */
+    private void openReportAt(int viewRow, int viewCol, int modelRow, int clickX) {
+        Object value = tableModel.getValueAt(modelRow, REPORTS_COLUMN);
+        if (!(value instanceof TestReports)) {
+            return;
+        }
+        List<Path> files = ((TestReports) value).getFiles();
+        Rectangle cellRect = statsTable.getCellRect(viewRow, viewCol, false);
+        int xInCell = clickX - cellRect.x;
+        int index = (xInCell - ReportsCellRenderer.ICON_PAD)
+                / (ReportsCellRenderer.ICON_WIDTH + ReportsCellRenderer.ICON_GAP);
+        if (xInCell >= ReportsCellRenderer.ICON_PAD && index >= 0 && index < files.size()) {
+            openPdfFile(files.get(index));
+        }
+    }
+
+    private void openPdfFile(Path pdfPath) {
+        try {
+            File file = pdfPath.toFile();
+            if (!file.isFile()) {
+                JOptionPane.showMessageDialog(this,
+                        "Datei wurde nicht gefunden:\n" + file.getAbsolutePath(),
+                        "Testreport \u00f6ffnen", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                Desktop.getDesktop().open(file);
+            } else {
+                new ProcessBuilder("rundll32", "url.dll,FileProtocolHandler", file.getAbsolutePath()).start();
+            }
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Fehler beim \u00d6ffnen des Testreports: " + safeMessage(ex),
+                    "Fehler", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void persistRisk(int modelRow, Object value) {
+        if (modelRow < 0 || modelRow >= currentStatsList.size()) {
+            return;
+        }
+        SubscriberStat stat = currentStatsList.get(modelRow);
+        if (stat == null) {
+            return;
+        }
+        String newRisk = value != null ? value.toString().trim() : "";
+        String oldRisk = stat.getRisk() != null ? stat.getRisk().trim() : "";
+        if (newRisk.equals(oldRisk)) {
+            return;
+        }
+        dbSaveExecutor.submit(() -> {
+            boolean saved = databaseManager.updateSignalRisk(stat.getSignalId(), stat.getMqlVersion(), newRisk);
+            if (!saved) {
+                SwingUtilities.invokeLater(() -> statusLabel.setText(
+                        "Risiko konnte nicht gespeichert werden (Signal " + stat.getSignalId() + ")."));
+            }
+        });
+    }
+    /** L\u00f6st den Farb-Schl\u00fcssel einer Modellzeile in die Anzeigefarbe auf (oder null). */
+    private Color rowColorForModelRow(int modelRow) {
+        if (modelRow < 0 || modelRow >= rowColorNames.size()) {
+            return null;
+        }
+        String name = rowColorNames.get(modelRow);
+        if (name == null) {
+            return null;
+        }
+        switch (name) {
+            case COLOR_LIGHT_GREEN: return ROW_COLOR_LIGHT_GREEN;
+            case COLOR_YELLOW: return ROW_COLOR_YELLOW;
+            case COLOR_ORANGE: return ROW_COLOR_ORANGE;
+            case COLOR_RED: return ROW_COLOR_RED;
+            default: return null;
+        }
+    }
+
+    /** Setzt die Zeilenfarbe der ausgew\u00e4hlten Zeile und speichert sie (null = entfernen). */
+    private void applyRowColor(String colorKey) {
+        int viewRow = statsTable.getSelectedRow();
+        if (viewRow == -1) {
+            return;
+        }
+        int modelRow = statsTable.convertRowIndexToModel(viewRow);
+        if (modelRow < 0 || modelRow >= currentStatsList.size() || modelRow >= rowColorNames.size()) {
+            return;
+        }
+        rowColorNames.set(modelRow, colorKey);
+        SubscriberStat stat = currentStatsList.get(modelRow);
+        dbSaveExecutor.submit(() ->
+                databaseManager.updateRowColor(stat.getSignalId(), stat.getMqlVersion(), colorKey));
+        statsTable.repaint();
+    }
+
+    private JMenuItem colorMenuItem(String text, Color color, String colorKey) {
+        JMenuItem item = new JMenuItem(text, colorIcon(color));
+        item.addActionListener(e -> applyRowColor(colorKey));
+        return item;
+    }
+
+    private static Icon colorIcon(Color color) {
+        BufferedImage image = new BufferedImage(12, 12, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2 = image.createGraphics();
+        try {
+            g2.setColor(color);
+            g2.fillRect(0, 0, 12, 12);
+            g2.setColor(Color.DARK_GRAY);
+            g2.drawRect(0, 0, 11, 11);
+        } finally {
+            g2.dispose();
+        }
+        return new ImageIcon(image);
     }
 
     private void openHistoryChart(SubscriberStat stat) {
@@ -373,10 +635,133 @@ public class SubscriberStatisticsDialog extends JDialog {
     private static final class StatsLoadResult {
         private final List<SubscriberStat> stats;
         private final Map<String, List<SubscriberHistoryPoint>> histories;
+        private final List<TestReports> reports;
 
-        private StatsLoadResult(List<SubscriberStat> stats, Map<String, List<SubscriberHistoryPoint>> histories) {
+        private StatsLoadResult(List<SubscriberStat> stats, Map<String, List<SubscriberHistoryPoint>> histories,
+                                List<TestReports> reports) {
             this.stats = stats;
             this.histories = histories;
+            this.reports = reports;
+        }
+    }
+
+    /** Im Analyse-Verzeichnis gefundene Testreport-PDFs zu einem Signal. */
+    static final class TestReports {
+        static final TestReports EMPTY = new TestReports(Collections.emptyList());
+
+        private final List<Path> files;
+
+        TestReports(List<Path> files) {
+            this.files = files != null ? files : Collections.<Path>emptyList();
+        }
+
+        List<Path> getFiles() {
+            return files;
+        }
+
+        int count() {
+            return files.size();
+        }
+    }
+
+    /** Zeichnet je gefundener Testreport-PDF ein Klickbares PDF-Icon. */
+    private static class ReportsCellRenderer extends JComponent implements TableCellRenderer {
+        private static final int ICON_WIDTH = 19;
+        private static final int ICON_HEIGHT = 22;
+        private static final int ICON_GAP = 5;
+        static final int ICON_PAD = 5;
+
+        private TestReports reports = TestReports.EMPTY;
+        private boolean selected;
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            this.reports = value instanceof TestReports ? (TestReports) value : TestReports.EMPTY;
+            this.selected = isSelected;
+            // Hintergrund live lesen (getBackground), damit prepareRenderer die Zeilenfarbe setzen kann
+            setBackground(isSelected ? table.getSelectionBackground() : table.getBackground());
+            setToolTipText(buildTooltip());
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            return this;
+        }
+
+        private String buildTooltip() {
+            if (reports.count() == 0) {
+                return null;
+            }
+            StringBuilder tip = new StringBuilder("<html><b>Testreport(s) \u00f6ffnen:</b>");
+            for (Path file : reports.getFiles()) {
+                tip.append("<br>&nbsp;&bull;&nbsp;")
+                   .append(escapeHtml(file.getFileName().toString()));
+            }
+            tip.append("<br><i>Klick auf ein Icon \u00f6ffnet die PDF.</i></html>");
+            return tip.toString();
+        }
+
+        private static String escapeHtml(String text) {
+            return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setColor(getBackground());
+                g2.fillRect(0, 0, getWidth(), getHeight());
+                if (reports.count() == 0) {
+                    return;
+                }
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                int iconY = (getHeight() - ICON_HEIGHT) / 2;
+                for (int i = 0; i < reports.count(); i++) {
+                    drawPdfIcon(g2, ICON_PAD + i * (ICON_WIDTH + ICON_GAP), iconY);
+                }
+            } finally {
+                g2.dispose();
+            }
+        }
+
+        private void drawPdfIcon(Graphics2D g2, int x, int y) {
+            // weiße Dokumentseite
+            g2.setColor(Color.WHITE);
+            g2.fillRect(x, y, ICON_WIDTH, ICON_HEIGHT);
+            g2.setColor(new Color(120, 120, 120));
+            g2.drawRect(x, y, ICON_WIDTH, ICON_HEIGHT);
+            // angedeutete Textzeilen
+            g2.setColor(new Color(175, 175, 175));
+            for (int line = 0; line < 3; line++) {
+                int lineY = y + 4 + line * 3;
+                g2.drawLine(x + 3, lineY, x + ICON_WIDTH - 3, lineY);
+            }
+            // rotes PDF-Band
+            g2.setColor(new Color(200, 35, 35));
+            g2.fillRect(x, y + ICON_HEIGHT - 8, ICON_WIDTH, 8);
+            g2.setColor(Color.WHITE);
+            Font originalFont = g2.getFont();
+            g2.setFont(originalFont.deriveFont(Font.BOLD, 6.5f));
+            FontMetrics fm = g2.getFontMetrics();
+            String label = "PDF";
+            g2.drawString(label, x + (ICON_WIDTH - fm.stringWidth(label)) / 2, y + ICON_HEIGHT - 2);
+            g2.setFont(originalFont);
+        }
+    }
+
+    /** Renderer für die manuell gepflegte Risiko-Spalte. */
+    private static class RiskCellRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int row, int column) {
+            JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+            label.setHorizontalAlignment(SwingConstants.LEFT);
+            label.setToolTipText("Doppelklick: Risiko-Wert eingeben (wird dauerhaft gespeichert)");
+            if (value == null || value.toString().trim().isEmpty()) {
+                label.setText("");
+                if (!isSelected) {
+                    label.setForeground(Color.GRAY);
+                }
+            }
+            return label;
         }
     }
 
