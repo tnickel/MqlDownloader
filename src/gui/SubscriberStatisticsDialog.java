@@ -29,6 +29,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.IntFunction;
 import java.util.regex.Pattern;
 
 public class SubscriberStatisticsDialog extends JDialog {
@@ -174,16 +175,21 @@ public class SubscriberStatisticsDialog extends JDialog {
                 Comparator.comparingInt(TestReports::count)));
         statsTable.setRowSorter(sorter);
 
-        // Renderers
-        statsTable.getColumnModel().getColumn(1).setCellRenderer(new AlignmentCellRenderer(SwingConstants.CENTER));
-        statsTable.getColumnModel().getColumn(2).setCellRenderer(new AlignmentCellRenderer(SwingConstants.RIGHT));
-        statsTable.getColumnModel().getColumn(RISK_COLUMN).setCellRenderer(new RiskCellRenderer());
-        statsTable.getColumnModel().getColumn(4).setCellRenderer(new ChangeCellRenderer());
-        statsTable.getColumnModel().getColumn(5).setCellRenderer(new ChangeCellRenderer());
-        statsTable.getColumnModel().getColumn(6).setCellRenderer(new ChangeCellRenderer());
+        // Renderers. Wichtig: keine DefaultTableCellRenderer-Instanzen verwenden!
+        // Deren setBackground() cacht die Farbe in "unselectedBackground", sodass sich
+        // eine in prepareRenderer gesetzte Zeilenfarbe auf nachfolgende Zeilen ausbreitet.
+        IntFunction<Color> rowColorLookup = this::rowColorForModelRow;
+        statsTable.getColumnModel().getColumn(0).setCellRenderer(new AlignedTextRenderer(rowColorLookup, SwingConstants.LEFT));
+        statsTable.getColumnModel().getColumn(1).setCellRenderer(new AlignedTextRenderer(rowColorLookup, SwingConstants.CENTER));
+        statsTable.getColumnModel().getColumn(2).setCellRenderer(new AlignedTextRenderer(rowColorLookup, SwingConstants.RIGHT));
+        statsTable.getColumnModel().getColumn(RISK_COLUMN).setCellRenderer(new RiskTextRenderer(rowColorLookup));
+        statsTable.getColumnModel().getColumn(4).setCellRenderer(new ChangeTextRenderer(rowColorLookup));
+        statsTable.getColumnModel().getColumn(5).setCellRenderer(new ChangeTextRenderer(rowColorLookup));
+        statsTable.getColumnModel().getColumn(6).setCellRenderer(new ChangeTextRenderer(rowColorLookup));
+        statsTable.getColumnModel().getColumn(7).setCellRenderer(new AlignedTextRenderer(rowColorLookup, SwingConstants.LEFT));
         statsTable.getColumnModel().getColumn(SPARKLINE_COLUMN).setCellRenderer(new SparklineCellRenderer());
         statsTable.getColumnModel().getColumn(REPORTS_COLUMN).setCellRenderer(new ReportsCellRenderer());
-        statsTable.getColumnModel().getColumn(URL_COLUMN).setCellRenderer(new UrlCellRenderer());
+        statsTable.getColumnModel().getColumn(URL_COLUMN).setCellRenderer(new UrlTextRenderer(rowColorLookup));
 
         // Risk editor: Doppelklick startet die Eingabe, Enter/Fokusverlust schließt ab
         DefaultCellEditor riskEditor = new DefaultCellEditor(new JTextField());
@@ -747,24 +753,6 @@ public class SubscriberStatisticsDialog extends JDialog {
         }
     }
 
-    /** Renderer für die manuell gepflegte Risiko-Spalte. */
-    private static class RiskCellRenderer extends DefaultTableCellRenderer {
-        @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
-                                                       boolean hasFocus, int row, int column) {
-            JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
-            label.setHorizontalAlignment(SwingConstants.LEFT);
-            label.setToolTipText("Doppelklick: Risiko-Wert eingeben (wird dauerhaft gespeichert)");
-            if (value == null || value.toString().trim().isEmpty()) {
-                label.setText("");
-                if (!isSelected) {
-                    label.setForeground(Color.GRAY);
-                }
-            }
-            return label;
-        }
-    }
-
     /** Compact subscriber series for the 30-day sparkline column. */
     static final class SparklineData {
         private static final long THIRTY_DAYS_MS = 30L * 24 * 60 * 60 * 1000;
@@ -837,57 +825,127 @@ public class SubscriberStatisticsDialog extends JDialog {
     }
 
     // Cell Renderer for Change Columns
-    private static class ChangeCellRenderer extends DefaultTableCellRenderer {
+    /** Basis für Textspalten: Selektion, Zeilenfarbe und Zebra-Streifen, ohne Hintergrund-Cache. */
+    private abstract static class TextCellRenderer extends JLabel implements TableCellRenderer {
+        private final IntFunction<Color> rowColors;
+
+        TextCellRenderer(IntFunction<Color> rowColors) {
+            this.rowColors = rowColors;
+            setOpaque(true);
+        }
+
         @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean cellHasFocus, int row, int column) {
-            JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, cellHasFocus, row, column);
-            label.setHorizontalAlignment(SwingConstants.RIGHT);
-            label.setFont(table.getFont().deriveFont(Font.PLAIN));
-            label.setToolTipText(null);
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected,
+                                                       boolean hasFocus, int viewRow, int column) {
+            setText(value != null ? value.toString() : "");
+            setFont(table.getFont());
 
-            if (value instanceof Integer) {
-                int change = (Integer) value;
-                if (change > 0) {
-                    label.setText("+" + change);
-                    label.setForeground(new Color(0, 110, 0));
-                    label.setFont(label.getFont().deriveFont(Font.BOLD));
-                } else if (change < 0) {
-                    label.setText(String.valueOf(change));
-                    label.setForeground(Color.RED);
-                    label.setFont(label.getFont().deriveFont(Font.BOLD));
-                } else {
-                    label.setText("0");
-                    label.setForeground(Color.GRAY);
-                    label.setFont(label.getFont().deriveFont(Font.PLAIN));
-                }
-            } else {
-                label.setText("–");
-                label.setForeground(isSelected ? table.getSelectionForeground() : Color.GRAY);
-                label.setFont(label.getFont().deriveFont(Font.PLAIN));
-                label.setToolTipText(UNKNOWN_CHANGE_TOOLTIP);
-            }
-
+            Color background;
+            Color foreground;
             if (isSelected) {
-                label.setForeground(table.getSelectionForeground());
+                background = table.getSelectionBackground();
+                foreground = table.getSelectionForeground();
+            } else {
+                Color rowColor = rowColors.apply(table.convertRowIndexToModel(viewRow));
+                if (rowColor != null) {
+                    background = rowColor;
+                } else {
+                    Color alternate = UIManager.getColor("Table.alternateRowColor");
+                    background = viewRow % 2 == 1 && alternate != null ? alternate : table.getBackground();
+                }
+                foreground = table.getForeground();
             }
+            setBackground(background);
+            setForeground(foreground);
+            style(table, value, isSelected);
+            return this;
+        }
 
-            return label;
+        /** Spaltenspezifische Ausrichtung, Text und Tooltip. */
+        protected void style(JTable table, Object value, boolean isSelected) {
         }
     }
 
-    // Cell Renderer for URL Column
-    private static class UrlCellRenderer extends DefaultTableCellRenderer {
+    /** Text-Renderer mit fester Ausrichtung. */
+    private static final class AlignedTextRenderer extends TextCellRenderer {
+        private final int alignment;
+
+        AlignedTextRenderer(IntFunction<Color> rowColors, int alignment) {
+            super(rowColors);
+            this.alignment = alignment;
+        }
+
         @Override
-        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean cellHasFocus, int row, int column) {
-            JLabel label = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, cellHasFocus, row, column);
-            String url = value != null ? value.toString() : "";
-            label.setText(url.isEmpty() ? "" : "\u2197 " + compactUrl(url));
-            label.setToolTipText(url.isEmpty() ? null : url);
-            label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            if (!isSelected) {
-                label.setForeground(new Color(0, 102, 180));
+        protected void style(JTable table, Object value, boolean isSelected) {
+            setHorizontalAlignment(alignment);
+        }
+    }
+
+    /** Risiko-Spalte: linksbündig mit Bearbeitungs-Hinweis. */
+    private static final class RiskTextRenderer extends TextCellRenderer {
+        RiskTextRenderer(IntFunction<Color> rowColors) {
+            super(rowColors);
+        }
+
+        @Override
+        protected void style(JTable table, Object value, boolean isSelected) {
+            setHorizontalAlignment(SwingConstants.LEFT);
+            setToolTipText("Doppelklick: Risiko-Wert eingeben (wird dauerhaft gespeichert)");
+        }
+    }
+
+    /** Renderer für die Änderungs-Spalten (+grün / -rot / 0 grau / – ohne Vergleichswert). */
+    private static final class ChangeTextRenderer extends TextCellRenderer {
+        ChangeTextRenderer(IntFunction<Color> rowColors) {
+            super(rowColors);
+        }
+
+        @Override
+        protected void style(JTable table, Object value, boolean isSelected) {
+            setHorizontalAlignment(SwingConstants.RIGHT);
+            setFont(getFont().deriveFont(Font.PLAIN));
+            setToolTipText(null);
+            if (isSelected) {
+                setFont(getFont().deriveFont(Font.BOLD));
+                return; // Selektionsfarbe behalten
             }
-            return label;
+            if (value instanceof Integer) {
+                int change = (Integer) value;
+                if (change > 0) {
+                    setText("+" + change);
+                    setForeground(new Color(0, 110, 0));
+                    setFont(getFont().deriveFont(Font.BOLD));
+                } else if (change < 0) {
+                    setText(String.valueOf(change));
+                    setForeground(Color.RED);
+                    setFont(getFont().deriveFont(Font.BOLD));
+                } else {
+                    setText("0");
+                    setForeground(Color.GRAY);
+                }
+            } else {
+                setText("–");
+                setForeground(Color.GRAY);
+                setToolTipText(UNKNOWN_CHANGE_TOOLTIP);
+            }
+        }
+    }
+
+    /** URL-Spalte: kompakter Link mit Tooltip und Hand-Cursor. */
+    private static final class UrlTextRenderer extends TextCellRenderer {
+        UrlTextRenderer(IntFunction<Color> rowColors) {
+            super(rowColors);
+        }
+
+        @Override
+        protected void style(JTable table, Object value, boolean isSelected) {
+            String url = value != null ? value.toString() : "";
+            setText(url.isEmpty() ? "" : "\u2197 " + compactUrl(url));
+            setToolTipText(url.isEmpty() ? null : url);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            if (!isSelected) {
+                setForeground(new Color(0, 102, 180));
+            }
         }
 
         private static String compactUrl(String value) {
@@ -901,13 +959,6 @@ public class SubscriberStatisticsDialog extends JDialog {
             } catch (Exception ignored) {
                 return "Link \u00f6ffnen";
             }
-        }
-    }
-
-    // Cell Renderer for alignment
-    private static class AlignmentCellRenderer extends DefaultTableCellRenderer {
-        public AlignmentCellRenderer(int alignment) {
-            setHorizontalAlignment(alignment);
         }
     }
 
