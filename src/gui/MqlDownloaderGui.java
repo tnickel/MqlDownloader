@@ -32,6 +32,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import config.ConfigurationManager;
+import rest.RestApiServer;
 import utils.AutoSchedulerManager;
 
 public class MqlDownloaderGui extends JFrame {
@@ -42,6 +43,7 @@ public class MqlDownloaderGui extends JFrame {
     private final DownloadManager downloadManager;
     private final ConversionManager conversionManager;
     private final AutoSchedulerManager autoScheduler;
+    private RestApiServer restApiServer;
     private JButton statisticsButton;
     private JButton abonnentenStatistikButton;
     private JToggleButton autoModeToggleButton;
@@ -64,11 +66,40 @@ public class MqlDownloaderGui extends JFrame {
         
         initializeGui();
         setupEventHandlers();
-        
+
+        // REST-API fuer andere Anwendungen im Netzwerk starten
+        startApiServer();
+
         // Restore saved AutoMode state on startup
         if (configManager.isAutoMode()) {
             autoModeToggleButton.setSelected(true);
             toggleAutoMode(true);
+        }
+    }
+
+    private void startApiServer() {
+        if (!configManager.isApiEnabled()) {
+            return;
+        }
+        try {
+            restApiServer = new RestApiServer(downloadManager.getDatabaseManager(), configManager);
+            restApiServer.start();
+            logHandler.log("REST-API aktiv: " + restApiServer.getLocalUrls());
+        } catch (Exception e) {
+            restApiServer = null;
+            logHandler.logError("REST-API konnte nicht gestartet werden: " + e.getMessage(), e);
+        }
+    }
+
+    private void restartApiServer() {
+        if (restApiServer != null) {
+            restApiServer.stop();
+            restApiServer = null;
+        }
+        if (configManager.isApiEnabled()) {
+            startApiServer();
+        } else {
+            logHandler.log("REST-API deaktiviert.");
         }
     }
 
@@ -342,7 +373,7 @@ public class MqlDownloaderGui extends JFrame {
     }
 
     private void showSetupDialog() {
-        SetupDialog dialog = new SetupDialog(this, configManager);
+        SetupDialog dialog = new SetupDialog(this, configManager, this::restartApiServer);
         dialog.setVisible(true);
     }
 

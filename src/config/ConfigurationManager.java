@@ -33,7 +33,12 @@ public class ConfigurationManager {
     private static final String KEY_SUBSCRIBERS_ONLY = "subscribersOnly";
     private static final String KEY_AUTO_MODE = "autoMode";
     private static final String KEY_ANALYSE_PATH = "analysePath";
-    
+    private static final String KEY_API_ENABLED = "apiEnabled";
+    private static final String KEY_API_PORT = "apiPort";
+    private static final String KEY_API_TOKEN = "apiToken";
+
+    public static final int DEFAULT_API_PORT = 8089;
+
     private static final int DEFAULT_MIN_WAIT = 4000; // 4 seconds
     private static final int DEFAULT_MAX_WAIT = 30000; // 30 seconds
     private static final int DEFAULT_MQL4_LIMIT = 1000;
@@ -217,6 +222,58 @@ public class ConfigurationManager {
             logger.info("Analyse-Verzeichnis zur\u00fcckgesetzt (leer)");
         } else {
             logger.info("Analyse-Verzeichnis aktualisiert auf: " + normalized);
+        }
+    }
+
+    /** true, wenn die eingebettete REST-API beim Start aktiv sein soll. */
+    public boolean isApiEnabled() {
+        Properties props = loadProperties();
+        return Boolean.parseBoolean(props.getProperty(KEY_API_ENABLED, "true"));
+    }
+
+    public void setApiEnabled(boolean enabled) {
+        Properties props = loadProperties();
+        props.setProperty(KEY_API_ENABLED, String.valueOf(enabled));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("REST-API " + (enabled ? "aktiviert" : "deaktiviert"));
+    }
+
+    /** Port der eingebetteten REST-API. */
+    public int getApiPort() {
+        Properties props = loadProperties();
+        return Integer.parseInt(props.getProperty(KEY_API_PORT, String.valueOf(DEFAULT_API_PORT)));
+    }
+
+    public void setApiPort(int port) {
+        if (port < 1024 || port > 65535) {
+            throw new IllegalArgumentException("API-Port muss zwischen 1024 und 65535 liegen");
+        }
+        Properties props = loadProperties();
+        props.setProperty(KEY_API_PORT, String.valueOf(port));
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("API-Port aktualisiert auf: " + port);
+    }
+
+    /**
+     * API-Token f\u00fcr die REST-API. Leer bedeutet: kein Schutz (nur f\u00fcr das
+     * vertrauensw\u00fcrdige LAN gedacht). Nicht leer: Anfrage braucht den Token
+     * im Header X-API-Token, als Bearer-Token oder im Query-Parameter token.
+     */
+    public String getApiToken() {
+        Properties props = loadProperties();
+        String token = props.getProperty(KEY_API_TOKEN, "");
+        return token != null ? token.trim() : "";
+    }
+
+    public void setApiToken(String token) {
+        String normalized = token != null ? token.trim() : "";
+        Properties props = loadProperties();
+        props.setProperty(KEY_API_TOKEN, normalized);
+        saveProperties(props, "MQL Downloader Konfiguration");
+        if (normalized.isEmpty()) {
+            logger.info("API-Token zur\u00fcckgesetzt (Zugriff ohne Token m\u00f6glich)");
+        } else {
+            logger.info("API-Token aktualisiert (Zugriff nur noch mit Token)");
         }
     }
 

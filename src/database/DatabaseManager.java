@@ -463,6 +463,54 @@ public class DatabaseManager {
     }
 
     /**
+     * Neueste Historien-Zeilen über alle Signale, absteigend nach Zeit.
+     * since/until optional (null = unbeschränkt); onlyChanges blendet
+     * Baseline-Zeilen und Null-Änderungen aus.
+     */
+    public synchronized List<SubscriberEvent> getRecentEvents(Timestamp since, Timestamp until,
+                                                              boolean onlyChanges, int limit) {
+        List<SubscriberEvent> events = new ArrayList<>();
+        StringBuilder sql = new StringBuilder(
+                "SELECT signal_id, mql_version, signal_name, timestamp, subscribers, " +
+                "change_amount, record_type FROM subscriber_history WHERE 1 = 1");
+        if (since != null) {
+            sql.append(" AND timestamp >= ?");
+        }
+        if (until != null) {
+            sql.append(" AND timestamp <= ?");
+        }
+        if (onlyChanges) {
+            sql.append(" AND change_amount <> 0");
+        }
+        sql.append(" ORDER BY timestamp DESC, id DESC LIMIT ").append(Math.max(1, limit));
+
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql.toString())) {
+            int index = 1;
+            if (since != null) {
+                stmt.setTimestamp(index++, since);
+            }
+            if (until != null) {
+                stmt.setTimestamp(index++, until);
+            }
+            try (ResultSet rs = stmt.executeQuery()) {
+                while (rs.next()) {
+                    events.add(new SubscriberEvent(rs.getString("signal_id"),
+                                                   rs.getString("mql_version"),
+                                                   rs.getString("signal_name"),
+                                                   rs.getTimestamp("timestamp"),
+                                                   rs.getInt("subscribers"),
+                                                   rs.getInt("change_amount"),
+                                                   rs.getString("record_type")));
+                }
+            }
+        } catch (SQLException e) {
+            logger.error("Error fetching recent events", e);
+        }
+        return events;
+    }
+
+    /**
      * Loads all subscriber history points in one query, grouped by signal identity.
      * Map keys are {@link #subscriberHistoryKey(String, String)}.
      */

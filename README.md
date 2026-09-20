@@ -31,6 +31,13 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 - **Konfigurierbare Download-Geschwindigkeit**
 - **Setup-Dialog** für Benutzereinstellungen
 
+### 🌐 REST-API für andere Anwendungen
+- **Eingebetteter HTTP-Server** (Standard-Port 8089, optional mit API-Token)
+- **JSON/CSV-Endpunkte** für Provider-Statistiken, Abonnenten-Historie und -Änderungen
+- **Tradelisten** als JSON oder rohe CSV, **Kennzahlen** und **Testreport-PDFs** abrufbar
+- **OpenAPI-Beschreibung** unter `/api/v1/openapi.json`
+- Details für Connectoren: [doc/REST_API_Dokumentation.md](doc/REST_API_Dokumentation.md)
+
 ## 🏗️ Architektur
 
 ### Paket-Struktur
