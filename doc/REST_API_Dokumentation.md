@@ -41,6 +41,7 @@ Verbindungstest: `GET http://<rechner>:8089/api/v1/health` → HTTP 200 bedeutet
 {
   "status": "ok",
   "service": "MqlDownloader",
+  "instance": "DESKTOP-NS1MQSV",
   "apiVersion": "v1",
   "uptimeSeconds": 3600,
   "serverTime": "2026-09-20T12:00:00",
@@ -49,7 +50,11 @@ Verbindungstest: `GET http://<rechner>:8089/api/v1/health` → HTTP 200 bedeutet
 }
 ```
 
-`tokenRequired` sagt, ob ein Token mitgesendet werden muss.
+`tokenRequired` sagt, ob ein Token mitgesendet werden muss. `instance` ist die
+**Instanz-Kennung** dieses Downloaders (Setup-Dialog → „Instanz-Kennung“,
+Standard: Rechnername) — Clients wie der SignalKiScanner unterscheiden damit
+mehrere Downloader-Instanzen und warnen, wenn zwei konfigurierte Quellen
+versehentlich auf denselben Downloader zeigen.
 
 ### Authentifizierung
 

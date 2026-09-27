@@ -16,9 +16,11 @@ public class SetupDialog extends JDialog {
     private JCheckBox apiEnabledCheckbox;
     private JSpinner apiPortSpinner;
     private JTextField apiTokenField;
+    private JTextField apiInstanceField;
     private boolean apiEnabledInitial;
     private int apiPortInitial;
     private String apiTokenInitial;
+    private String apiInstanceInitial;
 
     public SetupDialog(JFrame parent, ConfigurationManager configManager) {
         this(parent, configManager, null);
@@ -183,11 +185,23 @@ public class SetupDialog extends JDialog {
         gbcApi.gridx = 1;
         apiPanel.add(apiTokenField, gbcApi);
 
+        gbcApi.gridx = 0;
+        gbcApi.gridy = 3;
+        apiPanel.add(new JLabel("Instanz-Kennung:"), gbcApi);
+
+        apiInstanceField = new JTextField(configManager.getInstanceName());
+        apiInstanceField.setColumns(25);
+        apiInstanceField.setToolTipText("Eindeutiger Name dieses Downloaders, gemeldet unter "
+            + "/api/v1/health (Feld \"instance\"). Der SignalKiScanner zeigt ihn je Datenquelle "
+            + "an und warnt bei Verwechslung. Leer = Rechnername.");
+        gbcApi.gridx = 1;
+        apiPanel.add(apiInstanceField, gbcApi);
+
         JLabel apiInfoLabel = new JLabel(
             "<html>Endpunkte: http://<rechner>:<port>/api/v1/health, .../providers, .../trades, .../openapi.json</html>");
         apiInfoLabel.setFont(apiInfoLabel.getFont().deriveFont(Font.ITALIC));
         gbcApi.gridx = 0;
-        gbcApi.gridy = 3;
+        gbcApi.gridy = 4;
         gbcApi.gridwidth = 2;
         apiPanel.add(apiInfoLabel, gbcApi);
 
@@ -229,6 +243,7 @@ public class SetupDialog extends JDialog {
         apiEnabledInitial = apiEnabledCheckbox.isSelected();
         apiPortInitial = (Integer) apiPortSpinner.getValue();
         apiTokenInitial = apiTokenField.getText().trim();
+        apiInstanceInitial = apiInstanceField.getText().trim();
 
         pack();
         setResizable(false);
@@ -283,6 +298,10 @@ public class SetupDialog extends JDialog {
             JOptionPane.showMessageDialog(this, e.getMessage(), "Ung\u00fcltige API-Einstellung",
                     JOptionPane.ERROR_MESSAGE);
             return;
+        }
+        // Instanz-Kennung separat: /health liest sie live, kein API-Neustart nötig.
+        if (!apiInstanceField.getText().trim().equals(apiInstanceInitial)) {
+            configManager.setInstanceName(apiInstanceField.getText());
         }
         if (apiChanged && apiConfigChangedCallback != null) {
             apiConfigChangedCallback.run();

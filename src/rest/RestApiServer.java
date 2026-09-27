@@ -259,6 +259,7 @@ public class RestApiServer {
         w.beginObject()
             .name("status").value("ok")
             .name("service").value("MqlDownloader")
+            .name("instance").value(configManager.getInstanceName())
             .name("apiVersion").value("v1")
             .name("uptimeSeconds").value((System.currentTimeMillis() - startedAt) / 1000)
             .name("serverTime").value(iso(new Timestamp(System.currentTimeMillis())))

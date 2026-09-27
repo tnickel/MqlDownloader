@@ -36,6 +36,7 @@ public class ConfigurationManager {
     private static final String KEY_API_ENABLED = "apiEnabled";
     private static final String KEY_API_PORT = "apiPort";
     private static final String KEY_API_TOKEN = "apiToken";
+    private static final String KEY_INSTANCE_NAME = "instanceName";
 
     public static final int DEFAULT_API_PORT = 8089;
 
@@ -263,6 +264,44 @@ public class ConfigurationManager {
         Properties props = loadProperties();
         String token = props.getProperty(KEY_API_TOKEN, "");
         return token != null ? token.trim() : "";
+    }
+
+    /**
+     * Instanz-Kennung dieses Downloaders. Clients wie der SignalKiScanner
+     * können mehrere Downloader-Instanzen (z. B. auf verschiedenen Rechnern)
+     * anbinden und unterscheiden sie anhand dieser Kennung aus /health.
+     * Default: Rechnername. Leer setzen = zurück auf den Default.
+     */
+    public String getInstanceName() {
+        Properties props = loadProperties();
+        String name = props.getProperty(KEY_INSTANCE_NAME, "");
+        name = name != null ? name.trim() : "";
+        return name.isEmpty() ? defaultInstanceName() : name;
+    }
+
+    public void setInstanceName(String name) {
+        String normalized = name != null ? name.trim() : "";
+        Properties props = loadProperties();
+        if (normalized.isEmpty()) {
+            props.remove(KEY_INSTANCE_NAME);
+        } else {
+            props.setProperty(KEY_INSTANCE_NAME, normalized);
+        }
+        saveProperties(props, "MQL Downloader Konfiguration");
+        logger.info("Instanz-Kennung: " + (normalized.isEmpty()
+                ? defaultInstanceName() + " (Standard)" : normalized));
+    }
+
+    private String defaultInstanceName() {
+        try {
+            String host = java.net.InetAddress.getLocalHost().getHostName();
+            if (host != null && !host.trim().isEmpty()) {
+                return host.trim();
+            }
+        } catch (IOException ignored) {
+            // Best effort: Fallback unten
+        }
+        return "MqlDownloader";
     }
 
     public void setApiToken(String token) {
