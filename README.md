@@ -128,10 +128,10 @@ MPDD = Durchschnittlicher Monatlicher Profit / Equity Drawdown
 - 4GB+ RAM empfohlen
 
 ### Projektpfad
-Das Projekt befindet sich auf der Festplatte unter: `D:\git\MQL\MqlDownloader` (ehemals `D:\git\MqlDownloader`).
+Das Projekt befindet sich auf der Festplatte unter: `D:\AntiGravitySoftware\GitWorkspace\SIGNALDOWNLOADER\MqlDownloader` (ehemals `D:\git\MQL\MqlDownloader`).
 
 ### Quick Start
-1. Repository klonen oder direkt aus `D:\git\MQL\MqlDownloader` in der IDE öffnen.
+1. Repository klonen oder direkt aus `D:\AntiGravitySoftware\GitWorkspace\SIGNALDOWNLOADER\MqlDownloader` in der IDE öffnen.
 2. Dependencies installieren.
 3. Konfigurationspfad anpassen (`C:\Forex\MqlAnalyzer`).
 4. Anwendung starten.
