@@ -359,8 +359,8 @@ public class RestApiServer {
                 since = dayLimit;
             }
         }
-        int limit = (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit");
-        int offset = (int) parseLong(query.get("offset"), 0, "offset");
+        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
+        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
 
         List<SubscriberHistoryPoint> filtered = new ArrayList<>();
         for (SubscriberHistoryPoint point : history) {
@@ -411,8 +411,8 @@ public class RestApiServer {
             rows.add(row);
         }
         int total = rows.size();
-        int offset = (int) parseLong(query.get("offset"), 0, "offset");
-        int limit = (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit");
+        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
+        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
         int from = Math.min(offset, total);
         int to = Math.min(from + limit, total);
 
@@ -530,8 +530,8 @@ public class RestApiServer {
         if (nameFilter != null) {
             nameFilter = nameFilter.toLowerCase(Locale.ROOT);
         }
-        int limit = (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit");
-        int offset = (int) parseLong(query.get("offset"), 0, "offset");
+        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
+        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
 
         List<String[]> items = new ArrayList<>(); // versionFolder, fileName, signalId
         for (String folder : new String[]{"mql4", "mql5"}) {
@@ -595,7 +595,7 @@ public class RestApiServer {
         Timestamp since = parseSince(query);
         Timestamp until = parseUntil(query);
         boolean onlyChanges = !"false".equalsIgnoreCase(query.get("includeUnchanged"));
-        int limit = (int) parseLong(query.get("limit"), 100, "limit");
+        int limit = Math.max(1, (int) parseLong(query.get("limit"), 100, "limit"));
         List<SubscriberEvent> events = databaseManager.getRecentEvents(since, until, onlyChanges, limit);
 
         if ("csv".equalsIgnoreCase(query.get("format"))) {
@@ -796,7 +796,11 @@ public class RestApiServer {
 
     private void sortProviders(List<SubscriberStat> stats, Map<String, String> query) {
         String sort = query.get("sort");
-        boolean ascending = !"desc".equalsIgnoreCase(query.get("order"));
+        // Default absteigend (wie alle Monitore des Multi-Source-Hubs): Der
+        // SignalKiScanner blättert den Katalog und begrenzt anschließend auf
+        // die Top N — aufsteigende Standardordnung hätte ihm die KLEINSTEN
+        // Provider zuerst geliefert.
+        boolean ascending = "asc".equalsIgnoreCase(query.get("order"));
         Comparator<SubscriberStat> comparator;
         if (sort == null || sort.trim().isEmpty() || "subscribers".equals(sort)) {
             comparator = Comparator.comparingInt(SubscriberStat::getSubscribers);
@@ -835,8 +839,8 @@ public class RestApiServer {
 
     /** {from, to} als Schnittfenster der Liste. */
     private int[] pageWindow(Map<String, String> query, int total) {
-        int offset = (int) parseLong(query.get("offset"), 0, "offset");
-        int limit = (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit");
+        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
+        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
         int from = Math.min(offset, total);
         int to = Math.min(from + limit, total);
         return new int[]{from, to};

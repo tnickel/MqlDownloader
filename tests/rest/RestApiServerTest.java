@@ -232,6 +232,29 @@ class RestApiServerTest {
         }
     }
 
+    @Test
+    void katalogDefaultAbsteigendUndLimitGeclampt() throws Exception {
+        // Default-Ordnung absteigend nach Abonnenten (wie alle Monitore des
+        // Multi-Source-Hubs): Der Scanner begrenzt spaeter auf Top N —
+        // aufsteigend haette er die kleinsten Provider zuerst bekommen.
+        HttpResponse desc = get("/api/v1/providers", null);
+        assertEquals(200, desc.status);
+        assertTrue(desc.body.indexOf("\"signalId\":\"123\"") < desc.body.indexOf("\"signalId\":\"55\""),
+                "Groesster Provider (123, 45 Abos) zuerst");
+        HttpResponse asc = get("/api/v1/providers?order=asc", null);
+        assertEquals(200, asc.status);
+        assertTrue(asc.body.indexOf("\"signalId\":\"55\"") < asc.body.indexOf("\"signalId\":\"123\""),
+                "asc liefert den kleinsten (55, 7 Abos) zuerst");
+        // Negatives/nicht-positives Limit darf keinen 500-Fehler ausloesen
+        // (subList mit to<from) — Klammer auf mindestens 1.
+        HttpResponse neg = get("/api/v1/providers?limit=-5", null);
+        assertEquals(200, neg.status);
+        assertTrue(neg.body.contains("\"count\":1"));
+        HttpResponse negOffset = get("/api/v1/providers?offset=-5&limit=1", null);
+        assertEquals(200, negOffset.status);
+        assertTrue(negOffset.body.contains("\"count\":1"));
+    }
+
     // ------------------------------------------------------------------
 
     private static HttpResponse get(String path, String token) throws Exception {
