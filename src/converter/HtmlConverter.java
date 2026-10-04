@@ -167,8 +167,14 @@ public class HtmlConverter {
         // OPTIMIERUNG: Zuerst 3MPDD berechnen und pr\u00fcfen ob < 0.5
         double mpdd3 = calculate3MPDD(htmlFileName);
         boolean skipFilter = (configManager != null) && configManager.isSubscribersOnly();
+        // Review 04.10. (Paket C C2b): Ein BERECHNUNGSFEHLER (NaN) ist kein
+        // "schlechter" Wert — geloescht wird nur bei tatsaechlich berechnetem
+        // mpdd3 < 0.5, niemals weil die Extraktion versagte (Zeitbombe bei
+        // DOM-Aenderung: Massenloeschung der Originaldaten).
         
-        if (!skipFilter && mpdd3 < 0.5) {
+        if (Double.isNaN(mpdd3)) {
+            logger.info("3MPDD fuer " + htmlFileName + " nicht berechenbar - Datei BEHALTEN (Review 04.10. C2b)");
+        } else if (!skipFilter && mpdd3 < 0.5) {
             logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) f\u00fcr " + htmlFileName + " - Dateien werden gel\u00f6scht");
             deleteRelatedFiles(htmlFileName);
             
@@ -277,7 +283,7 @@ public class HtmlConverter {
             
         } catch (Exception e) {
             logger.error("Fehler beim Berechnen von 3MPDD f\u00fcr " + htmlFileName + ": " + e.getMessage(), e);
-            return 0.0;
+            return Double.NaN;  // C2b: Fehler != 0.0
         }
     }
     

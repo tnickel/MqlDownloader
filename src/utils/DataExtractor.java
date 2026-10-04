@@ -13,6 +13,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 public class DataExtractor {
+
+    // Review 04.10. (Paket C C2b): Extraktionsfehler loeschen KEINE Originaldaten
+    // mehr (deleteRelatedFiles bleibt hier ungenutzt) — Fehler werfen
+    // RuntimeException, der Aufrufer entscheidet; die Datei bleibt fuer einen
+    // erneuten Versuch nach Parser-Fix erhalten.
     private static final Logger logger = LogManager.getLogger(DataExtractor.class);
     private final HtmlContentCache contentCache;
     private final ChartDataExtractor chartExtractor;
@@ -42,7 +47,6 @@ public class DataExtractor {
             if (htmlContent == null) {
                 String errorMessage = "HTML-Inhalt konnte nicht geladen werden f\u00fcr Datei: " + fileName;
                 logger.error(errorMessage);
-                deleteRelatedFiles(fileName);
                 throw new RuntimeException(errorMessage);
             }
             
@@ -81,14 +85,12 @@ public class DataExtractor {
                 } else {
                     String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden f\u00fcr Datei: " + fileName;
                     logger.error(errorMessage);
-                    deleteRelatedFiles(fileName);
                     throw new RuntimeException(errorMessage);
                 }
             }
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren der Balance f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
         }
     }
@@ -160,7 +162,6 @@ public class DataExtractor {
         try {
             String htmlContent = contentCache.getHtmlContent(fileName);
             if (htmlContent == null) {
-                deleteRelatedFiles(fileName);
                 throw new RuntimeException("HTML-Inhalt konnte nicht geladen werden f\u00fcr Datei: " + fileName);
             }
 
@@ -251,13 +252,11 @@ public class DataExtractor {
             // Wenn kein Equity Drawdown gefunden wurde
             String errorMessage = "Equity Drawdown konnte nicht extrahiert werden f\u00fcr Datei: " + fileName;
             logger.error(errorMessage);
-            deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage);
             
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren des Equity Drawdown f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
         }
     }
@@ -285,7 +284,6 @@ public class DataExtractor {
         } catch (Exception e) {
             String errorMessage = "Fehler beim Berechnen des durchschnittlichen 3-Monats-Profits f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
-            deleteRelatedFiles(fileName);
             throw new RuntimeException(errorMessage, e);
         }
     }

@@ -46,7 +46,7 @@ public class MPDDCalculator {
     public double calculateMPDD(String fileName, int months) {
         if (months <= 0) {
             LOGGER.warning("Ung\u00fcltige Monatsanzahl: " + months);
-            return 0.0;
+            return Double.NaN;  // C2b
         }
         
         try {
@@ -66,7 +66,7 @@ public class MPDDCalculator {
             
         } catch (Exception e) {
             LOGGER.severe("Fehler bei MPDD-Berechnung f\u00fcr " + fileName + ": " + e.getMessage());
-            return 0.0;
+            return Double.NaN;  // C2b: Fehler != Loesch-Kriterium
         }
     }
     
