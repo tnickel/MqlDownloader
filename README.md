@@ -164,13 +164,19 @@ Wir begrüßen Beiträge! Besonders interessant sind:
 
 [Hier deine gewünschte Lizenz einfügen]
 
-## 🎯 Roadmap
+## 🧪 Tests
 
+```bash
+mvn test    # 76 automatisierte Tests grün (REST-API, Parser, MPDD-Berechnung, Setup, DB)
+```
+
+## 🎯 Status & Roadmap
+
+- [x] **REST API (:8089)** für Integration mit SignalKiScanner (Protokoll mql5-downloader-v1, OpenAPI unter `/api/v1/openapi.json`)
+- [x] **Abonnenten-Historie & Metriken** über REST
+- [x] **MPDD-Qualitätsfilterung** und automatische Bereinigung
 - [ ] **Cloud-Integration** für skalierbare Verarbeitung
-- [ ] **REST API** für externe Integration
-- [ ] **Machine Learning** für Provider-Ranking
-- [ ] **Real-time Monitoring** für Live-Signale
-- [ ] **Docker-Support** für einfache Deployment
+- [ ] **Docker-Support** für einfaches Deployment
 
 ---
 
