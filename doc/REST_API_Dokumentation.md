@@ -401,7 +401,7 @@ Daten → Daten abrufen → Aus dem Web → `http://<rechner>:8089/api/v1/provid
 
 ## 6. Internationale Hinweise für Implementierer
 
-- Der Server erlaubt nur `GET` und `OPTIONS`; alles andere → 405.
+- Der Server erlaubt `GET` und `OPTIONS` sowie genau EINEN Schreib-Endpoint `POST /api/v1/update` (Stufe 0, siehe unten); alles andere → 405.
 - Antwortgrößen können bei `trades` groß sein (zahlreiche Trades) — `limit`/`offset` nutzen und `total` für Pagination auslesen.
 - JSON-Zahlen: `subscribers`, `change`, `sizeBytes` sind Integer; Metrik-Werte sind Number *oder* String (Parser-Fallback) — tolerant parsen.
 - Bei `format=csv` ist das Trennzeichen `;` und die Codierung UTF-8 mit BOM.
