@@ -82,12 +82,187 @@ public class MqlDownloaderGui extends JFrame {
             return;
         }
         try {
-            restApiServer = new RestApiServer(downloadManager.getDatabaseManager(), configManager);
+            restApiServer = new RestApiServer(downloadManager.getDatabaseManager(), configManager,
+                    erstelleUpdateStarter());
             restApiServer.start();
             logHandler.log("REST-API aktiv: " + restApiServer.getLocalUrls());
         } catch (Exception e) {
             restApiServer = null;
             logHandler.logError("REST-API konnte nicht gestartet werden: " + e.getMessage(), e);
+        }
+    }
+
+    // ---------------------------------- Stufe 0: Update-Job (SignalKiScanner doc/23)
+
+    private rest.UpdateJob updateJob;
+
+    /** Fern-Auslöser für POST /api/v1/update: busy-Kopplung wie beim
+     *  „Alles ausführen“-Button, Start der Kaskade auf dem EDT. */
+    private rest.UpdateStarter erstelleUpdateStarter() {
+        return new rest.UpdateStarter() {
+            @Override
+            public rest.UpdateStarter.UpdateAntwort starte(java.util.Map<String, Object> body) {
+                rest.UpdateJob laufend = updateJob;
+                if (laufend != null && laufend.laeuft()) {
+                    return rest.UpdateStarter.UpdateAntwort.laufend(laufend);
+                }
+                if (overallProcessRunning || downloadManager.isDownloadRunning()
+                        || conversionManager.isConversionRunning()) {
+                    return rest.UpdateStarter.UpdateAntwort.beschaeftigt(
+                            "Es läuft bereits ein Download oder eine Konvertierung.");
+                }
+                int katalogMaxAlterH = zahlAus(body, "katalogMaxAlterH", 72);
+                rest.UpdateJob neu = new rest.UpdateJob("u-"
+                        + java.time.LocalDateTime.now().format(
+                                java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
+                updateJob = neu;
+                javax.swing.SwingUtilities.invokeLater(() -> starteUpdateKaskade(neu, katalogMaxAlterH));
+                return rest.UpdateStarter.UpdateAntwort.gestartet(neu);
+            }
+
+            @Override
+            public rest.UpdateJob letzterJob() {
+                return updateJob;
+            }
+        };
+    }
+
+    private static int zahlAus(java.util.Map<String, Object> body, String schluessel, int defaultWert) {
+        Object wert = body.get(schluessel);
+        if (wert instanceof Number) {
+            return ((Number) wert).intValue();
+        }
+        if (wert instanceof String) {
+            try {
+                return Integer.parseInt(((String) wert).trim());
+            } catch (NumberFormatException ignoriert) {
+                // kein Zahl-Format -> Default
+            }
+        }
+        return defaultWert;
+    }
+
+    /** Stufe-0-Kaskade (doc/23): dieselbe Kette wie „Alles ausführen“
+     *  (MQL4 → MQL5 → Konvertierung, Selenium-Login läuft automatisch mit
+     *  den gespeicherten Zugangsdaten), aber ohne Dialog und mit Live-Meldung
+     *  in den Job. 3-Tage-Regel: Lief der Gesamtprozess vor weniger als
+     *  katalogMaxAlterH Stunden erfolgreich, wird er komplett übersprungen
+     *  (Katalog und Tradelisten sind hier EIN Download). Muss auf dem EDT
+     *  aufgerufen werden. */
+    private void starteUpdateKaskade(rest.UpdateJob job, int katalogMaxAlterH) {
+        java.nio.file.Path vermerk = java.nio.file.Path.of("config", "update_state.json");
+        String letzterLoad = leseKatalogVermerk(vermerk);
+        if (letzterLoad != null && katalogFrischGenug(letzterLoad, katalogMaxAlterH)) {
+            job.ergebnis("katalogUebersprungen", true);
+            job.fertig(letzterLoad);
+            logHandler.log("UPDATE-JOB " + job.jobId() + ": übersprungen (3-Tage-Regel, letzter Load "
+                    + letzterLoad + ").");
+            return;
+        }
+        if (overallProcessRunning || downloadManager.isDownloadRunning()
+                || conversionManager.isConversionRunning()) {
+            job.fehler("Es läuft bereits ein Download oder eine Konvertierung.");
+            return;
+        }
+        overallProcessRunning = true;
+        logHandler.log("UPDATE-JOB " + job.jobId() + " gestartet (MQL4 → MQL5 → Konvertierung).");
+        disableAllButtons();
+        downloadManager.resetSubscribersCounters();
+        downloadManager.setDoAllAtOnce(true);
+        job.melde("mql4", 0, 0, "MQL4-Download …");
+
+        Thread statusPoller = new Thread(() -> {
+            while (updateJob == job && job.laeuft()) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                String status = downloadManager.getDownloadStatus();
+                String phase = conversionManager.isConversionRunning() ? "konvertieren" : "download";
+                job.melde(phase, 0, 0, status);
+            }
+        }, "mql-update-status");
+        statusPoller.setDaemon(true);
+        statusPoller.start();
+
+        Thread kaskade = new Thread(() -> {
+            try {
+                logHandler.log("Starte MQL4 Download...");
+                downloadManager.startDownload("MQL4");
+                downloadManager.waitForDownloadCompletion();
+
+                logHandler.log("Starte MQL5 Download...");
+                job.melde("mql5", 0, 0, "MQL5-Download ...");
+                downloadManager.startDownload("MQL5");
+                downloadManager.waitForDownloadCompletion();
+
+                logHandler.log("Starte Konvertierung...");
+                job.melde("konvertieren", 0, 0, "Konvertierung ...");
+                conversionManager.startConversion();
+                conversionManager.waitForConversionCompletion();
+
+                int mql4Count = downloadManager.getMql4SubscribersDownloadedCount();
+                int mql5Count = downloadManager.getMql5SubscribersDownloadedCount();
+                job.ergebnis("signaleGeliefert", mql4Count + mql5Count);
+                job.hinweis("Signale MIT Abonnenten: " + mql5Count + " (MQL5) + "
+                        + mql4Count + " (MQL4) — der Downloader lädt die Plattformliste komplett.");
+                schreibeKatalogVermerk(vermerk);
+                job.fertig(java.time.LocalDateTime.now().format(
+                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")));
+                logHandler.log("UPDATE-JOB " + job.jobId() + " fertig: " + (mql4Count + mql5Count)
+                        + " Signale mit Abonnenten.");
+            } catch (Exception e) {
+                logHandler.logError("Fehler im UPDATE-JOB: " + e.getMessage(), e);
+                job.fehler(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+            } finally {
+                downloadManager.setDoAllAtOnce(false);
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    overallProcessRunning = false;
+                    enableAllButtons();
+                });
+            }
+        }, "mql-update");
+        kaskade.setDaemon(true);
+        kaskade.start();
+    }
+
+    /** „katalogLetzterLoad=<ISO-Instant>“ aus update_state.json — null = nie. */
+    private static String leseKatalogVermerk(java.nio.file.Path vermerk) {
+        try {
+            if (!java.nio.file.Files.exists(vermerk)) {
+                return null;
+            }
+            for (String zeile : java.nio.file.Files.readAllLines(vermerk, java.nio.charset.StandardCharsets.UTF_8)) {
+                if (zeile.trim().startsWith("katalogLetzterLoad=")) {
+                    return zeile.trim().substring("katalogLetzterLoad=".length());
+                }
+            }
+        } catch (Exception ignoriert) {
+            // defekter Vermerk = ehrlich neu laden
+        }
+        return null;
+    }
+
+    private static boolean katalogFrischGenug(String isoInstant, int maxAlterStunden) {
+        try {
+            java.time.Duration alter = java.time.Duration.between(
+                    java.time.Instant.parse(isoInstant), java.time.Instant.now());
+            return alter.toHours() < maxAlterStunden;
+        } catch (Exception ungueltig) {
+            return false;
+        }
+    }
+
+    private static void schreibeKatalogVermerk(java.nio.file.Path vermerk) {
+        try {
+            java.nio.file.Files.createDirectories(vermerk.getParent());
+            java.nio.file.Files.writeString(vermerk,
+                    "katalogLetzterLoad=" + java.time.Instant.now() + System.lineSeparator(),
+                    java.nio.charset.StandardCharsets.UTF_8);
+        } catch (Exception ignoriert) {
+            // Vermerk optional — ohne ihn lädt der nächste Job einfach erneut
         }
     }
 

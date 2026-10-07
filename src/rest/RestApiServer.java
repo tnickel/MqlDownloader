@@ -52,14 +52,21 @@ public class RestApiServer {
 
     private final DatabaseManager databaseManager;
     private final ConfigurationManager configManager;
+    private final UpdateStarter updateStarter;
     private final long startedAt = System.currentTimeMillis();
     private HttpServer server;
     private ExecutorService executor;
     private volatile boolean running;
 
     public RestApiServer(DatabaseManager databaseManager, ConfigurationManager configManager) {
+        this(databaseManager, configManager, null);
+    }
+
+    public RestApiServer(DatabaseManager databaseManager, ConfigurationManager configManager,
+                         UpdateStarter updateStarter) {
         this.databaseManager = databaseManager;
         this.configManager = configManager;
+        this.updateStarter = updateStarter;
     }
 
     // ------------------------------------------------------------------
@@ -138,6 +145,24 @@ public class RestApiServer {
                 send(exchange, Resp.empty(204));
                 return;
             }
+            if ("POST".equals(method)) {
+                // Stufe 0 (SignalKiScanner doc/23 §4.1): genau EIN Schreib-
+                // Endpoint — der Update-Job. Alle anderen POST-Pfade bleiben
+                // gesperrt (Server sonst rein lesend).
+                if (updateStarter == null || !"/api/v1/update".equals(exchange.getRequestURI().getPath())) {
+                    send(exchange, Resp.json(405, errorBody(
+                            "Nur POST /api/v1/update ist erlaubt (Stufe 0); alle übrigen Endpunkte: GET und OPTIONS")));
+                    return;
+                }
+                Map<String, String> query = parseQuery(exchange);
+                if (!isAuthorized(exchange, query)) {
+                    send(exchange, Resp.json(401, errorBody(
+                            "Ungültiger oder fehlender API-Token (X-API-Token, Bearer oder ?token=)")));
+                    return;
+                }
+                send(exchange, updateStarten(exchange));
+                return;
+            }
             if (!"GET".equals(method)) {
                 send(exchange, Resp.json(405, errorBody("Nur GET und OPTIONS werden unterstützt")));
                 return;
@@ -169,6 +194,72 @@ public class RestApiServer {
         } finally {
             exchange.close();
         }
+    }
+
+    /** POST /api/v1/update: Kaskade anstoßen — Antwort sofort (doc/23 §4.1). */
+    private Resp updateStarten(HttpExchange exchange) throws IOException {
+        String roh;
+        try {
+            roh = new String(exchange.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        } catch (@SuppressWarnings("unused") Exception ignoriert) {
+            return Resp.json(400, errorBody("Body nicht lesbar."));
+        }
+        // Der definierte Body ist ein flaches JSON-Objekt mit maximal vier
+        // bekannten Feldern — ohne Jackson-Dependency tolerant von Hand
+        // lesen (unbekannter Inhalt = Defaultwerte, kein Fehler).
+        Map<String, Object> body = parseUpdateBody(roh);
+        UpdateStarter.UpdateAntwort antwort = updateStarter.starte(body);
+        if (antwort.status() == 409) {
+            return Resp.json(409, errorBody(antwort.error() == null ? "beschaeftigt" : antwort.error()));
+        }
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("jobId", antwort.job().jobId());
+        out.put("status", antwort.bereitsLaufend() ? "laeuft_bereits" : "gestartet");
+        out.put("bereitsLaufend", antwort.bereitsLaufend());
+        return Resp.json(antwort.status(), jsonVon(out));
+    }
+
+    private static Map<String, Object> parseUpdateBody(String roh) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        if (roh == null) {
+            return body;
+        }
+        java.util.regex.Matcher target = java.util.regex.Pattern
+                .compile("\"target\"\\s*:\\s*(\\d+)").matcher(roh);
+        java.util.regex.Matcher alter = java.util.regex.Pattern
+                .compile("\"katalogMaxAlterH\"\\s*:\\s*(\\d+)").matcher(roh);
+        java.util.regex.Matcher tradelisten = java.util.regex.Pattern
+                .compile("\"tradelisten\"\\s*:\\s*(true|false)").matcher(roh);
+        if (target.find()) {
+            body.put("target", Integer.parseInt(target.group(1)));
+        }
+        if (alter.find()) {
+            body.put("katalogMaxAlterH", Integer.parseInt(alter.group(1)));
+        }
+        if (tradelisten.find()) {
+            body.put("tradelisten", Boolean.parseBoolean(tradelisten.group(1)));
+        }
+        return body;
+    }
+
+    private static String jsonVon(Map<String, Object> body) {
+        StringBuilder sb = new StringBuilder("{");
+        boolean erster = true;
+        for (Map.Entry<String, Object> e : body.entrySet()) {
+            if (!erster) sb.append(",");
+            erster = false;
+            sb.append("\"").append(e.getKey()).append("\":");
+            Object wert = e.getValue();
+            if (wert == null) {
+                sb.append("null");
+            } else if (wert instanceof Boolean || wert instanceof Number) {
+                sb.append(wert);
+            } else {
+                sb.append("\"").append(String.valueOf(wert).replace("\\", "\\\\")
+                        .replace("\"", "\\\"")).append("\"");
+            }
+        }
+        return sb.append("}").toString();
     }
 
     private Resp route(List<String> segs, Map<String, String> query) throws IOException {
@@ -203,6 +294,15 @@ public class RestApiServer {
                 return Resp.json(200, OpenApiDoc.toJson());
             }
             return notFound(head);
+        }
+
+        // Stufe 0 (SignalKiScanner doc/23 §4.2): Job-Status für den Poll.
+        if ("update".equals(head) && path.size() == 2 && "status".equals(path.get(1))) {
+            if (updateStarter == null) {
+                return Resp.json(404, errorBody("Update-Protokoll nicht aktiv."));
+            }
+            UpdateJob job = updateStarter.letzterJob();
+            return Resp.json(200, job == null ? "{\"state\":\"idle\"}" : jsonVon(job.statusJson()));
         }
 
         // /trades/file/{version}/{name}
