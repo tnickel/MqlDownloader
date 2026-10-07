@@ -5,3 +5,6 @@
 .project
 .classpath
 .factorypath
+
+# Stufe-0-Laufzeitzustand (3-Tage-Vermerk) — kein Code
+config/update_state.json
