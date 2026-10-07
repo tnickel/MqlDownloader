@@ -416,3 +416,47 @@ Daten → Daten abrufen → Aus dem Web → `http://<rechner>:8089/api/v1/provid
 | Hauptdaten | `GET {base}/providers` |
 | Änderungsfeed | `GET {base}/events?limit=100` |
 | Schemabeschreibung | `GET {base}/openapi.json` |
+
+---
+
+## Stufe 0: Client-Update-Job (SignalKiScanner doc/23, 07.10.2026)
+
+Der SignalKiScanner stößt vor jedem Scan (Full-/Teilscan) die Daten-Aktualisierung
+aller Clients an. Der MqlDownloader kennt dazu genau EINEN Schreib-Endpoint —
+alle übrigen bleiben rein lesend (POST → 405).
+
+### `POST /api/v1/update` — „Alles ausführen" anstoßen
+
+Request-Body (JSON, alle Felder optional):
+```json
+{"target": 200, "tradelisten": true, "katalogMaxAlterH": 72}
+```
+- `target` (Default 200): Wunsch-Anzahl Signale — der Downloader lädt die
+  Plattformliste sowieso vollständig; gemeldet wird die Zahl derer MIT
+  Abonnenten (~50, MQL4+MQL5).
+- `tradelisten`: bei diesem Client ohne Wirkung (Katalog und Trades sind EIN
+  Download) — wird der Protokoll-Kompatibilität wegen angenommen.
+- `katalogMaxAlterH` (Default 72): **3-Tage-Regel** — lief der Gesamtprozess
+  vor weniger als dieser Stundenzahl erfolgreich (Vermerk
+  `config/update_state.json`), wird er komplett übersprungen.
+
+Antwort sofort (ohne auf den Download zu warten):
+- `202 {"jobId": "u-…", "status": "gestartet", "bereitsLaufend": false}`
+- läuft schon ein Update: `200` mit `bereitsLaufend: true`
+- GUI beschäftigt (Button-Download/Konvertierung läuft): `409 {"error": …}`
+- Body kein JSON-Objekt: `400`. Token gilt wie bei GET.
+
+### `GET /api/v1/update/status` — Job-Status (Poll)
+
+```json
+{"jobId": "u-…", "state": "running", "phase": "mql5", "done": 0, "total": 0,
+ "message": "MQL5-Download laeuft (Limit: 100 Provider)", "startedAt": "…",
+ "finishedAt": null,
+ "ergebnis": {"signaleGeliefert": 52, "tradelistenNeu": null,
+              "tradelistenAktualisiert": null, "katalogUebersprungen": false,
+              "datenstand": null, "hinweise": ["Signale MIT Abonnenten: …"]},
+ "error": null}
+```
+`state`: `idle` (noch nie gelaufen) | `running` | `done` | `error`.
+Phasen: `mql4` → `mql5` → `konvertieren` (der Status-Poller meldet Zwischen-
+stände des DownloadManagers). `signaleGeliefert` = Signale MIT Abonnenten.
