@@ -57,7 +57,8 @@ public final class UpdateJob {
     }
 
     public void melde(String phase, int done, int total, String message) {
-        if (state == State.DONE || state == State.ERROR) return;
+        if (state == State.DONE || state == State.ERROR
+                || state == State.LOGIN_REQUIRED) return;
         this.state = State.RUNNING;
         this.phase = phase == null ? "" : phase;
         this.done = done;

@@ -229,7 +229,7 @@ public class MqlDownloaderGui extends JFrame {
     }
 
     /** „katalogLetzterLoad=<ISO-Instant>“ aus update_state.json — null = nie. */
-    private static String leseKatalogVermerk(java.nio.file.Path vermerk) {
+    static String leseKatalogVermerk(java.nio.file.Path vermerk) {
         try {
             if (!java.nio.file.Files.exists(vermerk)) {
                 return null;
@@ -245,7 +245,7 @@ public class MqlDownloaderGui extends JFrame {
         return null;
     }
 
-    private static boolean katalogFrischGenug(String isoInstant, int maxAlterStunden) {
+    static boolean katalogFrischGenug(String isoInstant, int maxAlterStunden) {
         try {
             java.time.Duration alter = java.time.Duration.between(
                     java.time.Instant.parse(isoInstant), java.time.Instant.now());
@@ -255,7 +255,7 @@ public class MqlDownloaderGui extends JFrame {
         }
     }
 
-    private static void schreibeKatalogVermerk(java.nio.file.Path vermerk) {
+    static void schreibeKatalogVermerk(java.nio.file.Path vermerk) {
         try {
             java.nio.file.Files.createDirectories(vermerk.getParent());
             java.nio.file.Files.writeString(vermerk,
