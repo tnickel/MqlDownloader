@@ -855,7 +855,7 @@ public class RestApiServer {
         if (folder == null) {
             return null;
         }
-        return ProviderFiles.findTradeCsv(versionDir(folder), signalId);
+        return ProviderFiles.resolveTradeCsv(new File(configManager.getBaseDownloadPath()), signalId, folder);
     }
 
     private File resolveRootTxt(String signalId, String version) {
@@ -863,7 +863,7 @@ public class RestApiServer {
         if (folder == null) {
             return null;
         }
-        return ProviderFiles.findRootTxt(versionDir(folder), signalId);
+        return ProviderFiles.resolveRootTxt(new File(configManager.getBaseDownloadPath()), signalId, folder);
     }
 
     private File versionDir(String folder) {

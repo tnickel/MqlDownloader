@@ -2,18 +2,23 @@ package rest;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Pattern;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Element;
 
 /**
  * Findet die zum Dateisatz eines Signals gehörenden Dateien: Trading-History
  * (CSV), konvertierte Kennzahlen (*_root.txt) und Testreport-PDFs. Die
- * Zuordnung läuft über die Signal-ID im Dateinamen, analog zur Erkennung in
- * der GUI (Muster mit Ziffern-Grenze, damit ID 25 nicht in 125 matcht).
+ * CSV und Kennzahlen werden über die abschließende Signal-ID zugeordnet;
+ * Zahlen im frei gewählten Signalnamen sind keine Identität. Reports haben
+ * eigene Dateinamen und verwenden weiterhin das Zifferngrenzen-Muster.
  * Alle Ergebnisse sind Dateien innerhalb des jeweiligen Basisverzeichnisses;
  * Fremd-Pfade werden abgelehnt.
  */
@@ -45,6 +50,79 @@ public final class ProviderFiles {
     /** Konvertierte Kennzahlendatei {@code *_root.txt}, oder null. */
     public static File findRootTxt(File versionDir, String signalId) {
         return latest(findBySignalId(versionDir, signalId, "_root.txt"));
+    }
+
+    /** Normaler Versionsordner gewinnt. Archive brauchen eigenen Identitätsbeleg. */
+    public static File resolveTradeCsv(File downloadDir, String signalId, String version) {
+        String folder = normalizeVersionFolder(version);
+        if (folder == null || downloadDir == null) return null;
+        File normal = findTradeCsv(new File(downloadDir, folder), signalId);
+        return normal != null ? normal : findArchiveCsv(downloadDir, signalId, folder);
+    }
+
+    /** Archiv-Kennzahlen stammen ausschließlich aus demselben belegten Dateisatz. */
+    public static File resolveRootTxt(File downloadDir, String signalId, String version) {
+        String folder = normalizeVersionFolder(version);
+        if (folder == null || downloadDir == null) return null;
+        File normalDir = new File(downloadDir, folder);
+        File normal = findRootTxt(normalDir, signalId);
+        // Kein älterer Archiv-Metrics-Fallback neben einer regulären Trade-CSV.
+        if (findTradeCsv(normalDir, signalId) != null) return normal;
+        File csv = findArchiveCsv(downloadDir, signalId, folder);
+        if (csv == null) return normal;
+        // Bei Archiv-Trades keine unabhängigen regulären Metrics beimischen.
+        File txt = new File(csv.getParentFile(), stripExtension(csv.getName()) + "_root.txt");
+        return txt.isFile() && isDirectChild(csv.getParentFile(), txt) ? txt : null;
+    }
+
+    private static File findArchiveCsv(File downloadDir, String signalId, String folder) {
+        if (downloadDir == null || signalId == null || !signalId.trim().matches("\\d+")) return null;
+        List<File> candidates = new ArrayList<>();
+        File[] dirs = downloadDir.listFiles(File::isDirectory);
+        if (dirs == null) return null;
+        for (File dir : dirs) {
+            if (normalizeVersionFolder(dir.getName()) != null || !isDirectChild(downloadDir, dir)) continue;
+            for (File csv : findBySignalId(dir, signalId, ".csv")) {
+                if (isDirectChild(dir, csv) && archiveEvidence(csv, signalId.trim(), folder)) {
+                    candidates.add(csv);
+                }
+            }
+        }
+        // Zwei belegte Historien sind ohne zusätzlichen Standbeleg nicht auswählbar.
+        return candidates.size() == 1 ? candidates.get(0) : null;
+    }
+
+    private static boolean archiveEvidence(File csv, String signalId, String folder) {
+        File html = new File(csv.getParentFile(), stripExtension(csv.getName()) + "_root.html");
+        if (!html.isFile() || !isDirectChild(csv.getParentFile(), html)) return false;
+        String mt = folder.equals("mql5") ? "5" : "4";
+        try {
+            org.jsoup.nodes.Document doc = Jsoup.parse(html, null);
+            boolean found = false;
+            for (Element tag : doc.select("[data-id][data-mt]")) {
+                if (!signalId.equals(tag.attr("data-id"))) continue;
+                if (!mt.equals(tag.attr("data-mt"))) return false;
+                found = true;
+            }
+            if (!found) return false;
+            java.util.regex.Matcher title = Pattern.compile("MetaTrader\\s+([45])", Pattern.CASE_INSENSITIVE)
+                    .matcher(doc.title());
+            while (title.find()) if (!mt.equals(title.group(1))) return false;
+            for (Element canonical : doc.select("link[rel=canonical][href]")) {
+                java.util.regex.Matcher id = Pattern.compile("/signals/(\\d+)(?:[/?#].*)?$")
+                        .matcher(canonical.attr("href"));
+                if (id.find() && !signalId.equals(id.group(1))) return false;
+            }
+            String expected = folder.equals("mql5")
+                    ? "Time;Type;Volume;Symbol;Price;Volume;Time;Price;Commission;Swap;Profit"
+                    : "Time;Type;Volume;Symbol;Price;S/L;T/P;Time;Price;Commission;Swap;Profit;Comment";
+            try (java.io.BufferedReader reader = Files.newBufferedReader(csv.toPath(), StandardCharsets.UTF_8)) {
+                String header = reader.readLine();
+                return header != null && expected.equals(header.replace("\ufeff", "").trim());
+            }
+        } catch (IOException | RuntimeException ignored) {
+            return false;
+        }
     }
 
     /** Testreport-PDFs des Analyse-Verzeichnisses, sortiert nach Dateiname. */
@@ -88,7 +166,7 @@ public final class ProviderFiles {
             return null;
         }
         String name = stripExtension(fileName);
-        if (name.endsWith("_root")) {
+        if (name.toLowerCase(Locale.ROOT).endsWith("_root")) {
             name = name.substring(0, name.length() - "_root".length());
         }
         int underscore = name.lastIndexOf('_');
@@ -130,11 +208,10 @@ public final class ProviderFiles {
             return Collections.emptyList();
         }
         List<File> matches = new ArrayList<>();
-        Pattern pattern = idPattern(signalId);
         for (File file : listFiles(dir)) {
             String name = file.getName();
             if (name.toLowerCase(Locale.ROOT).endsWith(suffix.toLowerCase(Locale.ROOT))
-                    && pattern.matcher(name).find()) {
+                    && signalId.trim().equals(extractSignalId(name))) {
                 matches.add(file);
             }
         }

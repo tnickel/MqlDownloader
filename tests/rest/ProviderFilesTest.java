@@ -15,9 +15,88 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ProviderFilesTest {
+    private static final String MT5_HEADER = "Time;Type;Volume;Symbol;Price;Volume;Time;Price;Commission;Swap;Profit\n";
+    private static final String MT4_HEADER = "Time;Type;Volume;Symbol;Price;S/L;T/P;Time;Price;Commission;Swap;Profit;Comment\n";
 
     @TempDir
     Path tempDir;
+
+    private Path archive(String directory, String name, String html, String header) throws IOException {
+        Path dir = tempDir.resolve(directory);
+        Files.createDirectories(dir);
+        Files.write(dir.resolve(name + ".csv"), header.getBytes("UTF-8"));
+        Files.write(dir.resolve(name + "_root.html"), html.getBytes("UTF-8"));
+        Files.write(dir.resolve(name + "_root.txt"), "Balance=100".getBytes("UTF-8"));
+        return dir.resolve(name + ".csv");
+    }
+
+    @Test
+    void archiveRecoveryUsesExactIdAndSameElementPlatformEvidenceForDifferentSignals() throws IOException {
+        Path first = archive("mql4mql5_", "Make_You_Rich_2349577",
+                "<title>MetaTrader 5</title><div data-id='2349577' data-mt='5'></div>", MT5_HEADER);
+        Path second = archive("mql45", "You_Only_Live_Once_2361280",
+                "<button data-mt='5' data-id='2361280'></button>", MT5_HEADER);
+        assertEquals(first.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "2349577", "mt5"));
+        assertEquals(second.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "2361280", "mql5"));
+        assertEquals("Make_You_Rich_2349577_root.txt",
+                ProviderFiles.resolveRootTxt(tempDir.toFile(), "2349577", "mql5").getName());
+        assertNull(ProviderFiles.resolveTradeCsv(tempDir.toFile(), "2349577", "mql4"));
+    }
+
+    @Test
+    void archiveRejectsWrongIdentitySplitTagsContradictoryPlatformAndFormat() throws IOException {
+        String[] invalid = {"<div data-id='999' data-mt='5'></div>",
+                "<div data-id='123'></div><div data-mt='5'></div>",
+                "<div data-id='123' data-mt='4'></div>",
+                "<div data-id='123' data-mt='5'></div><div data-id='123' data-mt='4'></div>",
+                "<title>MetaTrader 4</title><div data-id='123' data-mt='5'></div>",
+                "<link rel='canonical' href='https://www.mql5.com/en/signals/999'><div data-id='123' data-mt='5'></div>"};
+        for (String html : invalid) {
+            archive("archive", "Strategy_123", html, MT5_HEADER);
+            assertNull(ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+            assertNull(ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+        }
+        archive("archive", "Strategy_123", "<div data-id='123' data-mt='5'></div>", MT4_HEADER);
+        assertNull(ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+    }
+
+    @Test
+    void archiveAmbiguityIsNotResolvedByModificationTime() throws IOException {
+        archive("old", "P_123", "<div data-id='123' data-mt='5'></div>", MT5_HEADER);
+        archive("new", "P_123", "<div data-id='123' data-mt='5'></div>", MT5_HEADER);
+        assertNull(ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+        assertNull(ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+    }
+
+    @Test
+    void normalCacheWinsAndMissingNormalMetricsDoNotMixWithArchive() throws IOException {
+        archive("archive", "P_123", "<div data-id='123' data-mt='5'></div>", MT5_HEADER);
+        Path normal = tempDir.resolve("mql5");Files.createDirectories(normal);
+        Path csv = normal.resolve("Normal_123.csv");Files.write(csv, new byte[]{1});
+        assertEquals(csv.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+        assertNull(ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+        Path txt = normal.resolve("Normal_123_root.txt");Files.write(txt, new byte[]{1});
+        assertEquals(txt.toFile(), ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+    }
+
+    @Test
+    void normalMetricsAloneDoNotOverrideMetricsOfSelectedArchiveTrades() throws IOException {
+        Path archived = archive("archive", "P_123", "<div data-id='123' data-mt='5'></div>", MT5_HEADER);
+        Path normal = tempDir.resolve("mql5");Files.createDirectories(normal);
+        Files.write(normal.resolve("Other_123_root.txt"), "Balance=999".getBytes("UTF-8"));
+        assertEquals(archived.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+        assertEquals(archived.resolveSibling("P_123_root.txt").toFile(),
+                ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+        Files.delete(archived.resolveSibling("P_123_root.txt"));
+        assertNull(ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+    }
+
+    @Test
+    void mt4ArchiveRequiresMt4EvidenceAndOrderbookFormat() throws IOException {
+        Path csv = archive("archive", "P_55", "<div data-id='55' data-mt='4'></div>", MT4_HEADER);
+        assertEquals(csv.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "55", "mt4"));
+        assertNull(ProviderFiles.resolveTradeCsv(tempDir.toFile(), "55", "mt5"));
+    }
 
     @Test
     void findsTradeCsvBySignalId() throws IOException {
@@ -39,6 +118,22 @@ class ProviderFilesTest {
         assertNull(ProviderFiles.findTradeCsv(mql5.toFile(), "123"));
         assertEquals("Provider_1234.csv",
                 ProviderFiles.findTradeCsv(mql5.toFile(), "1234").getName());
+    }
+
+    @Test
+    void numbersInProviderNameCannotSelectAnotherSignalsTradesOrMetrics() throws IOException {
+        Files.write(tempDir.resolve("Anson_Account_1_2381807.csv"), new byte[]{1});
+        Files.write(tempDir.resolve("Anson_Account_1_2381807_root.txt"), new byte[]{1});
+        Files.write(tempDir.resolve("Strategy_55_999.csv"), new byte[]{1});
+        Files.write(tempDir.resolve("Strategy_55_999_root.txt"), new byte[]{1});
+        assertNull(ProviderFiles.findTradeCsv(tempDir.toFile(), "1"));
+        assertNull(ProviderFiles.findRootTxt(tempDir.toFile(), "1"));
+        assertNull(ProviderFiles.findTradeCsv(tempDir.toFile(), "55"));
+        assertNull(ProviderFiles.findRootTxt(tempDir.toFile(), "55"));
+        assertEquals("Anson_Account_1_2381807.csv",
+                ProviderFiles.findTradeCsv(tempDir.toFile(), "2381807").getName());
+        assertEquals("Strategy_55_999_root.txt",
+                ProviderFiles.findRootTxt(tempDir.toFile(), "999").getName());
     }
 
     @Test
@@ -85,6 +180,7 @@ class ProviderFilesTest {
     void extractsSignalIdFromFileName() {
         assertEquals("123", ProviderFiles.extractSignalId("My_Provider_123.csv"));
         assertEquals("123", ProviderFiles.extractSignalId("My_Provider_123_root.txt"));
+        assertEquals("123", ProviderFiles.extractSignalId("My_Provider_123_ROOT.TXT"));
         assertNull(ProviderFiles.extractSignalId("no-id-here.csv"));
         assertNull(ProviderFiles.extractSignalId("trailing_underscore_.csv"));
         assertNull(ProviderFiles.extractSignalId(null));

@@ -1,5 +1,7 @@
 # MQL Signal Provider Analyzer
 
+Projektversion: `0.0.35-SNAPSHOT` laut `pom.xml`.
+
 ## 📊 Überblick
 
 Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von MetaTrader (MQL4/MQL5) Signal Providern. Das System ermöglicht die systematische Bewertung von Trading-Signalen basierend auf fortgeschrittenen Performance-Metriken wie MPDD (Month Profit Divided by Drawdown).
@@ -35,7 +37,22 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 - **Eingebetteter HTTP-Server** (Standard-Port 8089, optional mit API-Token)
 - **JSON/CSV-Endpunkte** für Provider-Statistiken, Abonnenten-Historie und -Änderungen
 - **Tradelisten** als JSON oder rohe CSV, **Kennzahlen** und **Testreport-PDFs** abrufbar
+- CSV/Kennzahlen werden anhand der abschließenden Signal-ID zugeordnet;
+  Zahlen im Signalnamen zählen nicht als ID. Fehlt der reguläre Versionscache,
+  werden direkte Archivordner nur bei eindeutigem Dateisatz berücksichtigt:
+  gleiche ID und Plattform im selben `data-id`/`data-mt`-HTML-Element,
+  widerspruchsfreie gespeicherte Seite und passender MT4-/MT5-CSV-Kopf.
+  Mehrere passende Archive bleiben gesperrt. Die Originaldateien werden
+  unverändert bereitgestellt; eine Archivmigration findet nicht statt.
+- **Dateinummernkorrektur ohne Ueberschreiben:** HTML-Dateinamen muessen
+  Providername und Signal-ID eindeutig in beide Richtungen zuordnen.
+  Gleichnamige Provider mit verschiedenen IDs, mehrere CSV-/TXT-Kandidaten
+  oder vorhandene Zieldateien bleiben unveraendert. Der abschliessende Move
+  ersetzt auch bei gleichzeitig angelegtem Ziel keine vorhandene Datei.
 - **OpenAPI-Beschreibung** unter `/api/v1/openapi.json`
+- **Stufe-0-Aktualisierung:** `POST /api/v1/update` startet einen Hintergrundjob;
+  `GET /api/v1/update/status` liefert dessen Status. Die übrigen Datenendpunkte
+  bleiben lesend. Die OpenAPI-Beschreibung enthält derzeit nur die Leseendpunkte.
 - Details für Connectoren: [doc/REST_API_Dokumentation.md](doc/REST_API_Dokumentation.md)
 
 ## 🏗️ Architektur
@@ -68,12 +85,13 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 
 ## 🚀 Technologie-Stack
 
-- **Java 11+** - Moderne Java-Features
+- **Java 11+** - Laufzeitvoraussetzung; das Maven-Compilerziel `source`/`target`
+  ist noch `1.8` und belegt keine Java-8-Lauffähigkeit der Abhängigkeiten.
 - **Selenium WebDriver** - Web-Automation
 - **JSoup** - HTML-Parsing
 - **Log4j2** - Professionelles Logging
 - **Swing** - Desktop GUI
-- **Maven/Gradle** - Dependency Management
+- **Maven** - Dependency Management (`pom.xml`)
 
 ## 📊 MPDD-Algorithmus (Kernfeature)
 
@@ -167,7 +185,7 @@ Wir begrüßen Beiträge! Besonders interessant sind:
 ## 🧪 Tests
 
 ```bash
-mvn test    # 76 automatisierte Tests grün (REST-API, Parser, MPDD-Berechnung, Setup, DB)
+mvn test    # REST-API, Parser, MPDD-Berechnung, Setup, DB
 ```
 
 ## 🎯 Status & Roadmap

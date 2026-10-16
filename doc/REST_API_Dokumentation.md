@@ -5,7 +5,7 @@
 > vollständig und maschinenlesbar genug, um daraus Connectoren zu implementieren, ohne den
 > Quellcode des Downloaders zu kennen.
 
-Stand: 2026-09-20 · API-Version: `v1` · Implementierung: `src/rest/` (Java, JDK-HttpServer)
+Stand: 2026-10-16 (Abgleich mit lokalem Quellcode, kein Laufzeittest) · API-Version: `v1` · Implementierung: `src/rest/` (Java, JDK-HttpServer)
 
 ---
 
@@ -21,19 +21,22 @@ Signal-Provider-Daten von mql5.com sammelt. Er hält drei Datenarten vor:
 | **Kennzahlen je Provider** | Konvertierte TXT-Dateien `<Name>_<SignalId>_root.txt` (aus der Provider-Webseite) | Balance, Drawdown, 3MPDD, Monatsprofit |
 | **Testreport-PDFs** | PDFs im konfigurierten „Analyse-Verzeichnis", Signal-ID im Dateinamen | Testbericht als PDF-Download |
 
-Die REST-API macht all das über **HTTP + JSON** lesbar. Sie ist **rein lesend** (nur GET),
-läuft **eingebettet im Downloader-Prozess** (kein zweiter Dienst) und ist standardmäßig
-**aktiviert**.
+Die REST-API macht all das über **HTTP + JSON** lesbar. Zusätzlich startet
+`POST /api/v1/update` einen Datenaktualisierungsjob (Stufe 0, siehe unten).
+Sie läuft **eingebettet im Downloader-Prozess** (kein zweiter Dienst) und ist
+standardmäßig **aktiviert**. Die übrigen Datenendpunkte sind lesend.
 
 ---
 
 ## 2. Verbindungsaufbau („Connector")
 
-Ein Connector braucht genau drei Angaben:
+Ein Connector benötigt folgende Verbindungsangaben:
 
 1. **Base URL**: `http://<rechnername-oder-ip>:<port>/api/v1` — Standard-Port **8089**
 2. **API-Token** (optional; nur nötig, wenn im Downloader einer gesetzt wurde)
-3. Nichts weiter. Alle Endpunkte sind `GET`.
+
+Datenabrufe verwenden `GET`; die optionale Aktualisierung verwendet
+`POST /api/v1/update` und anschließend `GET /api/v1/update/status`.
 
 Verbindungstest: `GET http://<rechner>:8089/api/v1/health` → HTTP 200 bedeutet „erreichbar".
 
@@ -84,12 +87,16 @@ Datei `<Wurzelverzeichnis>\config\MqldownloaderConfig.txt` bzw. GUI → Datei �
 
 ### Allgemeine Konventionen
 
-- **Zeichencodierung**: UTF-8 überall. CSV-Antworten haben ein UTF-8-BOM (Excel-kompatibel), CSV-Trennzeichen ist `;`.
+- **Zeichencodierung**: JSON und erzeugte CSV-Antworten verwenden UTF-8;
+  erzeugte CSVs haben ein BOM und `;` als Trennzeichen. Rohe Trade-CSVs
+  werden unverändert ausgeliefert; deren BOM und Trennzeichen stammen aus der Datei.
 - **Zeitstempel**: doppelt geliefert — `timestamp` als lokale ISO-Zeit (`2026-09-20T11:53:12`) und `timestampUtc` als ISO-Instant (`2026-09-20T09:53:12Z`).
-- **Fehler**: immer JSON `{"error":"<Meldung>"}` mit passendem Code: 400 (schlechter Parameter), 401 (Token), 404 (unbekannter Pfad/Objekt), 405 (kein GET), 500 (intern).
+- **Fehler**: JSON `{"error":"<Meldung>"}` mit passendem Code: 400 (schlechter Parameter), 401 (Token), 404 (unbekannter Pfad/Objekt), 405 (nicht unterstützte HTTP-Methode), 409 (Update bei beschäftigter GUI), 500 (intern).
 - **Seitengröße**: Default-Limit 1000 Zeilen bei Listen (`providers`, `trades`, `history`), 100 bei `events`; mit `limit`/`offset` steuerbar.
 - **CORS**: `Access-Control-Allow-Origin: *` ist gesetzt; `OPTIONS`-Preflight wird beantwortet. Web-Frontends können die API direkt aufrufen.
-- **Maschinenlesbare Selbstbeschreibung**: `GET /api/v1/openapi.json` liefert eine OpenAPI-3.0.3-Beschreibung aller Pfade.
+- **Maschinenlesbare Selbstbeschreibung**: `GET /api/v1/openapi.json` beschreibt
+  die Leseendpunkte als OpenAPI 3.0.3. Die Stufe-0-Pfade `/update` und
+  `/update/status` fehlen derzeit darin und sind unten separat dokumentiert.
 
 ---
 
@@ -191,7 +198,13 @@ Zeitformate für `from`/`to`: Epoch-Millis (`1799927520000`), ISO-Datum (`2026-0
 
 ### 3.6 `GET /providers/{id}/{version}/trades` — Tradeliste als JSON
 
-Liest die neueste `<Name>_<id>.csv` des Versionsordners und parst sie generisch: erste Zeile = Spaltenüberschriften, jede Zeile ein JSON-Objekt mit diesen Überschriften als Schlüsseln. Trennzeichen (`;`, `,`, Tab) wird automatisch erkannt, RFC-4180-Anführungszeichen werden verstanden.
+Liest die der Signal-ID eindeutig zugeordnete `<Name>_<id>.csv` des
+Versionsordners und parst sie generisch: erste Zeile = Spaltenüberschriften,
+jede Zeile ein JSON-Objekt mit diesen Überschriften als Schlüsseln.
+Trennzeichen (`;`, `,`, Tab) wird automatisch erkannt,
+RFC-4180-Anführungszeichen werden verstanden. Fehlt der reguläre Cache,
+kommen direkte Archivordner nur bei eindeutig belegter Signal-ID und
+MT4-/MT5-Zuordnung infrage; mehrdeutige Archive bleiben gesperrt.
 
 | Parameter | Wirkung |
 |---|---|
@@ -338,7 +351,9 @@ Ein Aufruf für Dashboards:
 
 ### 3.15 `GET /openapi.json` — Selbstbeschreibung
 
-OpenAPI-3.0.3-JSON aller Pfade; nutzbar für Codegenerierung (openapi-generator, Swagger) oder Dokumentations-UIs.
+OpenAPI-3.0.3-JSON der Leseendpunkte; nutzbar für Codegenerierung
+(openapi-generator, Swagger) oder Dokumentations-UIs. Die Stufe-0-Pfade
+`/update` und `/update/status` sind dort derzeit nicht enthalten.
 
 ---
 
@@ -393,7 +408,8 @@ Daten → Daten abrufen → Aus dem Web → `http://<rechner>:8089/api/v1/provid
 
 ## 5. Fehlerbehandlung & Grenzen
 
-- Die API ist **lesend**; Schreibzugriffe (z. B. Risiko-Werte pflegen) laufen bewusst nur über die GUI.
+- Datenabrufe sind **lesend**. Die Ausnahme `POST /api/v1/update` aktualisiert
+  die lokalen Quelldaten; manuelle Risiko-Werte werden weiterhin über die GUI gepflegt.
 - Die API ist nur erreichbar, während der Downloader läuft. Clients sollen Verbindungsfehler tolerant behandeln und erneut versuchen.
 - Tradelisten/Kennzahlen existieren nur für Provider, die heruntergeladen und konvertiert wurden; die Datenbank enthält u. U. mehr Signale als es CSVs gibt. Mit `links` im Provider-Objekt prüfen, was existiert (404 = nicht vorhanden, kein Fehlerfall).
 - Ein `weekChange`/`monthChange` von `null` ist normal, wenn der Vergleichszeitpunkt außerhalb des Messfensters liegt (weniger als ~5 Tage bzw. ~26 Tage Historie).
@@ -421,8 +437,8 @@ Daten → Daten abrufen → Aus dem Web → `http://<rechner>:8089/api/v1/provid
 
 ## Stufe 0: Client-Update-Job (SignalKiScanner doc/23, 07.10.2026)
 
-Der SignalKiScanner stößt vor jedem Scan (Full-/Teilscan) die Daten-Aktualisierung
-aller Clients an. Der MqlDownloader kennt dazu genau EINEN Schreib-Endpoint —
+Der SignalKiScanner kann über das Stufe-0-Protokoll die Daten-Aktualisierung
+des Clients anstoßen. Der MqlDownloader kennt dazu genau EINEN Schreib-Endpoint —
 alle übrigen bleiben rein lesend (POST → 405).
 
 ### `POST /api/v1/update` — „Alles ausführen" anstoßen
@@ -431,9 +447,11 @@ Request-Body (JSON, alle Felder optional):
 ```json
 {"target": 200, "tradelisten": true, "katalogMaxAlterH": 72}
 ```
-- `target` (Default 200): Wunsch-Anzahl Signale — der Downloader lädt die
-  Plattformliste sowieso vollständig; gemeldet wird die Zahl derer MIT
-  Abonnenten (~50, MQL4+MQL5).
+- `target`: wird zur Protokoll-Kompatibilität gelesen, vom MQL-Update-Starter
+  aber nicht verwendet. Der Download richtet sich nach den konfigurierten
+  `mql4Limit`-/`mql5Limit`-Werten (Default jeweils 1000); ein vollständiger
+  Plattformdownload ist dadurch nicht zugesichert. `signaleGeliefert`
+  zählt die im jeweiligen Lauf verarbeiteten Signale mit Abonnenten.
 - `tradelisten`: bei diesem Client ohne Wirkung (Katalog und Trades sind EIN
   Download) — wird der Protokoll-Kompatibilität wegen angenommen.
 - `katalogMaxAlterH` (Default 72): **3-Tage-Regel** — lief der Gesamtprozess
@@ -444,7 +462,10 @@ Antwort sofort (ohne auf den Download zu warten):
 - `202 {"jobId": "u-…", "status": "gestartet", "bereitsLaufend": false}`
 - läuft schon ein Update: `200` mit `bereitsLaufend: true`
 - GUI beschäftigt (Button-Download/Konvertierung läuft): `409 {"error": …}`
-- Body kein JSON-Objekt: `400`. Token gilt wie bei GET.
+- Token gilt wie bei GET. Der MQL-Client liest die bekannten Felder tolerant
+  per Mustererkennung; unbekannte oder nicht erkannte Inhalte führen zu
+  Defaultwerten. Eine strikte JSON-Objektvalidierung mit garantiertem `400`
+  ist hier nicht implementiert.
 
 ### `GET /api/v1/update/status` — Job-Status (Poll)
 
@@ -458,5 +479,9 @@ Antwort sofort (ohne auf den Download zu warten):
  "error": null}
 ```
 `state`: `idle` (noch nie gelaufen) | `running` | `done` | `error`.
-Phasen: `mql4` → `mql5` → `konvertieren` (der Status-Poller meldet Zwischen-
-stände des DownloadManagers). `signaleGeliefert` = Signale MIT Abonnenten.
+Die Kaskade führt MQL4 → MQL5 → Konvertierung aus. Während der Downloads
+kann der Status-Poller `phase: "download"` melden; die Plattform und ihr
+konfiguriertes Limit stehen dann in `message`. `signaleGeliefert` zählt die
+im Lauf verarbeiteten Signale mit Abonnenten, nicht den vollständigen
+Plattformbestand. Eine `202`-Antwort bestätigt zunächst nur die Jobannahme;
+Fortschritt, Abschluss und Fehler stehen im gepollten Status.

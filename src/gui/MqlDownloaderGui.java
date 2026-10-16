@@ -207,7 +207,7 @@ public class MqlDownloaderGui extends JFrame {
                 int mql5Count = downloadManager.getMql5SubscribersDownloadedCount();
                 job.ergebnis("signaleGeliefert", mql4Count + mql5Count);
                 job.hinweis("Signale MIT Abonnenten: " + mql5Count + " (MQL5) + "
-                        + mql4Count + " (MQL4) — der Downloader lädt die Plattformliste komplett.");
+                        + mql4Count + " (MQL4) — Downloads nach konfigurierten MQL4-/MQL5-Limits.");
                 schreibeKatalogVermerk(vermerk);
                 job.fertig(java.time.LocalDateTime.now().format(
                         java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")));

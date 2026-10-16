@@ -2,11 +2,12 @@ package utils;
 
 import java.io.File;
 import java.nio.file.Files;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -57,8 +58,10 @@ public class FileUtils {
             return correctedFiles;
         }
         
-        // Sammle alle HTML-Dateien und ihre Nummern
-        Map<String, String> htmlFileNumbers = new HashMap<>();
+        // Ein Anzeigename identifiziert kein Signal. Mehrere HTML-IDs unter
+        // demselben Namen duerfen niemals auf die zuletzt gefundene ID fallen.
+        Map<String, Set<String>> numbersByName = new HashMap<>();
+        Map<String, Set<String>> namesByNumber = new HashMap<>();
         File[] files = directory.listFiles((dir, name) -> name.endsWith("_root.html"));
         
         if (files == null || files.length == 0) {
@@ -75,10 +78,29 @@ public class FileUtils {
             if (matcher.find()) {
                 String number = matcher.group(1);
                 String baseName = fileName.substring(0, fileName.length() - matcher.group(0).length());
-                htmlFileNumbers.put(baseName, number);
+                numbersByName.computeIfAbsent(baseName, key -> new HashSet<>()).add(number);
+                namesByNumber.computeIfAbsent(number, key -> new HashSet<>()).add(baseName);
             }
         }
         
+        // Nur eine bijektive HTML-Dateinamen-Zuordnung erlaubt die bisherige
+        // Nummernkorrektur. Ambige Gruppen bleiben vollstaendig unveraendert.
+        Map<String, String> htmlFileNumbers = new HashMap<>();
+        for (Map.Entry<String, Set<String>> entry : numbersByName.entrySet()) {
+            if (entry.getValue().size() != 1) {
+                logger.warn("Keine Dateinummernkorrektur fuer mehrdeutigen Namen {}: {}",
+                        entry.getKey(), entry.getValue());
+                continue;
+            }
+            String number = entry.getValue().iterator().next();
+            if (namesByNumber.get(number).size() != 1) {
+                logger.warn("Keine Dateinummernkorrektur fuer mehrfach benannte HTML-ID {}: {}",
+                        number, namesByNumber.get(number));
+                continue;
+            }
+            htmlFileNumbers.put(entry.getKey(), number);
+        }
+
         // \u00dcberpr\u00fcfe CSV- und TXT-Dateien und korrigiere sie
         correctFileType(directory, htmlFileNumbers, "csv", correctedFiles);
         correctFileType(directory, htmlFileNumbers, "txt", correctedFiles);
@@ -98,8 +120,20 @@ public class FileUtils {
         if (files == null) return;
         
         Pattern numberPattern = Pattern.compile("_(\\d+)" + (suffix.isEmpty() ? "" : Pattern.quote(suffix)) + "\\" + fileExtension + "$");
+
+        Map<String, Integer> filesByName = new HashMap<>();
+        for (File file : files) {
+            if (!file.isFile()) continue;
+            Matcher matcher = numberPattern.matcher(file.getName());
+            if (matcher.find()) {
+                String baseName = file.getName().substring(0,
+                        file.getName().length() - matcher.group(0).length());
+                filesByName.put(baseName, filesByName.getOrDefault(baseName, 0) + 1);
+            }
+        }
         
         for (File file : files) {
+            if (!file.isFile()) continue;
             String fileName = file.getName();
             Matcher matcher = numberPattern.matcher(fileName);
             
@@ -113,11 +147,24 @@ public class FileUtils {
                     
                     // Wenn die Nummer anders ist, korrigiere sie
                     if (!currentNumber.equals(correctNumber)) {
+                        if (filesByName.get(baseName) != 1) {
+                            logger.warn("Keine Dateinummernkorrektur fuer mehrere {}-Dateien mit Namen {}",
+                                    fileType, baseName);
+                            continue;
+                        }
                         String newFileName = baseName + "_" + correctNumber + suffix + fileExtension;
                         File newFile = new File(directory, newFileName);
+
+                        if (newFile.exists()) {
+                            logger.warn("Dateinummernkorrektur wuerde vorhandenes Ziel ueberschreiben: {}",
+                                    newFile.getAbsolutePath());
+                            continue;
+                        }
                         
                         try {
-                            Files.move(file.toPath(), newFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
+                            // Auch bei einem zwischenzeitlich angelegten Ziel
+                            // muss der Move scheitern, niemals Daten ersetzen.
+                            Files.move(file.toPath(), newFile.toPath());
                             String message = String.format("Dateinummer korrigiert: %s -> %s", 
                                                          fileName, newFileName);
                             correctedFiles.add(message);

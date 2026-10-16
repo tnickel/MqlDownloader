@@ -233,6 +233,27 @@ class RestApiServerTest {
     }
 
     @Test
+    void archivedCsvAndMetricsAreServedOnlyWithMatchingSourcePlatform() throws Exception {
+        Path archive = tempDir.resolve("download").resolve("mql4mql5_");
+        Files.createDirectories(archive);
+        String csv = "Time;Type;Volume;Symbol;Price;Volume;Time;Price;Commission;Swap;Profit\n"
+                + "2026.05.25 02:00:12;Buy;0.01;XAUUSD;4568.36;0.01;2026.05.25 02:58:54;4568.27;-0.18;;-0.09\n";
+        Files.write(archive.resolve("Archived_4577.csv"), csv.getBytes(StandardCharsets.UTF_8));
+        Files.write(archive.resolve("Archived_4577_root.html"),
+                "<div data-id='4577' data-mt='5'></div>".getBytes(StandardCharsets.UTF_8));
+        Files.write(archive.resolve("Archived_4577_root.txt"), "Balance=100\n".getBytes(StandardCharsets.UTF_8));
+        HttpResponse trades = get("/api/v1/providers/4577/mql5/trades.csv", null);
+        assertEquals(200, trades.status);
+        assertEquals(csv, trades.body);
+        HttpResponse metrics = get("/api/v1/providers/4577/mql5/metrics", null);
+        assertEquals(200, metrics.status);
+        assertTrue(metrics.body.contains("\"version\":\"mql5\""));
+        assertEquals(404, get("/api/v1/providers/4577/mql4/trades.csv", null).status);
+        assertEquals(404, get("/api/v1/providers/4577/mql4/metrics", null).status);
+        assertEquals(404, get("/api/v1/providers/1/mql5/trades.csv", null).status);
+    }
+
+    @Test
     void katalogDefaultAbsteigendUndLimitGeclampt() throws Exception {
         // Default-Ordnung absteigend nach Abonnenten (wie alle Monitore des
         // Multi-Source-Hubs): Der Scanner begrenzt spaeter auf Top N —
