@@ -36,6 +36,9 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 ### 🌐 REST-API für andere Anwendungen
 - **Eingebetteter HTTP-Server** (Standard-Port 8089, optional mit API-Token)
 - **JSON/CSV-Endpunkte** für Provider-Statistiken, Abonnenten-Historie und -Änderungen
+- `/providers` liefert standardmäßig nur Signale mit mindestens einem Abonnenten;
+  `minSubscribers=0` öffnet ausdrücklich den vollständigen lokalen Katalog.
+  Der Filter gilt vor Pagination für JSON und CSV. Detail-/Archivzugriff bleibt möglich.
 - **Tradelisten** als JSON oder rohe CSV, **Kennzahlen** und **Testreport-PDFs** abrufbar
 - CSV/Kennzahlen werden anhand der abschließenden Signal-ID zugeordnet;
   Zahlen im Signalnamen zählen nicht als ID. Fehlt der reguläre Versionscache,

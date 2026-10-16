@@ -117,11 +117,16 @@ Abonnenten-Stand je Provider inkl. Änderungen der letzten 7/30 Tage (gleiche We
 |---|---|---|
 | `version` | `mql4`,`mql5`,`mt4`,`mt5` | nur diese Plattform |
 | `name` | Text | Teilstring-Filter auf `signalName` (Groß-/Kleinschreibung egal) |
-| `minSubscribers` | Zahl | nur Provider mit mindestens so vielen Abonnenten |
+| `minSubscribers` | Zahl (Default `1`) | nur Provider mit mindestens so vielen Abonnenten; explizit `0` schließt auch Provider ohne Abonnenten ein |
 | `sort` | `subscribers` (Default), `name`, `latestChange`, `weekChange`, `monthChange`, `lastUpdated` | Sortierung |
 | `order` | `asc`,`desc` (Default `desc`) | Richtung |
 | `limit`,`offset` | Zahl | Fensterung |
 | `format` | `json` (Default), `csv` | CSV-Antwort (`;`-getrennt, Header-Zeile) |
+
+Der Abonnentenfilter gilt für JSON und CSV vor Sortierung und Fensterung.
+Ein ausgelassener oder leerer `minSubscribers`-Parameter verwendet `1`;
+`total` zählt die gefilterten Provider. Detailendpunkte bleiben unabhängig
+vom Listenfilter erreichbar.
 
 Beispiel `GET /api/v1/providers?version=mql5&sort=monthChange&limit=2`:
 

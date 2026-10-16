@@ -426,8 +426,8 @@ public class RestApiServer {
                 since = dayLimit;
             }
         }
-        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
-        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
+        int limit = pageParameter(query, "limit", DEFAULT_PAGE_SIZE, 1);
+        int offset = pageParameter(query, "offset", 0, 0);
 
         List<SubscriberHistoryPoint> filtered = new ArrayList<>();
         for (SubscriberHistoryPoint point : history) {
@@ -441,7 +441,7 @@ public class RestApiServer {
         }
         int total = filtered.size();
         int from = Math.min(offset, total);
-        int to = Math.min(from + limit, total);
+        int to = (int) Math.min((long) from + limit, total);
 
         JsonWriter w = new JsonWriter();
         w.beginObject()
@@ -478,10 +478,10 @@ public class RestApiServer {
             rows.add(row);
         }
         int total = rows.size();
-        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
-        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
+        int offset = pageParameter(query, "offset", 0, 0);
+        int limit = pageParameter(query, "limit", DEFAULT_PAGE_SIZE, 1);
         int from = Math.min(offset, total);
-        int to = Math.min(from + limit, total);
+        int to = (int) Math.min((long) from + limit, total);
 
         JsonWriter w = new JsonWriter();
         w.beginObject()
@@ -597,8 +597,8 @@ public class RestApiServer {
         if (nameFilter != null) {
             nameFilter = nameFilter.toLowerCase(Locale.ROOT);
         }
-        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
-        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
+        int limit = pageParameter(query, "limit", DEFAULT_PAGE_SIZE, 1);
+        int offset = pageParameter(query, "offset", 0, 0);
 
         List<String[]> items = new ArrayList<>(); // versionFolder, fileName, signalId
         for (String folder : new String[]{"mql4", "mql5"}) {
@@ -621,7 +621,7 @@ public class RestApiServer {
         }
         int total = items.size();
         int from = Math.min(offset, total);
-        int to = Math.min(from + limit, total);
+        int to = (int) Math.min((long) from + limit, total);
 
         JsonWriter w = new JsonWriter();
         w.beginObject()
@@ -662,7 +662,7 @@ public class RestApiServer {
         Timestamp since = parseSince(query);
         Timestamp until = parseUntil(query);
         boolean onlyChanges = !"false".equalsIgnoreCase(query.get("includeUnchanged"));
-        int limit = Math.max(1, (int) parseLong(query.get("limit"), 100, "limit"));
+        int limit = pageParameter(query, "limit", 100, 1);
         List<SubscriberEvent> events = databaseManager.getRecentEvents(since, until, onlyChanges, limit);
 
         if ("csv".equalsIgnoreCase(query.get("format"))) {
@@ -855,10 +855,8 @@ public class RestApiServer {
                     || !stat.getSignalName().toLowerCase(Locale.ROOT).contains(needle));
         }
         String minSubscribers = query.get("minSubscribers");
-        if (minSubscribers != null && !minSubscribers.trim().isEmpty()) {
-            int min = (int) parseLong(minSubscribers, 0, "minSubscribers");
-            stats.removeIf(stat -> stat.getSubscribers() < min);
-        }
+        long min = parseLong(minSubscribers, 1, "minSubscribers");
+        stats.removeIf(stat -> stat.getSubscribers() < min);
     }
 
     private void sortProviders(List<SubscriberStat> stats, Map<String, String> query) {
@@ -906,11 +904,16 @@ public class RestApiServer {
 
     /** {from, to} als Schnittfenster der Liste. */
     private int[] pageWindow(Map<String, String> query, int total) {
-        int offset = Math.max(0, (int) parseLong(query.get("offset"), 0, "offset"));
-        int limit = Math.max(1, (int) parseLong(query.get("limit"), DEFAULT_PAGE_SIZE, "limit"));
+        int offset = pageParameter(query, "offset", 0, 0);
+        int limit = pageParameter(query, "limit", DEFAULT_PAGE_SIZE, 1);
         int from = Math.min(offset, total);
-        int to = Math.min(from + limit, total);
+        int to = (int) Math.min((long) from + limit, total);
         return new int[]{from, to};
+    }
+
+    private static int pageParameter(Map<String, String> query, String key, int fallback, int minimum) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max((long) minimum,
+                parseLong(query.get(key), fallback, key)));
     }
 
     private static boolean rowContains(Map<String, String> row, String needle) {

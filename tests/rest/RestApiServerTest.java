@@ -276,6 +276,17 @@ class RestApiServerTest {
         assertTrue(negOffset.body.contains("\"count\":1"));
     }
 
+    @Test
+    void largePaginationValuesCannotOverflowAnyListEndpoint() throws Exception {
+        for (String endpoint : new String[]{"/api/v1/providers", "/api/v1/trades",
+                "/api/v1/providers/123/mql5/history", "/api/v1/providers/123/mql5/trades"}) {
+            assertEquals(200, get(endpoint + "?offset=1&limit=2147483647", null).status, endpoint);
+            HttpResponse empty = get(endpoint + "?offset=9223372036854775807&limit=2147483647", null);
+            assertEquals(200, empty.status, endpoint);
+            assertTrue(empty.body.contains("\"count\":0"), endpoint + ": " + empty.body);
+        }
+    }
+
     // ------------------------------------------------------------------
 
     private static HttpResponse get(String path, String token) throws Exception {
