@@ -39,6 +39,8 @@ public final class UpdateJob {
         ergebnis.put("signaleGeliefert", null);
         ergebnis.put("tradelistenNeu", null);
         ergebnis.put("tradelistenAktualisiert", null);
+        ergebnis.put("tradelistenFehler", 0);
+        ergebnis.put("tradelistenAbgebrochen", false);
         ergebnis.put("katalogUebersprungen", false);
         ergebnis.put("datenstand", null);
         ergebnis.put("hinweise", new ArrayList<String>());
@@ -56,7 +58,12 @@ public final class UpdateJob {
         return state == State.RUNNING;
     }
 
-    public void melde(String phase, int done, int total, String message) {
+    public synchronized void reservieren() {
+        if(state!=State.IDLE) throw new IllegalStateException("Job bereits reserviert");
+        state=State.RUNNING;
+    }
+
+    public synchronized void melde(String phase, int done, int total, String message) {
         if (state == State.DONE || state == State.ERROR
                 || state == State.LOGIN_REQUIRED) return;
         this.state = State.RUNNING;
@@ -80,13 +87,15 @@ public final class UpdateJob {
         }
     }
 
-    public void fertig(String datenstand) {
+    public synchronized void fertig(String datenstand) {
+        if(state==State.DONE || state==State.ERROR || state==State.LOGIN_REQUIRED) return;
         ergebnis("datenstand", datenstand);
         state = State.DONE;
         finishedAt = Instant.now();
     }
 
-    public void fehler(String grund) {
+    public synchronized void fehler(String grund) {
+        if(state==State.DONE || state==State.ERROR || state==State.LOGIN_REQUIRED) return;
         error = grund;
         state = State.ERROR;
         finishedAt = Instant.now();
@@ -104,7 +113,7 @@ public final class UpdateJob {
         }
     }
 
-    public Map<String, Object> statusJson() {
+    public synchronized Map<String, Object> statusJson() {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("jobId", jobId);
         out.put("state", stateAlsText());
@@ -115,7 +124,10 @@ public final class UpdateJob {
         out.put("startedAt", ISO.format(startedAt));
         out.put("finishedAt", finishedAt == null ? null : ISO.format(finishedAt));
         synchronized (ergebnisLock) {
-            out.put("ergebnis", new LinkedHashMap<>(ergebnis));
+            Map<String,Object> snapshot=new LinkedHashMap<>(ergebnis);
+            Object hints=snapshot.get("hinweise");
+            if(hints instanceof List) snapshot.put("hinweise",new ArrayList<>((List<?>)hints));
+            out.put("ergebnis", snapshot);
         }
         out.put("error", error);
         return out;

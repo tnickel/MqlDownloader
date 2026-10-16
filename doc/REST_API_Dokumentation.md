@@ -231,7 +231,7 @@ MT4-/MT5-Zuordnung infrage; mehrdeutige Archive bleiben gesperrt.
 }
 ```
 
-Hinweis: Die Spaltennamen kommen 1:1 aus der mql5.com-CSV und können sich je Export unterscheiden — **nicht** auf feste Spaltennamen angewiesen sein, sondern `header` respektieren. Werte sind Strings. 404, wenn keine CSV existiert (z. B. Download noch nie gelaufen oder Provider gefiltert).
+Hinweis: `header` bewahrt die originalen Spaltennamen einschließlich Wiederholungen. Die JSON-Zeilen besitzen bei mehrfachen Namen zusätzlich nummerierte Schlüssel: `Time_1`/`Time_2`, `Price_1`/`Price_2`, bei MT5 `Volume_1`/`Volume_2`. Die einfachen Schlüssel enthalten weiterhin den letzten Wert (Altverhalten); für verlustfreie Verarbeitung die nummerierten Schlüssel oder rohe CSV verwenden. Werte sind Strings. 404, wenn keine CSV existiert (z. B. Download noch nie gelaufen oder Provider gefiltert).
 
 ### 3.7 `GET /providers/{id}/{version}/trades.csv` — Tradeliste roh
 
@@ -462,10 +462,7 @@ Antwort sofort (ohne auf den Download zu warten):
 - `202 {"jobId": "u-…", "status": "gestartet", "bereitsLaufend": false}`
 - läuft schon ein Update: `200` mit `bereitsLaufend: true`
 - GUI beschäftigt (Button-Download/Konvertierung läuft): `409 {"error": …}`
-- Token gilt wie bei GET. Der MQL-Client liest die bekannten Felder tolerant
-  per Mustererkennung; unbekannte oder nicht erkannte Inhalte führen zu
-  Defaultwerten. Eine strikte JSON-Objektvalidierung mit garantiertem `400`
-  ist hier nicht implementiert.
+- Token gilt wie bei GET. Leerer Body nutzt Defaults; sonst ist ein gültiges JSON-Objekt erforderlich. `target` muss eine positive ganze Zahl, `katalogMaxAlterH` eine nichtnegative ganze Zahl und `tradelisten` ein Boolean sein. Falsche Typen, doppelte Root-Schlüssel, Zusatzinhalt oder ungültiges JSON ergeben `400`. Unbekannte Felder werden ignoriert.
 
 ### `GET /api/v1/update/status` — Job-Status (Poll)
 
@@ -474,7 +471,8 @@ Antwort sofort (ohne auf den Download zu warten):
  "message": "MQL5-Download laeuft (Limit: 100 Provider)", "startedAt": "…",
  "finishedAt": null,
  "ergebnis": {"signaleGeliefert": 52, "tradelistenNeu": null,
-              "tradelistenAktualisiert": null, "katalogUebersprungen": false,
+              "tradelistenAktualisiert": null, "tradelistenFehler": 0,
+              "tradelistenAbgebrochen": false, "katalogUebersprungen": false,
               "datenstand": null, "hinweise": ["Signale MIT Abonnenten: …"]},
  "error": null}
 ```
@@ -484,4 +482,4 @@ kann der Status-Poller `phase: "download"` melden; die Plattform und ihr
 konfiguriertes Limit stehen dann in `message`. `signaleGeliefert` zählt die
 im Lauf verarbeiteten Signale mit Abonnenten, nicht den vollständigen
 Plattformbestand. Eine `202`-Antwort bestätigt zunächst nur die Jobannahme;
-Fortschritt, Abschluss und Fehler stehen im gepollten Status.
+Fortschritt, Abschluss und Fehler stehen im gepollten Status. `ergebnis` ist ein JSON-Objekt und `hinweise` ein Array. Download-/Konvertierungsfehler ergeben `error`, positive `tradelistenFehler` und `tradelistenAbgebrochen=true`; ein erfolgreicher 3-Tage-Vermerk wird dann nicht geschrieben. Terminale Zustände bleiben auch gegenüber einem verspäteten Status-Poller erhalten.

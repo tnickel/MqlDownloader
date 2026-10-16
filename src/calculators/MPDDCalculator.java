@@ -82,13 +82,13 @@ public class MPDDCalculator {
         Map<String, Double> monthlyProfits = getMonthlyProfitPercentages(fileName);
         if (monthlyProfits.isEmpty()) {
             LOGGER.warning("Keine monatlichen Profite f\u00fcr " + fileName + " gefunden");
-            return 0.0;
+            return Double.NaN;
         }
         
         List<String> sortedMonths = new ArrayList<>(monthlyProfits.keySet());
         if (sortedMonths.isEmpty()) {
             LOGGER.warning("Keine sortierten Monate f\u00fcr " + fileName + " verf\u00fcgbar");
-            return 0.0;
+            return Double.NaN;
         }
         
         // Absteigend sortieren (neueste Monate zuerst)
@@ -101,7 +101,7 @@ public class MPDDCalculator {
         // \u00dcberpr\u00fcfe, ob gen\u00fcgend Monate vorhanden sind
         if (sortedMonths.size() < 2) { // Mindestens aktueller Monat + 1 weiterer
             LOGGER.warning("Zu wenige Monate f\u00fcr " + fileName + ": " + sortedMonths.size());
-            return 0.0;
+            return Double.NaN;
         }
         
         // Nach Abzug des aktuellen Monats verf\u00fcgbare Monate
@@ -113,7 +113,7 @@ public class MPDDCalculator {
             monthsToUse = Math.min(months, availableMonths);
             if (monthsToUse <= 0) {
                 LOGGER.warning("Keine Monate f\u00fcr 3MPDD verf\u00fcgbar");
-                return 0.0;
+                return Double.NaN;
             }
         } else {
             // F\u00fcr 6, 9 und 12 MPDD: Nur berechnen wenn gen\u00fcgend Monate verf\u00fcgbar
@@ -121,7 +121,7 @@ public class MPDDCalculator {
             if (sortedMonths.size() < requiredMonths) {
                 LOGGER.warning("Nicht genug Monate f\u00fcr " + months + "-MPDD: " + 
                               sortedMonths.size() + "/" + requiredMonths);
-                return 0.0;
+                return Double.NaN;
             }
             monthsToUse = months;
         }
@@ -170,13 +170,13 @@ public class MPDDCalculator {
             // Stelle sicher, dass der Drawdown-Wert positiv ist
             if (drawdown <= 0.0) {
                 LOGGER.warning("Equity Drawdown ist 0 oder negativ: " + drawdown + " f\u00fcr " + fileName);
-                return 1.0; // Standardwert, um Division durch Null zu vermeiden
+                return Double.NaN; // fehlender DD ist keine gemessene 1-Prozent-Basis
             }
             
             return drawdown;
         } else {
             LOGGER.warning("HtmlDatabase ist null - kann Equity Drawdown nicht laden");
-            return 1.0; // Standardwert
+            return Double.NaN; // unbekannter DD
         }
     }
     
@@ -188,9 +188,9 @@ public class MPDDCalculator {
      * @return Der berechnete MPDD-Wert
      */
     public double calculateFinalMPDD(double averageProfit, double equityDrawdown) {
-        if (equityDrawdown <= 0.0) {
+        if (!Double.isFinite(averageProfit) || !Double.isFinite(equityDrawdown) || equityDrawdown <= 0.0) {
             LOGGER.warning("Equity Drawdown ist 0 oder negativ: " + equityDrawdown);
-            return 0.0;
+            return Double.NaN;
         }
         
         double mpdd = averageProfit / equityDrawdown;

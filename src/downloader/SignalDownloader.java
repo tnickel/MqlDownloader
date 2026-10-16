@@ -51,6 +51,8 @@ public class SignalDownloader {
     // NEUE Klassenvariablen f\u00fcr korrekte Numerierung
     private int totalProvidersProcessed = 0;  // Gesamtzahl aller verarbeiteten Provider
     private int successfulDownloads = 0;      // Nur erfolgreich heruntergeladene
+    private int failedProvidersCount = 0;
+    public int getFailedProvidersCount() { return failedProvidersCount; }
     private int skippedProviders = 0;         // \u00dcbersprungene Provider
     
     // Fehlertypen f\u00fcr bessere Klassifizierung
@@ -488,12 +490,13 @@ public class SignalDownloader {
                 }
                 
                 // Pr\u00fcfe ob Ende der Seiten erreicht
-                if (e.getMessage().equals("Keine Signal-Provider gefunden")) {
+                if ("Keine Signal-Provider gefunden".equals(e.getMessage())) {
                     logger.info("Keine weiteren Signalprovider auf Seite {} gefunden - regul\u00e4res Ende", currentPage);
                     hasNextPage = false;
                     consecutiveErrors = 0; // Reset, da es sich um ein regul\u00e4res Ende handelt
                     continue;
                 }
+                failedProvidersCount++; // A skipped/failed page must not produce a full success marker.
                 
                 // Pr\u00fcfe Limit f\u00fcr aufeinanderfolgende Fehler
                 if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
@@ -586,8 +589,7 @@ public class SignalDownloader {
             boolean pageLoaded = waitForPageElements();
             
             if (!pageLoaded) {
-                logger.warn("Seite konnte nicht geladen werden oder keine Signal-Provider gefunden f\u00fcr: {}", pageUrl);
-                return false;
+                throw new IllegalStateException("Provider-Seite konnte nicht verifiziert geladen werden");
             }
 
             List<WebElement> providerLinks = findProviderLinks();
@@ -618,6 +620,7 @@ public class SignalDownloader {
                     
                     providersToProcess.add(new ProviderData(providerUrl, providerName, providerId, subscribers));
                 } catch (Exception e) {
+                    failedProvidersCount++;
                     logger.warn("Fehler beim Extrahieren der Provider-Daten aus der Zeile: {}", e.getMessage());
                 }
             }
@@ -840,64 +843,9 @@ public class SignalDownloader {
      * @return true, wenn die Dateien innerhalb der konfigurierten Tage heruntergeladen wurden
      */
     private boolean isFileRecentlyDownloaded(String providerId, String providerName) {
-        String targetPath = configManager.getCurrentDownloadPath();
-        String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
-        
-        // \u00dcberpr\u00fcfe die HTML-Datei
-        String htmlFileName = String.format("%s_%s_root.html", safeProviderName, providerId);
-        File htmlFile = new File(targetPath, htmlFileName);
-        
-        // \u00dcberpr\u00fcfe die CSV-Datei (k\u00f6nnte mehrere Dateien mit diesem Pr\u00e4fix geben)
-        File[] csvFiles = new File(targetPath).listFiles((dir, name) -> 
-            name.startsWith(safeProviderName) && name.endsWith(".csv"));
-        
-        // Wenn beide Dateien existieren, pr\u00fcfe ihr Alter
-        if (htmlFile.exists() && csvFiles != null && csvFiles.length > 0) {
-            // Konfigurierte Tage aus den Einstellungen abrufen
-            int configuredDays = configManager.getDownloadDays();
-            
-            // Wenn 0 Tage konfiguriert sind, immer neu herunterladen
-            if (configuredDays == 0) {
-                logger.debug("Konfigurierte Tage ist 0, lade Dateien f\u00fcr Provider {} neu herunter", providerName);
-                return false;
-            }
-            
-            long currentTime = System.currentTimeMillis();
-            long configuredDaysInMillis = configuredDays * 24 * 60 * 60 * 1000L; // Konfigurierte Tage in Millisekunden
-            
-            long htmlFileAge = currentTime - htmlFile.lastModified();
-            
-            // Finde die j\u00fcngste CSV-Datei
-            long youngestCsvFileAge = Long.MAX_VALUE;
-            for (File csvFile : csvFiles) {
-                long age = currentTime - csvFile.lastModified();
-                if (age < youngestCsvFileAge) {
-                    youngestCsvFileAge = age;
-                }
-            }
-            
-            // Wenn beide Dateien j\u00fcnger als die konfigurierten Tage sind
-            boolean result = (htmlFileAge < configuredDaysInMillis && youngestCsvFileAge < configuredDaysInMillis);
-            if (result) {
-                logger.debug("Provider {} Dateien sind j\u00fcnger als {} Tage, \u00fcberspringe", 
-                    providerName, configuredDays);
-                
-                // Protokolliere das \u00dcberspringen
-                if (downloadProtokoll != null) {
-                    String mqlVersion = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                    downloadProtokoll.logSkipped(mqlVersion, providerName, 
-                        "Dateien sind j\u00fcnger als " + configuredDays + " Tage");
-                }
-            } else {
-                logger.debug("Provider {} Dateien sind \u00e4lter als {} Tage, lade neu herunter", 
-                    providerName, configuredDays);
-            }
-            return result;
-        }
-        
-        // Wenn eine der Dateien nicht existiert, muss heruntergeladen werden
-        logger.debug("Eine oder beide Dateien f\u00fcr Provider {} existieren nicht, lade herunter", providerName);
-        return false;
+        return DownloadFiles.isRecent(new File(configManager.getCurrentDownloadPath()),
+                providerId, providerName, configManager.getMqlVersion(),
+                configManager.getDownloadDays(), System.currentTimeMillis());
     }
 
     /**
@@ -946,34 +894,9 @@ public class SignalDownloader {
                 return;
             }
 
-            // Versuche Root Page zu downloaden
-            try {
-                logger.debug("Lade Root-Seite f\u00fcr Provider: {}", providerName);
-                downloadProviderRootPage(providerUrl, providerId, providerName);
-                logger.debug("Root-Seite erfolgreich f\u00fcr Provider: {}", providerName);
-            } catch (RuntimeException e) {
-                // Wenn kritischer Fehler, weiterwerfen (null-sicher)
-                String msg = e.getMessage();
-                if (msg != null && msg.contains("Kritischer Fehler")) {
-                    throw e;
-                }
-                logger.warn("Root Page Download fehlgeschlagen f\u00fcr '{}', \u00fcberspringe Trading History", providerName);
-            }
-            
+            downloadProviderRootPage(providerUrl, providerId, providerName);
             if (!stopRequested) {
-                // Versuche Trading History zu downloaden
-                try {
-                    logger.debug("Lade Trading History f\u00fcr Provider: {}", providerName);
-                    downloadTradeHistory(providerUrl, providerName, providerId);
-                    logger.debug("Trading History erfolgreich f\u00fcr Provider: {}", providerName);
-                } catch (RuntimeException e) {
-                    // Wenn kritischer Fehler, weiterwerfen (null-sicher)
-                    String msg = e.getMessage();
-                    if (msg != null && msg.contains("Kritischer Fehler")) {
-                        throw e;
-                    }
-                    logger.warn("Trading History Download fehlgeschlagen f\u00fcr '{}'", providerName);
-                }
+                downloadTradeHistory(providerUrl, providerName, providerId);
                 
                 // KORRIGIERTE Fortschrittsanzeige f\u00fcr erfolgreich verarbeitete Provider
                 updateProgress(providerName, "ERFOLGREICH HERUNTERGELADEN", true);
@@ -994,6 +917,7 @@ public class SignalDownloader {
             
         } catch (Exception e) {
             if (!stopRequested) {
+                failedProvidersCount++;
                 ErrorType errorType = classifyError(e);
                 
                 if (errorType == ErrorType.CRITICAL) {
@@ -1076,37 +1000,7 @@ public class SignalDownloader {
             }
                 
         } catch (Exception e) {
-            if (!stopRequested) {
-                ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Herunterladen der Root-Seite f\u00fcr '" + providerName + "' (ID: " + providerId + "): " + e.getMessage();
-                
-                // Protokolliere den Fehlschlag
-                if (downloadProtokoll != null) {
-                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Root-Seite: " + e.getMessage());
-                }
-                
-                switch (errorType) {
-                    case CRITICAL:
-                        logger.error("KRITISCHER FEHLER - {}", errorMsg);
-                        throw new RuntimeException("Kritischer Fehler beim Root-Page Download", e);
-                        
-                    case RECOVERABLE:
-                        logger.warn("RECOVERY-F\u00c4HIGER FEHLER - {}", errorMsg);
-                        boolean recovered = attemptRecovery(e);
-                        if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen f\u00fcr Root-Page Download von '{}'", providerName);
-                            throw new RuntimeException("Recovery fehlgeschlagen", e);
-                        }
-                        break;
-                        
-                    case NON_CRITICAL:
-                    default:
-                        logger.warn("NICHT-KRITISCHER FEHLER - {}", errorMsg);
-                        // Bei nicht-kritischen Fehlern weitermachen
-                        break;
-                }
-            }
+            if (!stopRequested) throw new RuntimeException("Provider-Dateien konnten nicht vollstaendig geladen werden", e);
         }
     }
 
@@ -1143,7 +1037,7 @@ public class SignalDownloader {
                     String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
                     downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Trading History: Kein Export-Link gefunden");
                 }
-                return;
+                throw new IllegalStateException(warnMsg);
             }
 
             logger.debug("Starte CSV-Download f\u00fcr '{}'", providerName);
@@ -1153,40 +1047,10 @@ public class SignalDownloader {
             }
             exportLink.click();
 
-            handleDownloadedFile(providerName, providerUrl.substring(providerUrl.lastIndexOf("/") + 1));
+            handleDownloadedFile(providerName, cleanProviderId);
             
         } catch (Exception e) {
-            if (!stopRequested) {
-                ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Herunterladen der Trading History f\u00fcr '" + providerName + "': " + e.getMessage();
-                
-                // Protokolliere den Fehlschlag
-                if (downloadProtokoll != null) {
-                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, "Trading History: " + e.getMessage());
-                }
-                
-                switch (errorType) {
-                    case CRITICAL:
-                        logger.error("KRITISCHER FEHLER - {}", errorMsg);
-                        throw new RuntimeException("Kritischer Fehler beim Trading History Download", e);
-                        
-                    case RECOVERABLE:
-                        logger.warn("RECOVERY-F\u00c4HIGER FEHLER - {}", errorMsg);
-                        boolean recovered = attemptRecovery(e);
-                        if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen f\u00fcr Trading History Download von '{}'", providerName);
-                            throw new RuntimeException("Recovery fehlgeschlagen", e);
-                        }
-                        break;
-                        
-                    case NON_CRITICAL:
-                    default:
-                        logger.warn("NICHT-KRITISCHER FEHLER - {}", errorMsg);
-                        // Bei nicht-kritischen Fehlern weitermachen
-                        break;
-                }
-            }
+            if (!stopRequested) throw new RuntimeException("Provider-Dateien konnten nicht vollstaendig geladen werden", e);
         }
     }
 
@@ -1206,7 +1070,7 @@ public class SignalDownloader {
             File downloadedFile = null;
             int elapsed = 0;
             while (elapsed < 5000 && !stopRequested) {
-                downloadedFile = findDownloadedFile(configManager.getDownloadPath());
+                downloadedFile = DownloadFiles.findDownload(new File(configManager.getDownloadPath()), signalProviderId);
                 if (downloadedFile != null && downloadedFile.exists()) {
                     break;
                 }
@@ -1216,7 +1080,9 @@ public class SignalDownloader {
             
             if (downloadedFile != null && downloadedFile.exists()) {
                 String safeProviderName = providerName.replaceAll("[\\/:*?\"<>|\\s]+", "_");
-                String originalId = downloadedFile.getName().replaceAll("[^0-9]", "");
+                String originalId = signalProviderId;
+                if (!DownloadFiles.validHeader(downloadedFile, configManager.getMqlVersion()))
+                    throw new IOException("Trading-History gehoert nicht zur angefragten MQL-Version");
                 
                 String targetPath = configManager.getCurrentDownloadPath();
                 createDirectoryIfNotExists(targetPath);
@@ -1254,39 +1120,10 @@ public class SignalDownloader {
                     String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
                     downloadProtokoll.logFailure(mqlVersionForLog, providerName, "CSV-Download: Keine Datei gefunden");
                 }
+                throw new IOException(warnMsg);
             }
         } catch (Exception e) {
-            if (!stopRequested) {
-                ErrorType errorType = classifyError(e);
-                String errorMsg = "Fehler beim Verarbeiten der CSV-Datei f\u00fcr '" + providerName + "': " + e.getMessage();
-                
-                // Protokolliere den Fehler beim Dateihandling
-                if (downloadProtokoll != null) {
-                    String mqlVersionForLog = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
-                    downloadProtokoll.logFailure(mqlVersionForLog, providerName, "CSV-Handling: " + e.getMessage());
-                }
-                
-                switch (errorType) {
-                    case CRITICAL:
-                        logger.error("KRITISCHER FEHLER - {}", errorMsg);
-                        throw new RuntimeException("Kritischer Fehler beim Dateihandling", e);
-                        
-                    case RECOVERABLE:
-                        logger.warn("RECOVERY-F\u00c4HIGER FEHLER - {}", errorMsg);
-                        boolean recovered = attemptRecovery(e);
-                        if (!recovered) {
-                            logger.error("Recovery fehlgeschlagen f\u00fcr Dateihandling von '{}'", providerName);
-                            throw new RuntimeException("Recovery fehlgeschlagen", e);
-                        }
-                        break;
-                        
-                    case NON_CRITICAL:
-                    default:
-                        logger.warn("NICHT-KRITISCHER FEHLER - {}", errorMsg);
-                        // Bei nicht-kritischen Fehlern weitermachen
-                        break;
-                }
-            }
+            if (!stopRequested) throw new RuntimeException("Provider-Dateien konnten nicht vollstaendig geladen werden", e);
         }
     }
 

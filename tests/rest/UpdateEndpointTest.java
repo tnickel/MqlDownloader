@@ -188,4 +188,48 @@ class UpdateEndpointTest {
         assertEquals("error", fehlerfall.statusJson().get("state"));
         assertTrue(((String) fehlerfall.statusJson().get("error")).contains("Selenium"));
     }
+
+    @Test
+    void malformedAndMistypedBodiesFailBeforeStart() throws Exception {
+        int before=starts.get();
+        for(String body:new String[]{"kein json","[]","null","{\"target\":-1}","{\"target\":1.5}",
+                "{\"target\":\"10\"}","{\"tradelisten\":\"false\"}","{\"katalogMaxAlterH\":null}",
+                "{\"target\":1,\"target\":2}","{} trailing"}) {
+            assertEquals(400,post("/update",body),body);
+        }
+        assertEquals(before,starts.get());
+    }
+
+    @Test
+    void statusPreservesNestedResultAndHintArrays() throws Exception {
+        beendeFakeJob();
+        post("/update","{}");
+        fakeJob.ergebnis("tradelistenFehler",2);
+        fakeJob.hinweis("two files failed");
+        com.google.gson.JsonObject status=com.google.gson.JsonParser.parseString(get("/update/status")).getAsJsonObject();
+        assertEquals(2,status.getAsJsonObject("ergebnis").get("tradelistenFehler").getAsInt());
+        assertEquals("two files failed",status.getAsJsonObject("ergebnis").getAsJsonArray("hinweise").get(0).getAsString());
+    }
+
+    @Test
+    void terminalStateRemainsStickyAgainstConcurrentPoller() throws Exception {
+        java.util.concurrent.ExecutorService pool=java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            for(int i=0;i<300;i++) {
+                UpdateJob job=new UpdateJob("race-"+i); job.reservieren();
+                java.util.concurrent.CountDownLatch start=new java.util.concurrent.CountDownLatch(1);
+                java.util.concurrent.Future<?> poll=pool.submit(()-> {
+                    try { start.await(); } catch(InterruptedException e) { throw new RuntimeException(e); }
+                    for(int n=0;n<300;n++) job.melde("download",0,0,"poll");
+                });
+                java.util.concurrent.Future<?> finish=pool.submit(()-> {
+                    try { start.await(); } catch(InterruptedException e) { throw new RuntimeException(e); }
+                    job.fertig("test"); job.fehler("late");
+                });
+                start.countDown(); poll.get(); finish.get();
+                assertEquals("done",job.statusJson().get("state"));
+                assertEquals(null,job.statusJson().get("error"));
+            }
+        } finally { pool.shutdownNow(); }
+    }
 }

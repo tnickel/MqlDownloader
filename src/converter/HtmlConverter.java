@@ -32,6 +32,8 @@ public class HtmlConverter {
     private Path conversionLogPath;
     private int deletedProvidersCount = 0;
     private int processedProvidersCount = 0;
+    private int failedProvidersCount = 0;
+    public int getFailedProvidersCount() { return failedProvidersCount; }
     
     public HtmlConverter(String downloadPath) {
         this(downloadPath, null);
@@ -57,6 +59,7 @@ public class HtmlConverter {
         
         // Z\u00e4hler zur\u00fccksetzen
         deletedProvidersCount = 0;
+        failedProvidersCount = 0;
         processedProvidersCount = 0;
         
         // Zuerst die Dateinummern korrigieren
@@ -75,6 +78,7 @@ public class HtmlConverter {
             logger.info("Insgesamt " + totalFiles + " HTML-Dateien zu verarbeiten");
         } catch (IOException e) {
             logger.error("Error counting files", e);
+            failedProvidersCount++;
         }
         int currentFile = 0;
         
@@ -118,10 +122,9 @@ public class HtmlConverter {
                     convertHtmlFile(htmlFile);
                 } catch (Exception e) {
                     logger.error("Fehler bei der Konvertierung von " + htmlFile.getFileName() + ": " + e.getMessage(), e);
-                    deleteRelatedFiles(htmlFile.toString());
-                    deletedProvidersCount++;
+                    failedProvidersCount++;
                     String providerName = extractProviderName(htmlFile.toString());
-                    logProviderAction(providerName, 0.0, "FEHLER BEIM PARSEN (Gel\u00f6scht)", htmlFile.toString());
+                    logProviderAction(providerName, 0.0, "FEHLER BEIM PARSEN (Originale erhalten)", htmlFile.toString());
                 }
                 currentFile++;
                 updateProgress(
@@ -131,6 +134,7 @@ public class HtmlConverter {
             }
         } catch (IOException e) {
             logger.error("Error processing directory: " + directory, e);
+            failedProvidersCount++;
         }
         return currentFile;
     }
@@ -172,8 +176,10 @@ public class HtmlConverter {
         // mpdd3 < 0.5, niemals weil die Extraktion versagte (Zeitbombe bei
         // DOM-Aenderung: Massenloeschung der Originaldaten).
         
-        if (Double.isNaN(mpdd3)) {
-            logger.info("3MPDD fuer " + htmlFileName + " nicht berechenbar - Datei BEHALTEN (Review 04.10. C2b)");
+        if (!Double.isFinite(mpdd3)) {
+            failedProvidersCount++;
+            logger.info("3MPDD fuer " + htmlFileName + " nicht berechenbar - Originale erhalten");
+            return;
         } else if (!skipFilter && mpdd3 < 0.5) {
             logger.info("3MPDD zu niedrig (" + String.format("%.4f", mpdd3) + " < 0.5) f\u00fcr " + htmlFileName + " - Dateien werden gel\u00f6scht");
             deleteRelatedFiles(htmlFileName);
@@ -258,7 +264,12 @@ public class HtmlConverter {
         output.append("********************************");
         
         // Schreibe die vollst\u00e4ndige Datei mit 3MPDD
-        Files.writeString(txtFile, output.toString());
+        Path temp=Files.createTempFile(txtFile.toAbsolutePath().getParent(), ".metrics-", ".tmp");
+        try {
+            Files.writeString(temp, output.toString());
+            try { Files.move(temp,txtFile,java.nio.file.StandardCopyOption.REPLACE_EXISTING,java.nio.file.StandardCopyOption.ATOMIC_MOVE); }
+            catch(java.nio.file.AtomicMoveNotSupportedException e) { Files.move(temp,txtFile,java.nio.file.StandardCopyOption.REPLACE_EXISTING); }
+        } finally { Files.deleteIfExists(temp); }
         
         // Log-Eintrag f\u00fcr verarbeiteten Provider mit Dateipfad
         logProviderAction(providerName, mpdd3, "OK - Vollst\u00e4ndig verarbeitet", htmlFileName);

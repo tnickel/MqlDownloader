@@ -94,14 +94,14 @@ public class MqlDownloaderGui extends JFrame {
 
     // ---------------------------------- Stufe 0: Update-Job (SignalKiScanner doc/23)
 
-    private rest.UpdateJob updateJob;
+    private volatile rest.UpdateJob updateJob;
 
     /** Fern-Auslöser für POST /api/v1/update: busy-Kopplung wie beim
      *  „Alles ausführen“-Button, Start der Kaskade auf dem EDT. */
     private rest.UpdateStarter erstelleUpdateStarter() {
         return new rest.UpdateStarter() {
             @Override
-            public rest.UpdateStarter.UpdateAntwort starte(java.util.Map<String, Object> body) {
+            public synchronized rest.UpdateStarter.UpdateAntwort starte(java.util.Map<String, Object> body) {
                 rest.UpdateJob laufend = updateJob;
                 if (laufend != null && laufend.laeuft()) {
                     return rest.UpdateStarter.UpdateAntwort.laufend(laufend);
@@ -112,9 +112,8 @@ public class MqlDownloaderGui extends JFrame {
                             "Es läuft bereits ein Download oder eine Konvertierung.");
                 }
                 int katalogMaxAlterH = zahlAus(body, "katalogMaxAlterH", 72);
-                rest.UpdateJob neu = new rest.UpdateJob("u-"
-                        + java.time.LocalDateTime.now().format(
-                                java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss")));
+                rest.UpdateJob neu = new rest.UpdateJob("u-" + java.util.UUID.randomUUID());
+                neu.reservieren();
                 updateJob = neu;
                 javax.swing.SwingUtilities.invokeLater(() -> starteUpdateKaskade(neu, katalogMaxAlterH));
                 return rest.UpdateStarter.UpdateAntwort.gestartet(neu);
@@ -215,6 +214,8 @@ public class MqlDownloaderGui extends JFrame {
                         + " Signale mit Abonnenten.");
             } catch (Exception e) {
                 logHandler.logError("Fehler im UPDATE-JOB: " + e.getMessage(), e);
+                job.ergebnis("tradelistenFehler", Math.max(1,downloadManager.getFailedProvidersCount()));
+                job.ergebnis("tradelistenAbgebrochen", true);
                 job.fehler(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
             } finally {
                 downloadManager.setDoAllAtOnce(false);

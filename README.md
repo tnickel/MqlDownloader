@@ -11,12 +11,12 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 ### 🔄 Automatisierter Download & Verarbeitung
 - **Selenium-basierter Web-Scraper** für automatische Datenextraktion
 - **Batch-Verarbeitung** von hunderten Signal Providern
-- **Intelligente Fehlerbehandlung** mit automatischer Datei-Bereinigung
+- **Fehlerweitergabe** an den Updatejob; technische Fehler und unbekannte MPDD-Werte erhalten Originaldateien
 - **Progress-Tracking** mit detailliertem Logging
 
 ### 📈 Erweiterte Performance-Analyse
 - **MPDD-Berechnungen** (3, 6, 9, 12 Monate) für präzise Risiko-Bewertung
-- **Automatische Qualitätsfilterung** (Provider mit MPDD < 0.5 werden entfernt)
+- **Automatische Qualitätsfilterung** (berechneter, endlicher MPDD < 0.5; im Abonnentenmodus deaktiviert). Fehlende Monats-/DD-Daten sind kein Löschkriterium.
 - **Drawdown-Chart-Analyse** mit grafischer Datenextraktion
 - **Stabilitätsbewertung** basierend auf historischen Daten
 - **Monatliche Profit-Trend-Analyse**
@@ -52,7 +52,9 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 - **OpenAPI-Beschreibung** unter `/api/v1/openapi.json`
 - **Stufe-0-Aktualisierung:** `POST /api/v1/update` startet einen Hintergrundjob;
   `GET /api/v1/update/status` liefert dessen Status. Die übrigen Datenendpunkte
-  bleiben lesend. Die OpenAPI-Beschreibung enthält derzeit nur die Leseendpunkte.
+  bleiben lesend. Bekannte Bodyfelder werden typstreng validiert (400 bei ungültigem JSON/Typschema); Jobresultate bleiben verschachtelte JSON-Objekte. Workerfehler verhindern einen falschen erfolgreichen Frischevermerk. Die OpenAPI-Beschreibung enthält derzeit nur die Leseendpunkte.
+- **Verlustfreie JSON-Trades:** Wiederholte MQL-Spalten erhalten zusätzlich `Time_1`/`Time_2`, `Price_1`/`Price_2` und bei MT5 `Volume_1`/`Volume_2`. Die bisherigen einfachen Schlüssel behalten aus Kompatibilitätsgründen den letzten Wert; CSV bleibt unverändert.
+- **Cacheprüfung:** Download-Skip nur mit exakt passender Signal-ID, MQL-Version/CSV-Kopf und konfiguriertem Dateialter.
 - Details für Connectoren: [doc/REST_API_Dokumentation.md](doc/REST_API_Dokumentation.md)
 
 ## 🏗️ Architektur
@@ -152,7 +154,9 @@ Das Projekt befindet sich auf der Festplatte unter: `D:\AntiGravitySoftware\GitW
 1. Repository klonen oder direkt aus `D:\AntiGravitySoftware\GitWorkspace\SIGNALDOWNLOADER\MqlDownloader` in der IDE öffnen.
 2. Dependencies installieren.
 3. Konfigurationspfad anpassen (`C:\Forex\MqlAnalyzer`).
-4. Anwendung starten.
+4. Unter Windows `start.bat` ausführen; es kompiliert vor dem Start. Alternativ: `mvn compile exec:java "-Dexec.mainClass=main.MqlDownloaderApp"`.
+
+Der Standard-Datenpfad der Anwendung ist `C:\\Forex\\MqlAnalyzer`; seine Konfiguration liegt außerhalb des Git-Checkouts. Ein Maven-Testlauf verwendet ausschließlich temporäre Testverzeichnisse.
 
 ## 📈 Output-Formate
 

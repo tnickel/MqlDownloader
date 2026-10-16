@@ -207,7 +207,9 @@ public class RestApiServer {
         // Der definierte Body ist ein flaches JSON-Objekt mit maximal vier
         // bekannten Feldern — ohne Jackson-Dependency tolerant von Hand
         // lesen (unbekannter Inhalt = Defaultwerte, kein Fehler).
-        Map<String, Object> body = parseUpdateBody(roh);
+        Map<String, Object> body;
+        try { body = parseUpdateBody(roh); }
+        catch(IllegalArgumentException e) { return Resp.json(400,errorBody(e.getMessage())); }
         UpdateStarter.UpdateAntwort antwort = updateStarter.starte(body);
         if (antwort.status() == 409) {
             return Resp.json(409, errorBody(antwort.error() == null ? "beschaeftigt" : antwort.error()));
@@ -220,46 +222,11 @@ public class RestApiServer {
     }
 
     private static Map<String, Object> parseUpdateBody(String roh) {
-        Map<String, Object> body = new LinkedHashMap<>();
-        if (roh == null) {
-            return body;
-        }
-        java.util.regex.Matcher target = java.util.regex.Pattern
-                .compile("\"target\"\\s*:\\s*(\\d+)").matcher(roh);
-        java.util.regex.Matcher alter = java.util.regex.Pattern
-                .compile("\"katalogMaxAlterH\"\\s*:\\s*(\\d+)").matcher(roh);
-        java.util.regex.Matcher tradelisten = java.util.regex.Pattern
-                .compile("\"tradelisten\"\\s*:\\s*(true|false)").matcher(roh);
-        if (target.find()) {
-            body.put("target", Integer.parseInt(target.group(1)));
-        }
-        if (alter.find()) {
-            body.put("katalogMaxAlterH", Integer.parseInt(alter.group(1)));
-        }
-        if (tradelisten.find()) {
-            body.put("tradelisten", Boolean.parseBoolean(tradelisten.group(1)));
-        }
-        return body;
+        return UpdateRequestParser.parse(roh);
     }
 
     private static String jsonVon(Map<String, Object> body) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean erster = true;
-        for (Map.Entry<String, Object> e : body.entrySet()) {
-            if (!erster) sb.append(",");
-            erster = false;
-            sb.append("\"").append(e.getKey()).append("\":");
-            Object wert = e.getValue();
-            if (wert == null) {
-                sb.append("null");
-            } else if (wert instanceof Boolean || wert instanceof Number) {
-                sb.append(wert);
-            } else {
-                sb.append("\"").append(String.valueOf(wert).replace("\\", "\\\\")
-                        .replace("\"", "\\\"")).append("\"");
-            }
-        }
-        return sb.append("}").toString();
+        return new com.google.gson.GsonBuilder().serializeNulls().create().toJson(body);
     }
 
     private Resp route(List<String> segs, Map<String, String> query) throws IOException {

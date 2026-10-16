@@ -62,7 +62,12 @@ public final class CsvParser {
                 Map<String, String> row = new LinkedHashMap<>();
                 for (int i = 0; i < header.size(); i++) {
                     String value = i < record.size() ? record.get(i) : "";
-                    row.put(header.get(i), value.trim());
+                    String key=header.get(i);
+                    if(java.util.Collections.frequency(header,key)>1) {
+                        int ordinal=java.util.Collections.frequency(header.subList(0,i+1),key);
+                        row.put(key+"_"+ordinal,value.trim());
+                    }
+                    row.put(key, value.trim()); // retain the legacy last-value key for compatibility
                 }
                 rows.add(row);
             }

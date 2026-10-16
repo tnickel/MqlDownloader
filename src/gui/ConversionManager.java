@@ -14,6 +14,7 @@ public class ConversionManager {
     private final LogHandler logHandler;
     private final ButtonPanelManager buttonManager;
     private Thread conversionThread;
+    private volatile Exception conversionFailure;
 
     public ConversionManager(ConfigurationManager configManager, LogHandler logHandler, ButtonPanelManager buttonManager) {
         this.configManager = configManager;
@@ -22,6 +23,7 @@ public class ConversionManager {
     }
 
     public void startConversion() {
+        conversionFailure = null;
         logHandler.log("Starte Konvertierungsprozess...");
         setupUIForConversion();
 
@@ -39,11 +41,15 @@ public class ConversionManager {
                 });
                 
                 converter.convertAllHtmlFiles();
+                if (converter.getFailedProvidersCount() > 0) {
+                    throw new java.io.IOException(converter.getFailedProvidersCount() + " Provider konnten nicht konvertiert werden");
+                }
                 
                 SwingUtilities.invokeLater(() -> {
                     logHandler.log("Konvertierung erfolgreich abgeschlossen!");
                 });
             } catch (Exception e) {
+                conversionFailure = e;
                 logHandler.logError("Fehler w\u00e4hrend der Konvertierung: " + e.getMessage(), e);
             } finally {
                 cleanupConversion();
@@ -82,13 +88,15 @@ public class ConversionManager {
         return conversionThread != null && conversionThread.isAlive();
     }
 
-    public void waitForConversionCompletion() {
+    public void waitForConversionCompletion() throws java.io.IOException {
         try {
             while (conversionThread != null && conversionThread.isAlive()) {
                 Thread.sleep(1000);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            throw new java.io.IOException("Warten auf Konvertierung unterbrochen", e);
         }
+        if (conversionFailure != null) throw new java.io.IOException("Konvertierung fehlgeschlagen", conversionFailure);
     }
 }

@@ -42,14 +42,16 @@ public class HtmlDatabase {
                     try {
                         String yearMonth = parts[0].trim();
                         double profitPercentage = Double.parseDouble(parts[1].trim());
+                        if (!Double.isFinite(profitPercentage)) throw new IllegalArgumentException("Nichtendlicher Monatswert");
                         monthlyProfits.put(yearMonth, profitPercentage);
                     } catch (NumberFormatException e) {
-                        LOGGER.warning("Could not parse profit percentage for entry: " + monthDetail);
+                        throw new IllegalArgumentException("Ungueltiger Monatswert: "+monthDetail,e);
                     }
-                }
+                } else throw new IllegalArgumentException("Ungueltiges Monatsdetail: "+monthDetail);
             }
             
         } catch (Exception e) {
+            monthlyProfits.clear();
             LOGGER.severe("Fehler beim Laden der monatlichen Profite f\u00fcr " + fileName + ": " + e.getMessage());
         }
         
@@ -69,13 +71,13 @@ public class HtmlDatabase {
             // Stelle sicher, dass der Wert positiv ist (wir erwarten einen positiven Prozentsatz)
             if (drawdown <= 0.0) {
                 LOGGER.warning("EquityDrawdown ist 0 oder negativ: " + drawdown + " f\u00fcr " + fileName);
-                return 1.0; // Standardwert, um Division durch Null zu vermeiden
+                return Double.NaN; // Standardwert, um Division durch Null zu vermeiden
             }
             
             return drawdown;
         } catch (Exception e) {
             LOGGER.warning("Could not get equity drawdown for " + fileName + ": " + e.getMessage());
-            return 1.0; // Standardwert
+            return Double.NaN; // Standardwert
         }
     }
     

@@ -12,6 +12,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class CsvParserTest {
 
     @Test
+    void duplicateMqlHeadersHaveLosslessAliasesAndLegacyKeys() {
+        CsvParser parser=CsvParser.parseLines(Arrays.asList("Time;Price;Volume;Time;Price;Volume", "open;1.1;0.5;close;1.2;0.4"));
+        Map<String,String> row=parser.getRows().get(0);
+        assertEquals("open",row.get("Time_1"));
+        assertEquals("close",row.get("Time_2"));
+        assertEquals("close",row.get("Time"));
+        assertEquals("1.1",row.get("Price_1"));
+        assertEquals("1.2",row.get("Price_2"));
+        assertEquals("0.5",row.get("Volume_1"));
+        assertEquals("0.4",row.get("Volume_2"));
+    }
+
+    @Test
     void parsesSemicolonSeparatedRows() {
         List<String> lines = Arrays.asList(
                 "Open Time;Symbol;Type;Volume",

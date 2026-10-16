@@ -29,6 +29,8 @@ public class DownloadManager {
     private WebDriver currentDriver;
     private volatile SignalDownloader activeDownloader; // Fix #1: Stop-Signal-Propagation
     private volatile boolean stopRequested;
+    private volatile Exception downloadFailure;
+    private volatile int failedProvidersCount;
     private Thread downloadThread;
     private boolean limitReachedLogged = false;
     private int mql4SubscribersDownloadedCount = 0;
@@ -52,9 +54,10 @@ public class DownloadManager {
     public void startDownload(String version) {
         logHandler.log("=== STARTE " + version + " DOWNLOAD-PROZESS ===");
         stopRequested = false;
+        downloadFailure = null;
+        failedProvidersCount = 0;
         limitReachedLogged = false; // Reset bei neuem Download
         buttonManager.updateCounter(version, 0);
-        setupUIForDownload(version);
 
         String downloadPath = configManager.getRootDirPath() + "\\download\\" + version.toLowerCase();
         logHandler.log("Download-Verzeichnis: " + downloadPath);
@@ -74,7 +77,11 @@ public class DownloadManager {
             logHandler.log("MQL-Version: " + mqlVersion + " | Limit: " + limit + " Provider | URL: " + configManager.getBaseUrl());
         } catch (IOException e) {
             logHandler.logError("Fehler beim Setzen der MQL-Version: " + e.getMessage(), e);
+            downloadFailure = e;
+            return;
         }
+
+        setupUIForDownload(version);
         
         downloadThread = new Thread(() -> {
             try {
@@ -162,6 +169,13 @@ public class DownloadManager {
                 });
                 
                 downloader.startDownloadProcess();
+                failedProvidersCount = downloader.getFailedProvidersCount();
+                if (failedProvidersCount > 0) {
+                    throw new IOException(failedProvidersCount + " Provider konnten nicht vollstaendig geladen werden");
+                }
+                if (stopRequested && !limitReachedLogged) {
+                    throw new IOException("Download wurde abgebrochen");
+                }
 
                 // Subscriber-Zaehler je Version aufaddieren
                 int subCount = downloader.getSubscribersDownloadedCount();
@@ -172,6 +186,8 @@ public class DownloadManager {
                 }
 
             } catch (Exception e) {
+                downloadFailure = e;
+                if (activeDownloader != null) failedProvidersCount = activeDownloader.getFailedProvidersCount();
                 if (!stopRequested) {
                     String errorMsg = "Fehler w\u00e4hrend " + version + " Download: " + e.getMessage();
                     logHandler.logError(errorMsg, e);
@@ -297,15 +313,19 @@ public class DownloadManager {
         return downloadThread != null && downloadThread.isAlive();
     }
 
-    public void waitForDownloadCompletion() {
+    public void waitForDownloadCompletion() throws IOException {
         try {
             while (downloadThread != null && downloadThread.isAlive()) {
                 Thread.sleep(1000);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            throw new IOException("Warten auf Download unterbrochen", e);
         }
+        if (downloadFailure != null) throw new IOException("Download fehlgeschlagen", downloadFailure);
     }
+
+    public int getFailedProvidersCount() { return failedProvidersCount; }
 
     public void resetSubscribersCounters() {
         mql4SubscribersDownloadedCount = 0;
