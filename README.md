@@ -39,6 +39,10 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 - `/providers` liefert standardmäßig nur Signale mit mindestens einem Abonnenten;
   `minSubscribers=0` öffnet ausdrücklich den vollständigen lokalen Katalog.
   Der Filter gilt vor Pagination für JSON und CSV. Detail-/Archivzugriff bleibt möglich.
+- Der aktuelle MQL-Katalog enthält keinen belegten `weeks`-Wert. Die konvertierten
+  TXT-Kennzahlen erzeugen derzeit ebenfalls kein Altersfeld. Abonnenten-Snapshots
+  und Dateizeitstempel werden nicht als Signalgründung ausgegeben; im Scanner
+  bleibt das Alter unbekannt und besteht den regulären Mindestalterfilter nicht.
 - **Tradelisten** als JSON oder rohe CSV, **Kennzahlen** und **Testreport-PDFs** abrufbar
 - CSV/Kennzahlen werden anhand der abschließenden Signal-ID zugeordnet;
   Zahlen im Signalnamen zählen nicht als ID. Fehlt der reguläre Versionscache,
