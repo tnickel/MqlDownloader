@@ -209,10 +209,12 @@ public class HtmlConverter {
         // Erstelle die vollst\u00e4ndige .txt-Datei
         StringBuilder output = new StringBuilder();
         output.append("Balance=").append(String.format("%.2f", balance)).append("\n");
+        output.append("Currency=").append(htmlParser.getCurrency(htmlFileName)).append("\n");
         output.append("Subscribers=").append(subscribers).append("\n");
         output.append("MaxDDGraphic=").append(String.format("%.2f", equityDrawdownGraphic)).append("\n");
         output.append("EquityDrawdown=").append(String.format("%.2f", equityDrawdown)).append("\n");
         output.append("Average3MonthProfit=").append(String.format("%.2f", avgProfit)).append("\n");
+        output.append("Average3MonthProfitMonthsIncluded=").append(lastMonths.size()).append("\n");
         output.append("StabilityValue=").append(String.format("%.2f", stability)).append("\n");
         output.append("MonthProfitProz=");
         if (!allMonths.isEmpty()) {

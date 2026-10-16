@@ -59,6 +59,9 @@ public final class MetricsParser {
                 // Details) bleiben bewusst roh; sie sind über raw verfügbar.
             }
         }
+        String currency = parser.metrics.get("Currency");
+        parser.metrics.put("Currency", currency != null && currency.matches("[A-Za-z]{3}")
+                ? currency.toUpperCase(java.util.Locale.ROOT) : "unknown");
         return parser;
     }
 

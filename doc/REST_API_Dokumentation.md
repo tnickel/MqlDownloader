@@ -253,10 +253,12 @@ Parst `<Name>_<id>_root.txt` (wird bei der HTML-Konvertierung im Downloader erze
   "file": { "name": "Test_Provider_Alpha_123_root.txt", "sizeBytes": 934, "lastModified": "2026-08-27T12:31:00" },
   "metrics": {
     "Balance": 1234.56,
+    "Currency": "USD",
     "Subscribers": 45,
     "MaxDDGraphic": 10.0,
     "EquityDrawdown": 8.5,
     "Average3MonthProfit": 2.25,
+    "Average3MonthProfitMonthsIncluded": 3,
     "StabilityValue": 0.75,
     "3MPDD": 0.8123
   },
@@ -266,6 +268,21 @@ Parst `<Name>_<id>_root.txt` (wird bei der HTML-Konvertierung im Downloader erze
 ```
 
 `drawdown` ist der gescrubbte Drawdown-Chart (Datum → Prozent). 404, wenn noch nie konvertiert wurde.
+
+`Balance` und die originalen Trade-CSV-Betraege sind native Kontobeträge,
+keine automatisch nach USD konvertierten Werte. `Currency` ist der explizite
+dreibuchstabige Code aus der Kontostand-Zeile (`USD`, `USC`, `EUR` usw.).
+Ohne eindeutigen Beleg, insbesondere bei alten TXT-Caches, lautet das Feld
+`"unknown"`. USC wird hier nicht pauschal durch 100 geteilt; Consumer müssen
+die Einheit belegen, bevor sie Beträge als USD verwenden.
+`Average3MonthProfitMonthsIncluded` nennt bei neu konvertierten Dateien die
+tatsächlich gemittelten Monate (höchstens drei, neuester exportierter Monat
+ausgeschlossen). Altdateien ohne Zähler belegen keine Drei-Monats-Abdeckung.
+
+Unbekannte Werte für `sort`, `order`, `format`, `version` und
+`includeUnchanged` werden an den jeweiligen Katalog-/Events-Endpunkten mit
+400 zurückgewiesen. `includeUnchanged=true` schließt Baseline/Nulländerungen
+ein; Default und `false` liefern ausschließlich Änderungen.
 
 ### 3.9 `GET /providers/{id}/{version}/reports` — Testreport-PDFs
 

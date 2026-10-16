@@ -170,11 +170,23 @@ Der Standard-Datenpfad der Anwendung ist `C:\\Forex\\MqlAnalyzer`; seine Konfigu
 ### Strukturierte Textdateien
 ```
 Balance=15420.50
+Currency=USD
+Average3MonthProfitMonthsIncluded=3
 EquityDrawdown=12.34
 3MPDD=0.8567
 MonthProfitProz=2024/01=5.2,2024/02=3.1,2024/03=7.8
 StabilityValue=85.40
 ```
+
+`Balance` und die exportierten Trade-CSV-Betraege behalten die native
+Kontowaehrung. `Currency` stammt ausschliesslich aus der Kontostand-Zeile
+der HTML-Seite; fehlt eine eindeutige Einheit, liefert die REST-API
+`Currency: "unknown"` (auch bei alten TXT-Caches ohne dieses Feld).
+Es gibt keine pauschale USD-Annahme und keine generelle USC-Umrechnung.
+`Average3MonthProfitMonthsIncluded` nennt die tatsaechlich gemittelten
+Monate (maximal drei, ohne den neuesten exportierten Monat); bei duennen
+Historien sind weniger als drei Monate moeglich. Wins/Losses/TradesTotal
+werden aus dieser HTML-Kennzahlenkonvertierung nicht behauptet.
 
 ### Detaillierte Logs
 - **Conversion-Logs** mit Provider-Statistiken

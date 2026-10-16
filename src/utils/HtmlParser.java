@@ -36,6 +36,10 @@ public class HtmlParser {
     public double getBalance(String fileName) {
         return dataExtractor.getBalance(fileName);
     }
+
+    public String getCurrency(String fileName) {
+        return dataExtractor.getCurrency(fileName);
+    }
     
     public double getEquityDrawdownGraphic(String fileName) {
         return dataExtractor.getEquityDrawdownGraphic(fileName);

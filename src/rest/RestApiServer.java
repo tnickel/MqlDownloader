@@ -337,6 +337,10 @@ public class RestApiServer {
     }
 
     private Resp providers(Map<String, String> query) {
+        validateChoice(query, "sort", "subscribers", "name", "latestChange", "weekChange", "monthChange", "lastUpdated");
+        validateChoice(query, "order", "asc", "desc");
+        validateChoice(query, "format", "json", "csv");
+        validateVersionQuery(query);
         List<SubscriberStat> stats = new ArrayList<>(databaseManager.getAllSubscriberStatistics());
         applyProviderFilters(stats, query);
         sortProviders(stats, query);
@@ -591,6 +595,7 @@ public class RestApiServer {
     }
 
     private Resp tradesCatalog(Map<String, String> query) {
+        validateVersionQuery(query);
         String versionFilter = query.get("version");
         String idFilter = query.get("id");
         String nameFilter = query.get("name");
@@ -659,9 +664,11 @@ public class RestApiServer {
     }
 
     private Resp events(Map<String, String> query) {
+        validateChoice(query, "format", "json", "csv");
+        validateChoice(query, "includeUnchanged", "true", "false");
         Timestamp since = parseSince(query);
         Timestamp until = parseUntil(query);
-        boolean onlyChanges = !"false".equalsIgnoreCase(query.get("includeUnchanged"));
+        boolean onlyChanges = !"true".equalsIgnoreCase(query.get("includeUnchanged"));
         int limit = pageParameter(query, "limit", 100, 1);
         List<SubscriberEvent> events = databaseManager.getRecentEvents(since, until, onlyChanges, limit);
 
@@ -842,6 +849,19 @@ public class RestApiServer {
         return folder != null ? folder : (version == null ? "" : version.trim().toLowerCase(Locale.ROOT));
     }
 
+    private static void validateChoice(Map<String, String> query, String key, String... choices) {
+        String raw = query.get(key);
+        if (raw == null || raw.trim().isEmpty()) return;
+        for (String choice : choices) if (choice.equalsIgnoreCase(raw)) return;
+        throw new IllegalArgumentException("Ungueltiger Parameter '" + key + "': " + raw);
+    }
+
+    private static void validateVersionQuery(Map<String, String> query) {
+        String version = query.get("version");
+        if (version != null && !version.trim().isEmpty() && ProviderFiles.normalizeVersionFolder(version) == null)
+            throw new IllegalArgumentException("Ungueltige Version: " + version);
+    }
+
     private void applyProviderFilters(List<SubscriberStat> stats, Map<String, String> query) {
         String version = query.get("version");
         if (version != null && !version.trim().isEmpty()) {
@@ -867,20 +887,20 @@ public class RestApiServer {
         // Provider zuerst geliefert.
         boolean ascending = "asc".equalsIgnoreCase(query.get("order"));
         Comparator<SubscriberStat> comparator;
-        if (sort == null || sort.trim().isEmpty() || "subscribers".equals(sort)) {
+        if (sort == null || sort.trim().isEmpty() || "subscribers".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparingInt(SubscriberStat::getSubscribers);
-        } else if ("name".equals(sort)) {
+        } else if ("name".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparing(SubscriberStat::getSignalName,
                     Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER));
-        } else if ("latestChange".equals(sort)) {
+        } else if ("latestChange".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparingInt(SubscriberStat::getLatestChange);
-        } else if ("weekChange".equals(sort)) {
+        } else if ("weekChange".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparing(SubscriberStat::getWeekChange,
                     Comparator.nullsLast(Comparator.naturalOrder()));
-        } else if ("monthChange".equals(sort)) {
+        } else if ("monthChange".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparing(SubscriberStat::getMonthChange,
                     Comparator.nullsLast(Comparator.naturalOrder()));
-        } else if ("lastUpdated".equals(sort)) {
+        } else if ("lastUpdated".equalsIgnoreCase(sort)) {
             comparator = Comparator.comparing(SubscriberStat::getLastUpdated,
                     Comparator.nullsLast(Comparator.naturalOrder()));
         } else {

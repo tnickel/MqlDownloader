@@ -43,56 +43,61 @@ public class DataExtractor {
     
     public double getBalance(String fileName) {
         try {
-            String htmlContent = contentCache.getHtmlContent(fileName);
-            if (htmlContent == null) {
-                String errorMessage = "HTML-Inhalt konnte nicht geladen werden f\u00fcr Datei: " + fileName;
-                logger.error(errorMessage);
-                throw new RuntimeException(errorMessage);
-            }
-            
-            // HTML mit JSoup parsen
-            org.jsoup.nodes.Document doc = org.jsoup.Jsoup.parse(htmlContent);
-            
-            // Nach dem Element mit dem Label "Kontostand:" suchen
-            org.jsoup.select.Elements elements = doc.select("div.s-list-info__item:contains(Kontostand:) .s-list-info__value");
-            
-            if (!elements.isEmpty()) {
-                String balanceStr = elements.first().text();
-                logger.info("Extrahierter Kontostand: " + balanceStr);
-                
-                // Verbesserte Bereinigung des Werts
-                balanceStr = balanceStr.replaceAll("[^0-9.,]", "").trim().replace(",", ".");
-                // Entfernt auch Leerzeichen zwischen Zahlen
-                balanceStr = balanceStr.replaceAll("\\s+", "");
-                
-                balance = Double.parseDouble(balanceStr);
-                return balance;
-            } else {
-                // Alternative Suche nach "Balance:" falls "Kontostand:" nicht gefunden wurde
-                elements = doc.select("div.s-list-info__item:contains(Balance:) .s-list-info__value");
-                
-                if (!elements.isEmpty()) {
-                    String balanceStr = elements.first().text();
-                    logger.info("Extrahierter Balance: " + balanceStr);
-                    
-                    // Verbesserte Bereinigung des Werts
-                    balanceStr = balanceStr.replaceAll("[^0-9.,]", "").trim().replace(",", ".");
-                    // Entfernt auch Leerzeichen zwischen Zahlen
-                    balanceStr = balanceStr.replaceAll("\\s+", "");
-                    
-                    balance = Double.parseDouble(balanceStr);
-                    return balance;
+            String amount = accountValue(fileName).replace('\u2212', '-');
+            // Currency is metadata; the numeric value remains in account units.
+            amount = amount.replaceAll("(?i)(?<![a-z])[a-z]{3}(?![a-z])", "")
+                    .replaceAll("[\\s\\u00a0\\u202f]", "");
+            if (amount.indexOf(',') >= 0 && amount.indexOf('.') >= 0) {
+                if (amount.lastIndexOf(',') > amount.lastIndexOf('.')) {
+                    if (!amount.matches("[+-]?\\d{1,3}(\\.\\d{3})+,\\d+"))
+                        throw new IllegalArgumentException("Ungueltige Zahlengruppierung");
+                    amount = amount.replace(".", "").replace(',', '.');
                 } else {
-                    String errorMessage = "Balance/Kontostand konnte nicht extrahiert werden f\u00fcr Datei: " + fileName;
-                    logger.error(errorMessage);
-                    throw new RuntimeException(errorMessage);
+                    if (!amount.matches("[+-]?\\d{1,3}(,\\d{3})+\\.\\d+"))
+                        throw new IllegalArgumentException("Ungueltige Zahlengruppierung");
+                    amount = amount.replace(",", "");
                 }
+            } else {
+                amount = amount.replace(',', '.');
             }
+            if (!amount.matches("[+-]?\\d+(\\.\\d+)?"))
+                throw new IllegalArgumentException("Ungueltiger Kontostand");
+            balance = Double.parseDouble(amount);
+            if (!Double.isFinite(balance)) throw new IllegalArgumentException("Kontostand ist nicht endlich");
+            return balance;
         } catch (Exception e) {
             String errorMessage = "Fehler beim Extrahieren der Balance f\u00fcr " + fileName + ": " + e.getMessage();
             logger.error(errorMessage, e);
             throw new RuntimeException(errorMessage, e);
         }
+    }
+
+    /** Explicit account unit only; missing/ambiguous units are never assumed USD. */
+    public String getCurrency(String fileName) {
+        Matcher matcher = Pattern.compile("(?i)(?<![a-z])[a-z]{3}(?![a-z])").matcher(accountValue(fileName));
+        String currency = null;
+        while (matcher.find()) {
+            String found = matcher.group().toUpperCase(java.util.Locale.ROOT);
+            if (currency != null && !currency.equals(found)) return "unknown";
+            currency = found;
+        }
+        return currency == null ? "unknown" : currency;
+    }
+
+    private String accountValue(String fileName) {
+        String html = contentCache.getHtmlContent(fileName);
+        if (html == null) throw new IllegalArgumentException("HTML-Inhalt fehlt: " + fileName);
+        for (org.jsoup.nodes.Element item : org.jsoup.Jsoup.parse(html).select("div.s-list-info__item")) {
+            org.jsoup.nodes.Element value = item.selectFirst(".s-list-info__value");
+            if (value == null) continue;
+            // Keep the pre-existing item/value contract; label markup may vary.
+            org.jsoup.nodes.Element label = item.clone();
+            label.select(".s-list-info__value").remove();
+            String text = label.text().replace(":", "").trim();
+            if (!"Balance".equalsIgnoreCase(text) && !"Kontostand".equalsIgnoreCase(text)) continue;
+            return value.text();
+        }
+        throw new IllegalArgumentException("Balance/Kontostand fehlt: " + fileName);
     }
     
     // Methode: L\u00f6scht die zugeh\u00f6rigen Dateien (root.html, .csv und .txt) bei Fehlern
