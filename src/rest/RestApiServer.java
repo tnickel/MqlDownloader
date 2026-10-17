@@ -532,6 +532,10 @@ public class RestApiServer {
                     + signalId + " (" + version + ") gefunden. Konvertierung ausführen?"));
         }
         MetricsParser parser = MetricsParser.parse(rootTxt);
+        if ("unknown".equals(parser.getMetrics().get("Currency"))) {
+            parser.getMetrics().put("Currency", ProviderFiles.legacyAccountCurrency(
+                    rootTxt, signalId, version, parser.getMetrics().get("Balance")));
+        }
         JsonWriter w = new JsonWriter();
         w.beginObject()
             .name("signalId").value(signalId)

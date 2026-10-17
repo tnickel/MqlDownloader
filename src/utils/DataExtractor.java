@@ -87,6 +87,7 @@ public class DataExtractor {
     private String accountValue(String fileName) {
         String html = contentCache.getHtmlContent(fileName);
         if (html == null) throw new IllegalArgumentException("HTML-Inhalt fehlt: " + fileName);
+        String account = null;
         for (org.jsoup.nodes.Element item : org.jsoup.Jsoup.parse(html).select("div.s-list-info__item")) {
             org.jsoup.nodes.Element value = item.selectFirst(".s-list-info__value");
             if (value == null) continue;
@@ -95,8 +96,12 @@ public class DataExtractor {
             label.select(".s-list-info__value").remove();
             String text = label.text().replace(":", "").trim();
             if (!"Balance".equalsIgnoreCase(text) && !"Kontostand".equalsIgnoreCase(text)) continue;
-            return value.text();
+            String found = value.text();
+            if (account != null && !account.equals(found))
+                throw new IllegalArgumentException("Balance/Kontostand ist mehrdeutig: " + fileName);
+            account = found;
         }
+        if (account != null) return account;
         throw new IllegalArgumentException("Balance/Kontostand fehlt: " + fileName);
     }
     

@@ -181,12 +181,37 @@ StabilityValue=85.40
 `Balance` und die exportierten Trade-CSV-Betraege behalten die native
 Kontowaehrung. `Currency` stammt ausschliesslich aus der Kontostand-Zeile
 der HTML-Seite; fehlt eine eindeutige Einheit, liefert die REST-API
-`Currency: "unknown"` (auch bei alten TXT-Caches ohne dieses Feld).
+`Currency: "unknown"`. Bei alten TXT-Dateien ohne Einheit kann der lesende
+REST-Endpunkt die Waehrung aus der zugehoerigen HTML ergaenzen: Signal-ID,
+MT-Plattform und der native Kontostand muessen eindeutig zusammenpassen.
 Es gibt keine pauschale USD-Annahme und keine generelle USC-Umrechnung.
 `Average3MonthProfitMonthsIncluded` nennt die tatsaechlich gemittelten
 Monate (maximal drei, ohne den neuesten exportierten Monat); bei duennen
 Historien sind weniger als drei Monate moeglich. Wins/Losses/TradesTotal
 werden aus dieser HTML-Kennzahlenkonvertierung nicht behauptet.
+
+### Lokale Reparatur alter Currency-Metadaten
+
+`scripts/CurrencyLegacyRepair.java` prueft vorhandene TXT-/HTML-Paare in
+`mql4` und `mql5` mit derselben Logik. Der Standardaufruf zeigt nur die
+Inventur; `--apply` ergaenzt ausschliesslich fehlende `Currency`-Zeilen.
+Vorhandene Einheiten bleiben erhalten, unbewiesene Faelle werden
+uebersprungen. Es werden keine Downloads oder Vollkonvertierungen gestartet.
+
+```powershell
+mvn compile dependency:build-classpath -DincludeScope=runtime "-Dmdep.outputFile=tmp/currency_classpath.txt"
+$currencyClassPath = 'target\classes;' + (Get-Content tmp/currency_classpath.txt -Raw).Trim()
+java --class-path $currencyClassPath scripts/CurrencyLegacyRepair.java
+java --class-path $currencyClassPath scripts/CurrencyLegacyRepair.java --apply
+```
+
+Optional sind `--root=C:\anderer\download` und `--backup-root=C:\sicherung`.
+Jeder Schreibdurchlauf sichert Originaldateien und ein SHA-256-Manifest in
+`tmp/currency_legacy_backup_<Zeitstempel>` (oder unter `--backup-root`).
+Die neue Zeile wird atomar vor unveraenderte Originalbytes gesetzt. Ein
+wiederholter Lauf ueberspringt bereits vorhandene `Currency`-Zeilen. Fuer
+eine Ruecknahme kann die Originaldatei aus dem Backup an den im Manifest
+verzeichneten Quellpfad kopiert werden.
 
 ### Detaillierte Logs
 - **Conversion-Logs** mit Provider-Statistiken

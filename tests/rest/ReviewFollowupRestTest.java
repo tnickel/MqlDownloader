@@ -67,6 +67,50 @@ class ReviewFollowupRestTest {
         assertEquals("unknown", json("/providers/123/mql5/metrics").getAsJsonObject("metrics").get("Currency").getAsString());
     }
 
+    @Test void legacyMetricsRecoverExplicitCurrencyFromIdentifiedMatchingHtmlWithoutWritingFiles() throws Exception {
+        Path folder = Files.createDirectories(dir.resolve("download/mql5"));
+        Path root = folder.resolve("Synthetic_123_root.txt");
+        Path html = folder.resolve("Synthetic_123_root.html");
+        byte[] legacy = "Balance=1234,56\nSubscribers=2\n".getBytes(StandardCharsets.UTF_8);
+        Files.write(root, legacy);
+        for (String currency : new String[]{"USD", "EUR", "USC"}) {
+            byte[] evidence = accountHtml("123", "5", "1 234.56 " + currency).getBytes(StandardCharsets.UTF_8);
+            Files.write(html, evidence);
+            JsonObject metrics = json("/providers/123/mql5/metrics").getAsJsonObject("metrics");
+            assertEquals(currency, metrics.get("Currency").getAsString());
+            assertEquals("1234,56", metrics.get("Balance").getAsString());
+            assertArrayEquals(legacy, Files.readAllBytes(root));
+            assertArrayEquals(evidence, Files.readAllBytes(html));
+        }
+        // A declared native unit is preserved even when another HTML unit exists.
+        Files.write(root, "Balance=1234.56\nCurrency=EUR\n".getBytes(StandardCharsets.UTF_8));
+        assertEquals("EUR", json("/providers/123/mql5/metrics").getAsJsonObject("metrics").get("Currency").getAsString());
+    }
+
+    @Test void legacyMetricsNeverGuessCurrencyFromForeignOrAmbiguousEvidence() throws Exception {
+        Path folder = Files.createDirectories(dir.resolve("download/mql5"));
+        Files.write(folder.resolve("Synthetic_123_root.txt"), "Balance=1234.56\n".getBytes(StandardCharsets.UTF_8));
+        Path html = folder.resolve("Synthetic_123_root.html");
+        for (String evidence : new String[]{
+                accountHtml("999", "5", "1234.56 USD"),
+                accountHtml("123", "4", "1234.56 USD"),
+                accountHtml("123", "5", "9999.99 USD"),
+                accountHtml("123", "5", "1234.56 USD / EUR"),
+                accountHtml("123", "5", "1234.56 USD") + accountHtml("123", "5", "1234.56 EUR"),
+                accountHtml("123", "5", "1234.56") + "<p>USD EURUSD</p>",
+                accountHtml("123", "5", "1234.56 USD") + "<link rel='canonical' href='https://www.mql5.com/en/signals/999'>",
+                "<div class='s-list-info__item'>Balance: <span class='s-list-info__value'>1234.56 USD</span></div>"}) {
+            Files.write(html, evidence.getBytes(StandardCharsets.UTF_8));
+            assertEquals("unknown", json("/providers/123/mql5/metrics").getAsJsonObject("metrics").get("Currency").getAsString());
+        }
+    }
+
+    private String accountHtml(String id, String mt, String balance) {
+        return "<div data-id='" + id + "' data-mt='" + mt + "'></div>"
+                + "<div class='s-list-info__item'>Balance: <span class='s-list-info__value'>"
+                + balance + "</span></div>";
+    }
+
     JsonObject json(String path) throws Exception { return JsonParser.parseString(response(path, 200)).getAsJsonObject(); }
     String response(String path, int expected) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(base + path).openConnection();

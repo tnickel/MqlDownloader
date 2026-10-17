@@ -75,6 +75,36 @@ public final class ProviderFiles {
         return txt.isFile() && isDirectChild(csv.getParentFile(), txt) ? txt : null;
     }
 
+    /** Recover only a missing legacy unit from the same, identified HTML account row.
+     * Matching balances bind the HTML evidence to the native money in the TXT;
+     * a newer/different account snapshot cannot silently supply its unit.
+     * This is a read-only fallback: GET never rewrites source files.
+     */
+    public static String legacyAccountCurrency(File rootTxt, String signalId, String version,
+                                                String txtBalance) {
+        String folder = normalizeVersionFolder(version);
+        if (rootTxt == null || folder == null || signalId == null || txtBalance == null
+                || !rootTxt.getName().toLowerCase(Locale.ROOT).endsWith("_root.txt")
+                || !signalId.equals(extractSignalId(rootTxt.getName()))) return "unknown";
+        File parent = rootTxt.getAbsoluteFile().getParentFile();
+        String stem = rootTxt.getName().substring(0, rootTxt.getName().length() - "_root.txt".length());
+        File html = new File(parent, stem + "_root.html");
+        if (!html.isFile() || !isDirectChild(parent, html)) return "unknown";
+        try {
+            utils.HtmlContentCache cache = new utils.HtmlContentCache(parent.toString());
+            String content = cache.getHtmlContent(html.toString());
+            if (content == null || !htmlIdentity(Jsoup.parse(content), signalId, folder)) return "unknown";
+            utils.DataExtractor extractor = new utils.DataExtractor(cache, null);
+            String currency = extractor.getCurrency(html.toString());
+            if ("unknown".equals(currency)) return currency;
+            java.math.BigDecimal converted = new java.math.BigDecimal(txtBalance.trim().replace(',', '.'));
+            java.math.BigDecimal original = java.math.BigDecimal.valueOf(extractor.getBalance(html.toString()));
+            return converted.compareTo(original) == 0 ? currency : "unknown";
+        } catch (RuntimeException ignored) {
+            return "unknown";
+        }
+    }
+
     private static File findArchiveCsv(File downloadDir, String signalId, String folder) {
         if (downloadDir == null || signalId == null || !signalId.trim().matches("\\d+")) return null;
         List<File> candidates = new ArrayList<>();
@@ -95,24 +125,9 @@ public final class ProviderFiles {
     private static boolean archiveEvidence(File csv, String signalId, String folder) {
         File html = new File(csv.getParentFile(), stripExtension(csv.getName()) + "_root.html");
         if (!html.isFile() || !isDirectChild(csv.getParentFile(), html)) return false;
-        String mt = folder.equals("mql5") ? "5" : "4";
         try {
             org.jsoup.nodes.Document doc = Jsoup.parse(html, null);
-            boolean found = false;
-            for (Element tag : doc.select("[data-id][data-mt]")) {
-                if (!signalId.equals(tag.attr("data-id"))) continue;
-                if (!mt.equals(tag.attr("data-mt"))) return false;
-                found = true;
-            }
-            if (!found) return false;
-            java.util.regex.Matcher title = Pattern.compile("MetaTrader\\s+([45])", Pattern.CASE_INSENSITIVE)
-                    .matcher(doc.title());
-            while (title.find()) if (!mt.equals(title.group(1))) return false;
-            for (Element canonical : doc.select("link[rel=canonical][href]")) {
-                java.util.regex.Matcher id = Pattern.compile("/signals/(\\d+)(?:[/?#].*)?$")
-                        .matcher(canonical.attr("href"));
-                if (id.find() && !signalId.equals(id.group(1))) return false;
-            }
+            if (!htmlIdentity(doc, signalId, folder)) return false;
             String expected = folder.equals("mql5")
                     ? "Time;Type;Volume;Symbol;Price;Volume;Time;Price;Commission;Swap;Profit"
                     : "Time;Type;Volume;Symbol;Price;S/L;T/P;Time;Price;Commission;Swap;Profit;Comment";
@@ -123,6 +138,26 @@ public final class ProviderFiles {
         } catch (IOException | RuntimeException ignored) {
             return false;
         }
+    }
+
+    private static boolean htmlIdentity(org.jsoup.nodes.Document doc, String signalId, String folder) {
+        String mt = folder.equals("mql5") ? "5" : "4";
+        boolean found = false;
+        for (Element tag : doc.select("[data-id][data-mt]")) {
+            if (!signalId.equals(tag.attr("data-id"))) continue;
+            if (!mt.equals(tag.attr("data-mt"))) return false;
+            found = true;
+        }
+        if (!found) return false;
+        java.util.regex.Matcher title = Pattern.compile("MetaTrader\\s+([45])", Pattern.CASE_INSENSITIVE)
+                .matcher(doc.title());
+        while (title.find()) if (!mt.equals(title.group(1))) return false;
+        for (Element canonical : doc.select("link[rel=canonical][href]")) {
+            java.util.regex.Matcher id = Pattern.compile("/signals/(\\d+)(?:[/?#].*)?$")
+                    .matcher(canonical.attr("href"));
+            if (id.find() && !signalId.equals(id.group(1))) return false;
+        }
+        return true;
     }
 
     /** Testreport-PDFs des Analyse-Verzeichnisses, sortiert nach Dateiname. */
