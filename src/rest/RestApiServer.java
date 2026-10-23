@@ -369,7 +369,19 @@ public class RestApiServer {
         validateChoice(query, "order", "asc", "desc");
         validateChoice(query, "format", "json", "csv");
         validateVersionQuery(query);
-        List<SubscriberStat> stats = providerStatistics();
+        String requestedScope = query.get("catalogScope");
+        if (requestedScope != null && !java.util.Arrays.asList("full", "subscribers").contains(requestedScope))
+            throw new IllegalArgumentException("catalogScope muss full oder subscribers sein");
+        String catalogScope;
+        List<SubscriberStat> stats;
+        synchronized (databaseManager) {
+            boolean selected = databaseManager.hasSubscriberCatalogueSelection();
+            catalogScope = requestedScope != null ? requestedScope : selected ? "subscribers" : "full";
+            if ("subscribers".equals(catalogScope) && !selected)
+                return Resp.json(503, errorBody("Kein aktueller Abonnenten-Auswahlsnapshot vorhanden"));
+            stats = "full".equals(catalogScope) ? validProviderStatistics(databaseManager.getFullSubscriberStatistics())
+                    : providerStatistics();
+        }
         applyProviderFilters(stats, query);
         sortProviders(stats, query);
         int total = stats.size();
@@ -382,6 +394,7 @@ public class RestApiServer {
 
         JsonWriter w = new JsonWriter();
         w.beginObject()
+            .name("catalogScope").value(catalogScope)
             .name("total").value(total)
             .name("count").value(window.size())
             .name("offset").value(page[0])
@@ -859,8 +872,12 @@ public class RestApiServer {
 
     /** Filter before totals, sorting and pagination; preserve the underlying historical rows. */
     private List<SubscriberStat> providerStatistics() {
+        return validProviderStatistics(databaseManager.getCatalogueSubscriberStatistics());
+    }
+
+    private List<SubscriberStat> validProviderStatistics(List<SubscriberStat> stats) {
         List<SubscriberStat> valid = new ArrayList<>();
-        for (SubscriberStat stat : databaseManager.getCatalogueSubscriberStatistics()) {
+        for (SubscriberStat stat : stats) {
             if (isProviderId(stat.getSignalId())) valid.add(stat);
         }
         return valid;

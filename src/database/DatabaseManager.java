@@ -350,8 +350,17 @@ public class DatabaseManager {
         }
     }
 
+    public synchronized boolean hasSubscriberCatalogueSelection() {
+        try (Connection conn = getConnection(); Statement q = conn.createStatement();
+             ResultSet r = q.executeQuery("SELECT id FROM subscriber_catalog_state WHERE id=1")) {
+            return r.next();
+        } catch (SQLException e) {
+            throw new IllegalStateException("Abonnenten-Auswahlbeleg nicht lesbar", e);
+        }
+    }
+
     public synchronized List<SubscriberStat> getCatalogueSubscriberStatistics() {
-        List<SubscriberStat> all=getAllSubscriberStatistics();
+        List<SubscriberStat> all=getFullSubscriberStatistics();
         try(Connection conn=getConnection(); Statement q=conn.createStatement()) {
             try(ResultSet r=q.executeQuery("SELECT id FROM subscriber_catalog_state WHERE id=1")) { if(!r.next()) return all; }
             java.util.Set<String> members=new java.util.HashSet<>();
@@ -363,7 +372,15 @@ public class DatabaseManager {
         } catch(SQLException e) { throw new IllegalStateException("Aktueller Abonnentenkatalog nicht lesbar",e); }
     }
 
+    public synchronized List<SubscriberStat> getFullSubscriberStatistics() {
+        return readSubscriberStatistics(true);
+    }
+
     public synchronized List<SubscriberStat> getAllSubscriberStatistics() {
+        return readSubscriberStatistics(false);
+    }
+
+    private List<SubscriberStat> readSubscriberStatistics(boolean requireComplete) {
         List<SubscriberStat> stats = new ArrayList<>();
         // A weekly comparison accepts at most two days of scheduler/manual-run drift.
         // For a 30-day value, four days are required because the normal weekly scan
@@ -399,6 +416,7 @@ public class DatabaseManager {
             }
         } catch (SQLException e) {
             logger.error("Error fetching subscriber statistics", e);
+            if (requireComplete) throw new IllegalStateException("Vollstaendiger lokaler Katalog nicht lesbar", e);
         }
         return stats;
     }

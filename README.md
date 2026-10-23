@@ -255,3 +255,30 @@ mvn test    # REST-API, Parser, MPDD-Berechnung, Setup, DB
 ---
 
 > **Hinweis**: Dieses Tool ist für Bildungs- und Analysezwecke konzipiert. Trading birgt finanzielle Risiken.
+
+
+## Expliziter Katalogumfang (GLM-Review 24.10.2026)
+
+`GET /api/v1/providers?catalogScope=full` liefert den gesamten lokal bekannten
+Bestand mit aktuellen gespeicherten Zaehlern, auch nach einem reinen
+Top-200-Abonnentenupdate. Das bedeutet keine Vollerfassung der Handelsplattform.
+`catalogScope=subscribers` liefert exakt die zuletzt publizierte
+Abonnentenauswahl; ohne Auswahlnachweis antwortet der Dienst mit HTTP 503.
+Andere oder leere Scopewerte ergeben HTTP 400. Ohne Parameter bleibt das
+bisherige Verhalten (aktive Auswahl, sonst lokaler Bestand) erhalten.
+Jede JSON-Seite einschliesslich leerer Randseiten nennt top-level `catalogScope`.
+Die bisherigen Filter und die CSV-Spalten bleiben gleich; der Scopebeleg gilt
+fuer JSON. Ein Lesefehler im expliziten Vollkatalog wird als Fehler gemeldet,
+nicht als leerer Vollbestand.
+
+Im Abonnenten-Konverter werden ID und MetaTrader-Version der HTML-Profilseite
+vor dem Schreiben geprueft. Login-/Fehlerseiten oder fremde Profile ersetzen
+keine vorhandenen Kennzahlen. Ein korrekt zugeordnetes Profil darf weiterhin
+frische Kontofakten mit unbekanntem `3MPDD=NaN` exportieren.
+
+
+Eine HTML-Seite ohne verifizierte numerische Anbieterzeilen gilt weiterhin als
+unbelegte Antwort, nicht automatisch als Listenende. Login-/Fehlerseiten koennen
+ebenso aussehen. Im reinen Abonnentenmodus gilt der separate Auswahlbeleg:
+Zielzahl je Plattform erreicht oder gepruefte Nullzaehlergrenze; sichtbare
+Paginatorzahlen oder eine kurze Seite ersetzen diesen Beleg nicht.

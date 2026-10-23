@@ -38,7 +38,7 @@ final class ClientUpdateRunner implements Runnable {
     static List<SubscriberStat> eligible(List<SubscriberStat> providers, String version) {
         List<SubscriberStat> result = new ArrayList<>();
         for (SubscriberStat provider : providers) {
-            if (provider.getSignalId() != null && provider.getSignalId().matches("\\d+")
+            if (provider.getSignalId() != null && provider.getSignalId().matches("[1-9][0-9]*")
                     && provider.getSubscribers() > 0
                     && ProviderFiles.normalizeVersionFolder(version).equals(
                             ProviderFiles.normalizeVersionFolder(provider.getMqlVersion()))) result.add(provider);

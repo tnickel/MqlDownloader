@@ -21,6 +21,14 @@ class ClientUpdateRunnerTest {
         return new SubscriberStat(id, version, "Synthetic " + id, subscribers, 0, null, null, null, null);
     }
 
+    @Test void eligibleRequiresCanonicalPositiveProviderIdentity() {
+        List<SubscriberStat> input = Arrays.asList(provider("007","mql4",10), provider("0","mql4",10),
+                provider("-1","mql4",10),provider("7","mql4",10),provider("8","mql5",10));
+        List<SubscriberStat> eligible=ClientUpdateRunner.eligible(input,"mql4");
+        assertEquals(1,eligible.size());
+        assertEquals("7",eligible.get(0).getSignalId());
+    }
+
     private final class FakeServices implements ClientUpdateRunner.Services {
         List<SubscriberStat> providers = Arrays.asList(provider("11", "mql4", 3), provider("22", "mql5", 5));
         List<String> calls = new ArrayList<>();

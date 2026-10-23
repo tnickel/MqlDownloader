@@ -192,8 +192,19 @@ public class HtmlConverter {
         logger.info("Processing file: " + htmlFileName + " to " + txtFileName);
         
         // OPTIMIERUNG: Zuerst 3MPDD berechnen und pr\u00fcfen ob < 0.5
-        double mpdd3 = calculate3MPDD(htmlFileName);
         boolean skipFilter = preserveProvider || ((configManager != null) && configManager.isSubscribersOnly());
+        if (skipFilter) {
+            java.util.regex.Matcher identity = java.util.regex.Pattern.compile(".*_([1-9][0-9]*)_root\\.html$")
+                    .matcher(htmlFile.getFileName().toString());
+            String folder = rest.ProviderFiles.normalizeVersionFolder(htmlFile.getParent().getFileName().toString());
+            if (!identity.matches() || folder == null || !rest.ProviderFiles.htmlIdentity(
+                    org.jsoup.Jsoup.parse(htmlFile.toFile(), "UTF-8"), identity.group(1), folder)) {
+                failedProvidersCount++;
+                logger.warn("Profilidentitaet nicht belegt; vorhandene Kennzahlen bleiben erhalten: " + htmlFileName);
+                return;
+            }
+        }
+        double mpdd3 = calculate3MPDD(htmlFileName);
         // Review 04.10. (Paket C C2b): Ein BERECHNUNGSFEHLER (NaN) ist kein
         // "schlechter" Wert — geloescht wird nur bei tatsaechlich berechnetem
         // mpdd3 < 0.5, niemals weil die Extraktion versagte (Zeitbombe bei

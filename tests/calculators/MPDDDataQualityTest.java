@@ -44,7 +44,7 @@ class MPDDDataQualityTest {
     @Test void subscriberModePublishesFactsEvenWhenOptionalQuotientIsUnknown(@TempDir Path temp) throws Exception {
         Path dir=Files.createDirectories(temp.resolve("download/mql4"));
         Path html=dir.resolve("Synthetic_101_root.html"),csv=dir.resolve("Synthetic_101.csv"),txt=dir.resolve("Synthetic_101_root.txt");
-        String source="<div class='s-list-info__item'><div class='s-list-info__label'>Balance:</div>"
+        String source="<div data-id='101' data-mt='4'></div><div class='s-list-info__item'><div class='s-list-info__label'>Balance:</div>"
                 + "<div class='s-list-info__value'>123.45 EUR</div></div>Maximaler R\u00fcckgang: 5%";
         Files.write(html,source.getBytes(StandardCharsets.UTF_8));
         Files.write(csv,"original history".getBytes(StandardCharsets.UTF_8));
@@ -62,4 +62,22 @@ class MPDDDataQualityTest {
         assertEquals(123.45,Double.parseDouble(facts.get("Balance").replace(',','.')));
         assertEquals("NaN",facts.get("3MPDD"));
     }
+    @Test void subscriberModeDoesNotReplaceMetricsWithUnverifiedHtml(@TempDir Path temp) throws Exception {
+        Path dir=Files.createDirectories(temp.resolve("download/mql4"));
+        Path html=dir.resolve("Synthetic_101_root.html"), txt=dir.resolve("Synthetic_101_root.txt");
+        Files.createDirectories(temp.resolve("config"));
+        config.ConfigurationManager settings=new config.ConfigurationManager(temp.toString());
+        settings.setSubscribersOnly(true);
+        for (String invalid : Arrays.asList("<html>Login required</html>",
+                "<div data-id='102' data-mt='4'></div>", "<div data-id='101' data-mt='5'></div>")) {
+            Files.write(html, invalid.getBytes(StandardCharsets.UTF_8));
+            Files.write(txt, "Currency=USD\n3MPDD=9.99\n".getBytes(StandardCharsets.UTF_8));
+            HtmlConverter converter=new HtmlConverter(temp.resolve("download").toString(),settings);
+            converter.convertAllHtmlFiles();
+            assertEquals(1,converter.getFailedProvidersCount());
+            assertEquals("Currency=USD\n3MPDD=9.99\n",new String(Files.readAllBytes(txt),StandardCharsets.UTF_8));
+            assertEquals(invalid,new String(Files.readAllBytes(html),StandardCharsets.UTF_8));
+        }
+    }
+
 }
