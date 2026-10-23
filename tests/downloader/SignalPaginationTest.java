@@ -207,6 +207,87 @@ class SignalPaginationTest {
         assertNull(SignalDownloader.parseSubscriberCount(null));
     }
 
+    @Test void visiblePageWindowIsNotAnEndProofForTheSubscriberSelection() throws Exception {
+        SignalDownloader downloader = subscriberPages(Arrays.asList(
+                Arrays.asList(provider(601, 10), provider(602, 8)),
+                Arrays.asList(provider(603, 7), provider(604, 4)),
+                Arrays.asList(provider(605, 1))), 1, 5);
+        Method run = SignalDownloader.class.getDeclaredMethod("processSignalProviders");
+        run.setAccessible(true); run.invoke(downloader);
+        assertEquals(5, downloader.getSubscriberList().size(),
+                "The visible page window cannot truncate a subscriber selection before its target");
+        assertEquals(true,downloader.getSubscriberListResult().proof().get("targetReached"));
+        assertEquals(false,downloader.getSubscriberListResult().proof().get("zeroBoundaryReached"));
+    }
+
+    @Test void shortPrefixRequiresAnActualZeroBoundaryInsteadOfVisibleLastPage() throws Exception {
+        SignalDownloader downloader = subscriberPages(Arrays.asList(
+                Arrays.asList(provider(611, 8), provider(612, 4)),
+                Arrays.asList(provider(613, 1))), 2, 200);
+        Method run=SignalDownloader.class.getDeclaredMethod("processSignalProviders");run.setAccessible(true);
+        InvocationTargetException error=assertThrows(InvocationTargetException.class,()->run.invoke(downloader));
+        assertTrue(error.getCause().getMessage().contains("verifiziert"));
+        assertEquals(3,downloader.getSubscriberList().size());
+        assertThrows(IllegalStateException.class,downloader::getSubscriberListResult);
+        assertEquals(1,downloader.getFailedProvidersCount());
+    }
+
+    @Test void actualZeroBoundaryProvesAValidShortOrEmptySubscriberSelection() throws Exception {
+        for(boolean empty:Arrays.asList(false,true)) {
+            SignalDownloader downloader = subscriberPages(Arrays.asList(empty
+                    ? Arrays.asList(provider(620, 0)) : Arrays.asList(provider(621, 4),provider(622, 1),provider(623, 0))), 1, 200);
+            Method run=SignalDownloader.class.getDeclaredMethod("processSignalProviders");run.setAccessible(true);run.invoke(downloader);
+            assertEquals(empty?0:2,downloader.getSubscriberListResult().providers().size());
+            assertEquals(true,downloader.getSubscriberListResult().proof().get("zeroBoundaryReached"));
+            assertEquals(false,downloader.getSubscriberListResult().proof().get("targetReached"));
+        }
+    }
+
+    @Test void unstartedOrStoppedSubscriberReadCannotReturnAFreshReceipt() throws Exception {
+        SignalDownloader downloader=subscriberPages(Arrays.asList(Arrays.asList(provider(631,0))),1,200);
+        assertThrows(IllegalStateException.class,downloader::getSubscriberListResult);
+        downloader.setStopFlag(true);
+        Method run=SignalDownloader.class.getDeclaredMethod("processSignalProviders");run.setAccessible(true);run.invoke(downloader);
+        assertThrows(IllegalStateException.class,downloader::getSubscriberListResult);
+    }
+
+    private SignalDownloader subscriberPages(List<List<WebElement>> pages, int visibleMax, int target) throws Exception {
+        Files.createDirectories(dir.resolve("config"));
+        ConfigurationManager config = new ConfigurationManager(dir.toString()) {
+            @Override public String getMqlBaseUrl() { return "https://www.mql5.com/en/signals/mt4/list"; }
+            @Override public String getMqlVersion() { return "mt4"; }
+            @Override public String getCurrentDownloadPath() { return dir.toString(); }
+            @Override public String getDownloadPath() { return dir.toString(); }
+            @Override public int getMinWaitTime() { return 0; }
+            @Override public int getMaxWaitTime() { return 0; }
+        };
+        AtomicReference<String> url = new AtomicReference<>("");
+        WebDriver driver = (WebDriver) Proxy.newProxyInstance(getClass().getClassLoader(), new Class[]{WebDriver.class}, (proxy, method, args) -> {
+            if (method.getName().equals("get")) { url.set((String) args[0]); return null; }
+            if (method.getName().equals("getCurrentUrl")) return url.get();
+            if (method.getName().equals("findElements")) {
+                String selector = args[0].toString();
+                if (selector.contains("paging") || selector.contains("pagination") || selector.contains("/page")) {
+                    if (visibleMax == 0) return Collections.emptyList();
+                    return Collections.singletonList(element((name, values) -> name.equals("getText") ? ""+visibleMax
+                            : name.equals("getAttribute") ? "https://www.mql5.com/en/signals/mt4/list/page"+visibleMax : null));
+                }
+                if (selector.contains("/signals/") || selector.contains("signal")) {
+                    java.util.regex.Matcher match = java.util.regex.Pattern.compile("/page([0-9]+)").matcher(url.get());
+                    int page = match.find() ? Integer.parseInt(match.group(1)) : 1;
+                    return page <= pages.size() ? pages.get(page-1) : Collections.emptyList();
+                }
+                return Collections.emptyList();
+            }
+            return null;
+        });
+        SignalDownloader downloader = new SignalDownloader(driver, config, null);
+        downloader.setSubscriberListMode(target);
+        Field wait = SignalDownloader.class.getDeclaredField("wait"); wait.setAccessible(true);
+        wait.set(downloader, new WebDriverWait(driver, Duration.ofMillis(30)).pollingEvery(Duration.ofMillis(5)));
+        return downloader;
+    }
+
     private Object field(Object owner, String name) throws Exception {
         Field field = SignalDownloader.class.getDeclaredField(name);
         field.setAccessible(true);

@@ -56,7 +56,12 @@ public class DownloadManager {
     }
 
     private volatile java.util.List<database.SubscriberStat> measuredSubscribers = java.util.Collections.emptyList();
+    private volatile SignalDownloader.SubscriberListResult measuredSubscriberResult;
     public java.util.List<database.SubscriberStat> getMeasuredSubscribers() { return new java.util.ArrayList<>(measuredSubscribers); }
+    public SignalDownloader.SubscriberListResult getMeasuredSubscriberResult() {
+        if (measuredSubscriberResult == null) throw new IllegalStateException("Kein aktueller Abonnenten-Auswahlbeleg");
+        return measuredSubscriberResult;
+    }
     public void startSubscriberListDownload(String version, int target) {
         startDownload(version, null, false, true, target);
     }
@@ -78,6 +83,7 @@ public class DownloadManager {
     private void startDownload(String version, java.util.List<database.SubscriberStat> providers,
                                boolean includeTrades, boolean updateRequest, Integer subscriberTarget) {
         measuredSubscribers = java.util.Collections.emptyList();
+        measuredSubscriberResult = null;
         logHandler.log("=== STARTE " + version + " DOWNLOAD-PROZESS ===");
         stopRequested = false;
         downloadFailure = null;
@@ -210,6 +216,7 @@ public class DownloadManager {
                 if (stopRequested && !limitReachedLogged) {
                     throw new IOException("Download wurde abgebrochen");
                 }
+                if (subscriberTarget != null) measuredSubscriberResult = downloader.getSubscriberListResult();
 
             } catch (Exception e) {
                 downloadFailure = e;

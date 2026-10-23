@@ -144,6 +144,7 @@ class UpdateEndpointTest {
     @Test
     void subscriberModeIsAdvertisedAndForwardedWithoutSilentFullUpdate() throws Exception {
         assertTrue(get("/health").contains("\"abonnentenRefresh\":true"));
+        assertTrue(get("/health").contains("\"subscriberSelectionProof\":true"));
         beendeFakeJob();
         assertEquals(202,post("/update","{\"nurAbonnenten\":true,\"target\":200,\"tradelisten\":false}"));
         assertEquals(Boolean.TRUE,letzterBody.get().get("nurAbonnenten"));

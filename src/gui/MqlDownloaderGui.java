@@ -256,6 +256,10 @@ public class MqlDownloaderGui extends JFrame {
                             downloadManager.waitForDownloadCompletion();
                             return downloadManager.getMeasuredSubscribers();
                         }
+                        @Override public downloader.SignalDownloader.SubscriberListResult collectVerified(String version,int requested) throws Exception {
+                            collect(version,requested);
+                            return downloadManager.getMeasuredSubscriberResult();
+                        }
                         @Override public void publish(java.util.List<database.SubscriberStat> selected) throws Exception {
                             downloadManager.getDatabaseManager().publishSubscriberCatalogue(selected);
                         }

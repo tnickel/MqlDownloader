@@ -1,6 +1,7 @@
 package gui;
 
 import database.SubscriberStat;
+import downloader.SignalDownloader.SubscriberListResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
@@ -15,6 +16,11 @@ import rest.UpdateJob;
 final class AbonnentenUpdateRunner implements Runnable {
     interface Services {
         List<SubscriberStat> collect(String version, int target) throws Exception;
+        default SubscriberListResult collectVerified(String version, int target) throws Exception {
+            // Old services may prove a full prefix by its size. A short list
+            // requires the downloader's explicit zero-boundary receipt.
+            return new SubscriberListResult(version, collect(version,target), target, false);
+        }
         void publish(List<SubscriberStat> providers) throws Exception;
     }
     private final UpdateJob job;
@@ -45,14 +51,22 @@ final class AbonnentenUpdateRunner implements Runnable {
         job.ergebnis("tradelistenNeu",0);job.ergebnis("tradelistenAktualisiert",0);
         try {
             List<SubscriberStat> candidates=new ArrayList<>();
+            java.util.Map<String,Object> platformProof=new java.util.LinkedHashMap<>();
             for(String version:new String[]{"MQL4","MQL5"}) {
                 job.melde("abonnenten",0,target,version+": Abonnentenliste absteigend lesen (ohne Profile) …");
-                candidates.addAll(services.collect(version,target));
+                SubscriberListResult result=services.collectVerified(version,target);
+                if(result==null || !version.equalsIgnoreCase(result.version()) || result.target()!=target)
+                    throw new IllegalArgumentException("Abonnenten-Auswahlbeleg gehoert zu anderer Plattform oder anderem Ziel");
+                candidates.addAll(result.providers());
+                platformProof.put(result.version(),result.proof());
             }
             List<SubscriberStat> selected=top(candidates,target);
             // A subset observation proves no full-profile/catalogue freshness.
             Files.deleteIfExists(fullCatalogueMarker);
             services.publish(selected);
+            job.ergebnis("subscriberSelectionVerified",true);
+            job.ergebnis("subscriberSelectionTarget",target);
+            job.ergebnis("subscriberSelectionPlatforms",platformProof);
             job.ergebnis("signaleGeliefert",selected.size());
             job.hinweis("Nur Abonnenten: insgesamt hoechstens "+target+" Anbieter aus MT4 und MT5, mindestens 1 Abonnent; keine Profile/Tradelisten neu geladen.");
             job.melde("abonnenten",selected.size(),selected.size(),"Top-Abonnentenkatalog atomar uebernommen");

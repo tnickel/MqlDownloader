@@ -60,12 +60,59 @@ public class SignalDownloader {
     private boolean includeTradeHistory = true;
     private Integer subscriberListTarget;
     private Integer previousListSubscribers;
+    private boolean subscriberListVerified;
     private final List<database.SubscriberStat> subscriberList = new ArrayList<>();
+
+    /** A verified top-list prefix, not a claim that every platform provider was read. */
+    public static final class SubscriberListResult {
+        private final String version;
+        private final List<database.SubscriberStat> providers;
+        private final int target;
+        private final boolean zeroBoundaryReached;
+        public SubscriberListResult(String version, List<database.SubscriberStat> providers, int target,
+                                    boolean zeroBoundaryReached) {
+            this.version = version == null ? "" : version.toLowerCase(java.util.Locale.ROOT);
+            if (!("mql4".equals(this.version) || "mql5".equals(this.version)) || target < 1 || target > 200
+                    || providers == null || providers.size() > target
+                    || providers.size() < target && !zeroBoundaryReached)
+                throw new IllegalArgumentException("Abonnentenliste ohne belegtes Ziel oder Nullgrenze");
+            java.util.Set<String> ids = new java.util.HashSet<>();
+            int previous = Integer.MAX_VALUE;
+            for (database.SubscriberStat p : providers) {
+                if (p == null || !this.version.equals(p.getMqlVersion()) || p.getSubscribers() < 1
+                        || p.getSubscribers() > previous || p.getSignalId() == null
+                        || !p.getSignalId().matches("[1-9][0-9]*") || !ids.add(p.getSignalId()))
+                    throw new IllegalArgumentException("Unverifizierte Abonnentenlisten-Identitaet oder Reihenfolge");
+                previous = p.getSubscribers();
+            }
+            this.providers = java.util.Collections.unmodifiableList(new ArrayList<>(providers));
+            this.target = target;
+            this.zeroBoundaryReached = zeroBoundaryReached;
+        }
+        public String version() { return version; }
+        public List<database.SubscriberStat> providers() { return providers; }
+        public int target() { return target; }
+        public java.util.Map<String,Object> proof() {
+            java.util.Map<String,Object> result = new java.util.LinkedHashMap<>();
+            result.put("collected", providers.size());
+            result.put("targetReached", providers.size() == target);
+            result.put("zeroBoundaryReached", zeroBoundaryReached);
+            return result;
+        }
+    }
+
+    public SubscriberListResult getSubscriberListResult() {
+        if (!subscriberListVerified || subscriberListTarget == null || stopRequested)
+            throw new IllegalStateException("Kein vollstaendiger Abonnenten-Auswahlbeleg dieses Downloads");
+        String version = configManager.getMqlVersion().startsWith("mt4") ? "mql4" : "mql5";
+        return new SubscriberListResult(version, subscriberList, subscriberListTarget, subscriberBoundaryReached);
+    }
 
     /** Read table rows only. No profiles, exports or persistence before the merged snapshot is complete. */
     public void setSubscriberListMode(int target) {
         if (target < 1 || target > 200) throw new IllegalArgumentException("target muss zwischen 1 und 200 liegen");
         subscriberListTarget = target;
+        subscriberListVerified = false;
         includeTradeHistory = false;
         forceProviderRefresh = true;
     }
@@ -440,6 +487,7 @@ public class SignalDownloader {
      */
     private void processSignalProviders() {
         subscriberBoundaryReached = false;
+        subscriberListVerified = false;
         previousListSubscribers = null;
         subscriberList.clear();
         int currentPage = 1;
@@ -469,7 +517,9 @@ public class SignalDownloader {
 
         while (hasNextPage && !stopRequested && !subscriberBoundaryReached && totalProvidersProcessed < mqlLimit) {
             // NEUE LOGIK: Pr\u00fcfe ob maximale Seitenzahl erreicht wurde
-            if (maxPageNumber > 0 && currentPage > maxPageNumber) {
+            // Visible paging links can be a moving window, never an end proof.
+            // The dedicated counter mode keeps reading until target/zero.
+            if (subscriberListTarget == null && maxPageNumber > 0 && currentPage > maxPageNumber) {
                 logger.info("Maximale Seitenzahl ({}) erreicht - beende Download-Prozess", maxPageNumber);
                 hasNextPage = false;
                 break;
@@ -592,6 +642,14 @@ public class SignalDownloader {
             }
         }
         
+        if (subscriberListTarget != null && !stopRequested) {
+            if (Thread.currentThread().isInterrupted() || failedProvidersCount > 0
+                    || subscriberList.size() < subscriberListTarget && !subscriberBoundaryReached) {
+                failedProvidersCount++;
+                throw new UnverifiedProviderPage("Abonnentenliste unvollstaendig: weder Ziel noch bestaetigte Nullgrenze fehlerfrei belegt");
+            }
+            subscriberListVerified = true;
+        }
         // Detaillierte Abschluss-Logs
         String reason = determineEndReason(hasNextPage, totalProvidersProcessed, mqlLimit, consecutiveErrors, maxPageNumber, currentPage);
         logger.info("Download-Prozess beendet - {}: {} Provider verarbeitet, {} Seiten durchsucht", 

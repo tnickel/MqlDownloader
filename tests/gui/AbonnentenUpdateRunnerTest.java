@@ -53,4 +53,45 @@ class AbonnentenUpdateRunnerTest {
         assertThrows(IllegalArgumentException.class,()->AbonnentenUpdateRunner.top(Arrays.asList(p(1,"mql4",0)),200));
         assertThrows(IllegalArgumentException.class,()->AbonnentenUpdateRunner.top(Arrays.asList(p(1,"mql4",7),p(1,"mql4",7)),200));
     }
+    @Test void aShortUnprovedPlatformCannotPublishEvenWhenTheOtherAlreadyFillsTheGlobalTarget() throws Exception {
+        Path marker=dir.resolve("marker");Files.writeString(marker,"old");UpdateJob job=new UpdateJob("short");
+        new AbonnentenUpdateRunner(job,new AbonnentenUpdateRunner.Services(){
+            public List<SubscriberStat> collect(String version,int target) {
+                return version.equals("MQL4")?Arrays.asList(p(1,"mql4",10),p(2,"mql4",8)):Arrays.asList(p(3,"mql5",5));
+            }
+            public void publish(List<SubscriberStat> rows){fail("Do not relabel an old selection as fresh");}
+        },marker,2).run();
+        assertEquals(UpdateJob.State.ERROR,job.state());assertEquals("old",Files.readString(marker));
+        assertNull(((Map<?,?>)job.statusJson().get("ergebnis")).get("subscriberSelectionVerified"));
+    }
+    @Test void verifiedZeroBoundariesPermitFewerThanTargetIncludingAnEmptyPlatform() throws Exception {
+        List<SubscriberStat> published=new ArrayList<>();UpdateJob job=new UpdateJob("short-proved");
+        new AbonnentenUpdateRunner(job,new AbonnentenUpdateRunner.Services(){
+            public List<SubscriberStat> collect(String version,int target){fail("Use the detailed receipt");return null;}
+            public downloader.SignalDownloader.SubscriberListResult collectVerified(String version,int target) {
+                return new downloader.SignalDownloader.SubscriberListResult(version,version.equals("MQL4")
+                    ? Collections.emptyList():Arrays.asList(p(3,"mql5",5),p(4,"mql5",2)),target,true);
+            }
+            public void publish(List<SubscriberStat> rows){published.addAll(rows);}
+        },dir.resolve("marker"),200).run();
+        assertEquals(UpdateJob.State.DONE,job.state());assertEquals(2,published.size());
+        Map<?,?> receipt=(Map<?,?>)job.statusJson().get("ergebnis");
+        assertEquals(true,receipt.get("subscriberSelectionVerified"));assertEquals(200,receipt.get("subscriberSelectionTarget"));
+        Map<?,?> platforms=(Map<?,?>)receipt.get("subscriberSelectionPlatforms");
+        assertEquals(0,((Map<?,?>)platforms.get("mql4")).get("collected"));
+        assertEquals(true,((Map<?,?>)platforms.get("mql5")).get("zeroBoundaryReached"));
+    }
+    @Test void receiptForAnotherPlatformOrTargetCannotPublish() throws Exception {
+        for(boolean wrongTarget:Arrays.asList(false,true)) {
+            UpdateJob job=new UpdateJob("foreign");
+            new AbonnentenUpdateRunner(job,new AbonnentenUpdateRunner.Services(){
+                public List<SubscriberStat> collect(String version,int target){return Collections.emptyList();}
+                public downloader.SignalDownloader.SubscriberListResult collectVerified(String version,int target) {
+                    return new downloader.SignalDownloader.SubscriberListResult(wrongTarget?version:"mql5",Collections.emptyList(),wrongTarget?target-1:target,true);
+                }
+                public void publish(List<SubscriberStat> rows){fail("Foreign receipt");}
+            },dir.resolve("marker"),200).run();
+            assertEquals(UpdateJob.State.ERROR,job.state());
+        }
+    }
 }

@@ -354,6 +354,7 @@ public class RestApiServer {
             .name("instance").value(configManager.getInstanceName())
             .name("apiVersion").value("v1")
             .name("abonnentenRefresh").value(true)
+            .name("subscriberSelectionProof").value(true)
             .name("providerRefresh").value(updateStarter != null && updateStarter.providerRefreshSupported())
             .name("uptimeSeconds").value((System.currentTimeMillis() - startedAt) / 1000)
             .name("serverTime").value(iso(new Timestamp(System.currentTimeMillis())))
