@@ -158,7 +158,30 @@ public class HtmlConverter {
         return count;
     }
     
+    /** Recherche-Einzelabruf: keine Sammelkonvertierung und kein loeschender 3MPDD-Filter. */
+    public void convertProvider(String version, String providerId) throws IOException {
+        String folder = rest.ProviderFiles.normalizeVersionFolder(version);
+        if (folder == null || providerId == null || !providerId.matches("[1-9][0-9]*"))
+            throw new IllegalArgumentException("Anbieter-ID/Plattform ungueltig");
+        java.io.File csv = rest.ProviderFiles.findTradeCsv(
+                Paths.get(downloadPath, folder).toFile(), providerId);
+        if (csv == null || !downloader.DownloadFiles.validHeader(csv, folder))
+            throw new IOException("Passender Tradeexport fuer Einzelkonvertierung fehlt");
+        Path html = csv.toPath().resolveSibling(csv.getName().substring(0, csv.getName().length() - 4) + "_root.html");
+        if (!Files.isRegularFile(html)) throw new IOException("Passendes Providerprofil fehlt");
+        if (!rest.ProviderFiles.htmlIdentity(org.jsoup.Jsoup.parse(html.toFile(), null), providerId, folder))
+            throw new IOException("Profilidentitaet oder MetaTrader-Version nicht belegt");
+        conversionLogPath = Paths.get(downloadPath, "provider-" + folder + "-" + providerId + "-conversionLog.txt");
+        Files.write(conversionLogPath, "Gezielte Einzelkonvertierung; kein 3MPDD-Auswahlfilter.\n"
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        convertHtmlFile(html, true);
+    }
+
     private void convertHtmlFile(Path htmlFile) throws IOException {
+        convertHtmlFile(htmlFile, false);
+    }
+
+    private void convertHtmlFile(Path htmlFile, boolean preserveProvider) throws IOException {
         String htmlFileName = htmlFile.toString();
         String txtFileName = htmlFileName.replace("_root.html", "_root.txt");
         Path txtFile = Paths.get(txtFileName);
@@ -170,13 +193,13 @@ public class HtmlConverter {
         
         // OPTIMIERUNG: Zuerst 3MPDD berechnen und pr\u00fcfen ob < 0.5
         double mpdd3 = calculate3MPDD(htmlFileName);
-        boolean skipFilter = (configManager != null) && configManager.isSubscribersOnly();
+        boolean skipFilter = preserveProvider || ((configManager != null) && configManager.isSubscribersOnly());
         // Review 04.10. (Paket C C2b): Ein BERECHNUNGSFEHLER (NaN) ist kein
         // "schlechter" Wert — geloescht wird nur bei tatsaechlich berechnetem
         // mpdd3 < 0.5, niemals weil die Extraktion versagte (Zeitbombe bei
         // DOM-Aenderung: Massenloeschung der Originaldaten).
         
-        if (!Double.isFinite(mpdd3)) {
+        if (!Double.isFinite(mpdd3) && !skipFilter) {
             failedProvidersCount++;
             logger.info("3MPDD fuer " + htmlFileName + " nicht berechenbar - Originale erhalten");
             return;
@@ -191,7 +214,16 @@ public class HtmlConverter {
             return; // Keine weitere Verarbeitung
         }
         
-        logger.info("3MPDD OK (" + String.format("%.4f", mpdd3) + " >= 0.5) f\u00fcr " + htmlFileName + " - Vollst\u00e4ndige Verarbeitung");
+        // Subscriber mode selects by actual subscribers, not this optional
+        // performance quotient. Missing month/DD inputs must not suppress fresh
+        // account metadata or leave a previous finite quotient looking current.
+        if (!Double.isFinite(mpdd3)) {
+            logger.info("3MPDD unbekannt fuer " + htmlFileName
+                    + " - Abonnentenmodus: aktuelle Metadaten, 3MPDD bleibt NaN");
+        } else {
+            logger.info("3MPDD berechnet (" + String.format("%.4f", mpdd3) + ") fuer "
+                    + htmlFileName + " - Vollstaendige Verarbeitung");
+        }
         
         double balance = htmlParser.getBalance(htmlFileName);
         int subscribers = htmlParser.getSubscribers(htmlFileName);

@@ -52,6 +52,18 @@ public final class ProviderFiles {
         return latest(findBySignalId(versionDir, signalId, "_root.txt"));
     }
 
+    /** Profile HTML is independent age evidence; archives retain their identity gate. */
+    static File resolveRootHtml(File downloadDir, String signalId, String version) {
+        String folder = normalizeVersionFolder(version);
+        if (folder == null || downloadDir == null) return null;
+        File normal = latest(findBySignalId(new File(downloadDir, folder), signalId, "_root.html"));
+        if (normal != null) return normal;
+        File csv = resolveTradeCsv(downloadDir, signalId, folder);
+        if (csv == null) return null;
+        File html = new File(csv.getParentFile(), stripExtension(csv.getName()) + "_root.html");
+        return html.isFile() && isDirectChild(csv.getParentFile(), html) ? html : null;
+    }
+
     /** Normaler Versionsordner gewinnt. Archive brauchen eigenen Identitätsbeleg. */
     public static File resolveTradeCsv(File downloadDir, String signalId, String version) {
         String folder = normalizeVersionFolder(version);
@@ -60,17 +72,19 @@ public final class ProviderFiles {
         return normal != null ? normal : findArchiveCsv(downloadDir, signalId, folder);
     }
 
-    /** Archiv-Kennzahlen stammen ausschließlich aus demselben belegten Dateisatz. */
+    /** Kennzahlen stammen aus demselben Dateisatz wie die gewählte Trading-History. */
     public static File resolveRootTxt(File downloadDir, String signalId, String version) {
         String folder = normalizeVersionFolder(version);
         if (folder == null || downloadDir == null) return null;
         File normalDir = new File(downloadDir, folder);
-        File normal = findRootTxt(normalDir, signalId);
-        // Kein älterer Archiv-Metrics-Fallback neben einer regulären Trade-CSV.
-        if (findTradeCsv(normalDir, signalId) != null) return normal;
-        File csv = findArchiveCsv(downloadDir, signalId, folder);
-        if (csv == null) return normal;
-        // Bei Archiv-Trades keine unabhängigen regulären Metrics beimischen.
+        File csv = findTradeCsv(normalDir, signalId);
+        if (csv == null) csv = findArchiveCsv(downloadDir, signalId, folder);
+        // Ohne Trade-CSV bleibt der reine Kennzahlenzugriff möglich.
+        if (csv == null) return findRootTxt(normalDir, signalId);
+        // Die Sammelkonvertierung schreibt auch alte umbenannte Profile neu.
+        // Ihre spätere TXT-mtime belegt keine Aktualität zur gewählten CSV.
+        // Keine unabhängigen Alt-/Archiv-Metrics beimischen; fehlt das exakte
+        // Gegenstück, liefert die API ehrlich 404 bis zur Konvertierung.
         File txt = new File(csv.getParentFile(), stripExtension(csv.getName()) + "_root.txt");
         return txt.isFile() && isDirectChild(csv.getParentFile(), txt) ? txt : null;
     }
@@ -140,7 +154,7 @@ public final class ProviderFiles {
         }
     }
 
-    private static boolean htmlIdentity(org.jsoup.nodes.Document doc, String signalId, String folder) {
+    public static boolean htmlIdentity(org.jsoup.nodes.Document doc, String signalId, String folder) {
         String mt = folder.equals("mql5") ? "5" : "4";
         boolean found = false;
         for (Element tag : doc.select("[data-id][data-mt]")) {

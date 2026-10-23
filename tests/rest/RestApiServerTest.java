@@ -72,6 +72,12 @@ class RestApiServerTest {
                 + "-----------------\n";
         Files.write(mql5.resolve("Test_Provider_Alpha_123_root.txt"),
                 rootTxt.getBytes(StandardCharsets.UTF_8));
+        Files.write(mql5.resolve("Test_Provider_Alpha_123_root.html"),
+                ("<link rel='canonical' href='https://www.mql5.com/en/signals/123'>"
+                + "<div data-id='123' data-mt='5'></div>"
+                + "<div class='s-indicators__item_weeks'><div class='s-indicators__item-wrapper'>"
+                + "<span class='s-indicators__item-desc_weeks'><span>31</span> Weeks</span></div></div>")
+                .getBytes(StandardCharsets.UTF_8));
         Path analyse = tempDir.resolve("analyse");
         Files.createDirectories(analyse);
         byte[] pdfBytes = {0x25, 0x50, 0x44, 0x46, 0x2D, 0x74, 0x65, 0x73, 0x74};
@@ -98,6 +104,18 @@ class RestApiServerTest {
                 "sa", "").createStatement()) {
             stmt.execute("SHUTDOWN");
         }
+    }
+
+    @Test
+    void exposesProvenAgeInCatalogueAndDetailButKeepsUnknownNull() throws Exception {
+        HttpResponse catalogue = get("/api/v1/providers?version=mql5", null);
+        assertTrue(catalogue.body.contains("\"weeks\":31"));
+        assertTrue(catalogue.body.contains("\"weeksSource\":\"mql_profile_cached_weeks_lower_bound\""));
+        HttpResponse detail = get("/api/v1/providers/123/mql5", null);
+        assertTrue(detail.body.contains("\"weeks\":31"));
+        HttpResponse unknown = get("/api/v1/providers/55/mql4", null);
+        assertTrue(unknown.body.contains("\"weeks\":null"));
+        assertTrue(unknown.body.contains("\"weeksSource\":null"));
     }
 
     @Test

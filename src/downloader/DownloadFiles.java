@@ -33,8 +33,17 @@ public final class DownloadFiles {
         } catch (IOException e) { return false; }
     }
     public static File findDownload(File dir, String id) {
+        return findDownload(dir, id, null);
+    }
+    public static File findDownload(File dir, String id, String version) {
         if (id == null || !id.matches("\\d+")) return null;
-        File[] files = dir.listFiles((d,n) -> n.matches(java.util.regex.Pattern.quote(id) + "(?: \\(\\d+\\))?\\.csv"));
+        String folder = version == null ? null : ProviderFiles.normalizeVersionFolder(version);
+        if (version != null && folder == null) return null;
+        String suffix = folder == null ? "(?:history|positions)" : "mql4".equals(folder) ? "history" : "positions";
+        // MQL's Content-Disposition is <id>.history.csv / <id>.positions.csv.
+        // Chromium inserts its duplicate counter immediately before .csv.
+        String name = java.util.regex.Pattern.quote(id) + "(?:\\." + suffix + ")?(?: \\(\\d+\\))?\\.csv";
+        File[] files = dir.listFiles((d,n) -> n.matches(name));
         return files == null ? null : Arrays.stream(files).filter(File::isFile)
                 .max(Comparator.comparingLong(File::lastModified)).orElse(null);
     }

@@ -40,4 +40,26 @@ class MPDDDataQualityTest {
         assertEquals("original history",new String(Files.readAllBytes(csv),StandardCharsets.UTF_8));
         assertEquals("previous metrics",new String(Files.readAllBytes(txt),StandardCharsets.UTF_8));
     }
+
+    @Test void subscriberModePublishesFactsEvenWhenOptionalQuotientIsUnknown(@TempDir Path temp) throws Exception {
+        Path dir=Files.createDirectories(temp.resolve("download/mql4"));
+        Path html=dir.resolve("Synthetic_101_root.html"),csv=dir.resolve("Synthetic_101.csv"),txt=dir.resolve("Synthetic_101_root.txt");
+        String source="<div class='s-list-info__item'><div class='s-list-info__label'>Balance:</div>"
+                + "<div class='s-list-info__value'>123.45 EUR</div></div>Maximaler R\u00fcckgang: 5%";
+        Files.write(html,source.getBytes(StandardCharsets.UTF_8));
+        Files.write(csv,"original history".getBytes(StandardCharsets.UTF_8));
+        Files.write(txt,"Currency=USD\n3MPDD=9.99\n".getBytes(StandardCharsets.UTF_8));
+        Files.createDirectories(temp.resolve("config"));
+        config.ConfigurationManager settings=new config.ConfigurationManager(temp.toString());
+        settings.setSubscribersOnly(true);
+        HtmlConverter converter=new HtmlConverter(temp.resolve("download").toString(),settings);
+        converter.convertAllHtmlFiles();
+        assertEquals(0,converter.getFailedProvidersCount());
+        assertEquals(source,new String(Files.readAllBytes(html),StandardCharsets.UTF_8));
+        assertEquals("original history",new String(Files.readAllBytes(csv),StandardCharsets.UTF_8));
+        Map<String,String> facts=rest.MetricsParser.parse(txt.toFile()).getMetrics();
+        assertEquals("EUR",facts.get("Currency"));
+        assertEquals(123.45,Double.parseDouble(facts.get("Balance").replace(',','.')));
+        assertEquals("NaN",facts.get("3MPDD"));
+    }
 }

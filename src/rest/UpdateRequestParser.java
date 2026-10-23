@@ -20,8 +20,8 @@ final class UpdateRequestParser {
             while(reader.hasNext()) {
                 String key=reader.nextName(); if(!seen.add(key)) throw new IllegalArgumentException("Doppeltes Feld: "+key);
                 JsonElement value=JSON.fromJson(reader,JsonElement.class);
-                if("tradelisten".equals(key)) {
-                    if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException("tradelisten muss Boolean sein");
+                if("tradelisten".equals(key) || "nurAbonnenten".equals(key)) {
+                    if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isBoolean()) throw new IllegalArgumentException(key+" muss Boolean sein");
                     values.put(key,value.getAsBoolean());
                 } else if("target".equals(key) || "katalogMaxAlterH".equals(key)) {
                     if(!value.isJsonPrimitive() || !value.getAsJsonPrimitive().isNumber()) throw new IllegalArgumentException(key+" muss ganzzahlig sein");
@@ -32,6 +32,9 @@ final class UpdateRequestParser {
             }
             reader.endObject();
             if(reader.peek()!=JsonToken.END_DOCUMENT) throw new IllegalArgumentException("Zusatzinhalt nach JSON-Objekt");
+            if(Boolean.TRUE.equals(values.get("nurAbonnenten")) && values.containsKey("target")
+                    && ((Number)values.get("target")).intValue()>200)
+                throw new IllegalArgumentException("target muss im Abonnentenmodus zwischen 1 und 200 liegen");
             return values;
         } catch(Exception e) { throw new IllegalArgumentException("Ungueltiger Update-Body: "+e.getMessage(),e); }
     }

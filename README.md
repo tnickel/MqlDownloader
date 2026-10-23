@@ -39,10 +39,12 @@ Ein hochentwickeltes Java-Tool zur automatisierten Analyse und Bewertung von Met
 - `/providers` liefert standardmäßig nur Signale mit mindestens einem Abonnenten;
   `minSubscribers=0` öffnet ausdrücklich den vollständigen lokalen Katalog.
   Der Filter gilt vor Pagination für JSON und CSV. Detail-/Archivzugriff bleibt möglich.
-- Der aktuelle MQL-Katalog enthält keinen belegten `weeks`-Wert. Die konvertierten
-  TXT-Kennzahlen erzeugen derzeit ebenfalls kein Altersfeld. Abonnenten-Snapshots
-  und Dateizeitstempel werden nicht als Signalgründung ausgegeben; im Scanner
-  bleibt das Alter unbekannt und besteht den regulären Mindestalterfilter nicht.
+- JSON-Katalog und Providerdetails liefern `weeks` aus dem strukturierten
+  Wochenindikator der eindeutig zugeordneten lokalen MQL-Profilseite.
+  `weeksSource=mql_profile_cached_weeks_lower_bound` bezeichnet diesen gespeicherten
+  Wochenstand; seit dem Download verstrichene Zeit wird nicht hinzugerechnet.
+  Fehlt ein eindeutiger Beleg, bleiben beide Felder `null`. Abonnenten-Snapshots,
+  Dateizeitstempel und erste Trades werden nicht als Signalgründung ausgegeben.
 - **Tradelisten** als JSON oder rohe CSV, **Kennzahlen** und **Testreport-PDFs** abrufbar
 - CSV/Kennzahlen werden anhand der abschließenden Signal-ID zugeordnet;
   Zahlen im Signalnamen zählen nicht als ID. Fehlt der reguläre Versionscache,
@@ -231,6 +233,12 @@ Wir begrüßen Beiträge! Besonders interessant sind:
 [Hier deine gewünschte Lizenz einfügen]
 
 ## 🧪 Tests
+
+Im Abonnentenmodus ist ein unbekannter `3MPDD` kein Abbruchgrund fuer den
+Metadatenexport: aktuelle Kontofakten werden aus der lokalen Profilseite
+neu geschrieben, der nicht belegte Quotient bleibt ausdruecklich `NaN`.
+Der MPDD-Filtermodus behaelt seine bisherige strenge Fehlerbehandlung;
+fehlende Berechnungen werden niemals zu null oder einem positiven Urteil.
 
 ```bash
 mvn test    # REST-API, Parser, MPDD-Berechnung, Setup, DB

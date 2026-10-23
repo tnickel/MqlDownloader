@@ -11,6 +11,13 @@ public interface UpdateStarter {
 
     UpdateAntwort starte(Map<String, Object> body);
 
+    /** Nur true, wenn ein gezielter nativer Plattformabruf verdrahtet ist. */
+    default boolean providerRefreshSupported() { return false; }
+
+    default UpdateAntwort starteProvider(long providerId, String version) {
+        throw new UnsupportedOperationException("Gezielter Anbieterabruf nicht implementiert.");
+    }
+
     /** Letzter Job (auch abgeschlossener) für GET /api/v1/update/status;
      *  null = seit Start kein Update gelaufen (→ state "idle"). */
     UpdateJob letzterJob();

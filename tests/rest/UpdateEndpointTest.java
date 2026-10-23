@@ -142,6 +142,23 @@ class UpdateEndpointTest {
     }
 
     @Test
+    void subscriberModeIsAdvertisedAndForwardedWithoutSilentFullUpdate() throws Exception {
+        assertTrue(get("/health").contains("\"abonnentenRefresh\":true"));
+        beendeFakeJob();
+        assertEquals(202,post("/update","{\"nurAbonnenten\":true,\"target\":200,\"tradelisten\":false}"));
+        assertEquals(Boolean.TRUE,letzterBody.get().get("nurAbonnenten"));
+        assertEquals(200,letzterBody.get().get("target"));
+        int before=starts.get();
+        for(String invalid:new String[]{
+                "{\"nurAbonnenten\":\"true\"}","{\"nurAbonnenten\":1}","{\"nurAbonnenten\":null}",
+                "{\"nurAbonnenten\":true,\"target\":200.5}","{\"nurAbonnenten\":true,\"target\":0}",
+                "{\"nurAbonnenten\":true,\"target\":201}","{\"nurAbonnenten\":true,\"target\":\"200\"}"}) {
+            assertEquals(400,post("/update",invalid),invalid);
+        }
+        assertEquals(before,starts.get());
+    }
+
+    @Test
     void postLeererBodyNutztDefaults() throws Exception {
         beendeFakeJob();
         assertEquals(202, post("/update", ""));

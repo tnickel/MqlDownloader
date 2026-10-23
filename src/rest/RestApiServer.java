@@ -53,6 +53,7 @@ public class RestApiServer {
     private final DatabaseManager databaseManager;
     private final ConfigurationManager configManager;
     private final UpdateStarter updateStarter;
+    private final ProviderAge providerAge = new ProviderAge();
     private final long startedAt = System.currentTimeMillis();
     private HttpServer server;
     private ExecutorService executor;
@@ -146,12 +147,11 @@ public class RestApiServer {
                 return;
             }
             if ("POST".equals(method)) {
-                // Stufe 0 (SignalKiScanner doc/23 §4.1): genau EIN Schreib-
-                // Endpoint — der Update-Job. Alle anderen POST-Pfade bleiben
-                // gesperrt (Server sonst rein lesend).
-                if (updateStarter == null || !"/api/v1/update".equals(exchange.getRequestURI().getPath())) {
+                boolean providerRefresh = exchange.getRequestURI().getPath().matches(
+                        "/api/v1/providers/[1-9][0-9]*/[a-z0-9]+/refresh");
+                if (updateStarter == null || (!providerRefresh && !"/api/v1/update".equals(exchange.getRequestURI().getPath()))) {
                     send(exchange, Resp.json(405, errorBody(
-                            "Nur POST /api/v1/update ist erlaubt (Stufe 0); alle übrigen Endpunkte: GET und OPTIONS")));
+                            "Nur Update-Job oder gezielter Provider-Refresh erlaubt; sonst GET und OPTIONS")));
                     return;
                 }
                 Map<String, String> query = parseQuery(exchange);
@@ -160,7 +160,7 @@ public class RestApiServer {
                             "Ungültiger oder fehlender API-Token (X-API-Token, Bearer oder ?token=)")));
                     return;
                 }
-                send(exchange, updateStarten(exchange));
+                send(exchange, providerRefresh ? providerRefresh(exchange) : updateStarten(exchange));
                 return;
             }
             if (!"GET".equals(method)) {
@@ -219,6 +219,28 @@ public class RestApiServer {
         out.put("status", antwort.bereitsLaufend() ? "laeuft_bereits" : "gestartet");
         out.put("bereitsLaufend", antwort.bereitsLaufend());
         return Resp.json(antwort.status(), jsonVon(out));
+    }
+
+    /** Reserviert genau einen eigenen Job; kein Kataloglauf und kein alter Erfolgsbeleg. */
+    private Resp providerRefresh(HttpExchange exchange) {
+        String[] parts = exchange.getRequestURI().getPath().split("/");
+        final long id;
+        try { id = Long.parseLong(parts[4]); }
+        catch (NumberFormatException e) { return Resp.json(400, errorBody("Ungueltige Anbieter-ID")); }
+        String version = parts[5];
+        if (!"mql4".equals(version) && !"mql5".equals(version))
+            return Resp.json(400, errorBody("Falsche Quellenplattform"));
+        if (!updateStarter.providerRefreshSupported())
+            return Resp.json(405, errorBody("Gezielter Plattformabruf nicht implementiert"));
+        UpdateStarter.UpdateAntwort answer = updateStarter.starteProvider(id, version);
+        if (answer.status() >= 400 || answer.bereitsLaufend())
+            return Resp.json(409, errorBody(answer.error() == null
+                    ? "Anderer Quellenjob laeuft bereits" : answer.error()));
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put("jobId", answer.job().jobId());
+        out.put("status", "gestartet");
+        out.put("bereitsLaufend", false);
+        return Resp.json(answer.status(), jsonVon(out));
     }
 
     private static Map<String, Object> parseUpdateBody(String roh) {
@@ -285,6 +307,9 @@ public class RestApiServer {
             return notFound(join(path));
         }
         String signalId = path.get(1);
+        if (!isProviderId(signalId)) {
+            return notFound(join(path));
+        }
         if (path.size() == 2) {
             return providerDetailAll(signalId, query);
         }
@@ -328,9 +353,11 @@ public class RestApiServer {
             .name("service").value("MqlDownloader")
             .name("instance").value(configManager.getInstanceName())
             .name("apiVersion").value("v1")
+            .name("abonnentenRefresh").value(true)
+            .name("providerRefresh").value(updateStarter != null && updateStarter.providerRefreshSupported())
             .name("uptimeSeconds").value((System.currentTimeMillis() - startedAt) / 1000)
             .name("serverTime").value(iso(new Timestamp(System.currentTimeMillis())))
-            .name("providers").value(databaseManager.getAllSubscriberStatistics().size())
+            .name("providers").value(providerStatistics().size())
             .name("tokenRequired").value(!configManager.getApiToken().isEmpty())
         .endObject();
         return Resp.json(200, w.toString());
@@ -341,7 +368,7 @@ public class RestApiServer {
         validateChoice(query, "order", "asc", "desc");
         validateChoice(query, "format", "json", "csv");
         validateVersionQuery(query);
-        List<SubscriberStat> stats = new ArrayList<>(databaseManager.getAllSubscriberStatistics());
+        List<SubscriberStat> stats = providerStatistics();
         applyProviderFilters(stats, query);
         sortProviders(stats, query);
         int total = stats.size();
@@ -618,6 +645,7 @@ public class RestApiServer {
             File dir = versionDir(folder);
             for (File csv : ProviderFiles.listTradeCsvs(dir)) {
                 String signalId = ProviderFiles.extractSignalId(csv.getName());
+                if (!isProviderId(signalId)) continue;
                 if (idFilter != null && !idFilter.trim().isEmpty()
                         && !idFilter.trim().equals(signalId)) {
                     continue;
@@ -661,7 +689,7 @@ public class RestApiServer {
         }
         List<File> csvs = ProviderFiles.listTradeCsvs(versionDir(folder));
         File csv = ProviderFiles.findByName(csvs, fileName);
-        if (csv == null) {
+        if (csv == null || !isProviderId(ProviderFiles.extractSignalId(csv.getName()))) {
             return Resp.json(404, errorBody("Keine CSV mit Namen " + fileName + " im Ordner " + folder));
         }
         return Resp.file(200, csv, "text/csv; charset=utf-8");
@@ -674,7 +702,7 @@ public class RestApiServer {
         Timestamp until = parseUntil(query);
         boolean onlyChanges = !"true".equalsIgnoreCase(query.get("includeUnchanged"));
         int limit = pageParameter(query, "limit", 100, 1);
-        List<SubscriberEvent> events = databaseManager.getRecentEvents(since, until, onlyChanges, limit);
+        List<SubscriberEvent> events = databaseManager.getRecentProviderEvents(since, until, onlyChanges, limit);
 
         if ("csv".equalsIgnoreCase(query.get("format"))) {
             StringBuilder csv = new StringBuilder();
@@ -712,7 +740,7 @@ public class RestApiServer {
     }
 
     private Resp summary() {
-        List<SubscriberStat> stats = databaseManager.getAllSubscriberStatistics();
+        List<SubscriberStat> stats = providerStatistics();
         int total = 0;
         int mql4Count = 0;
         int mql5Count = 0;
@@ -784,12 +812,17 @@ public class RestApiServer {
     // ------------------------------------------------------------------
 
     private void writeStat(JsonWriter w, SubscriberStat stat, boolean withLinks) {
+        Integer weeks = providerAge.weeks(new File(configManager.getBaseDownloadPath()),
+                stat.getSignalId(), stat.getMqlVersion());
         w.beginObject()
             .name("signalId").value(stat.getSignalId())
             .name("version").value(stat.getMqlVersion())
             .name("signalName").value(stat.getSignalName())
             .name("subscribers").value(stat.getSubscribers())
             .name("latestChange").value(stat.getLatestChange());
+        w.name("weeks");
+        if (weeks == null) w.nullValue(); else w.value(weeks.longValue());
+        w.name("weeksSource").value(weeks == null ? null : ProviderAge.SOURCE);
         if (stat.getWeekChange() != null) {
             w.name("weekChange").value(stat.getWeekChange());
         } else {
@@ -816,6 +849,20 @@ public class RestApiServer {
             .endObject();
         }
         w.endObject();
+    }
+
+    /** MQL profile identities are canonical positive decimal IDs, never navigation/test labels. */
+    private static boolean isProviderId(String signalId) {
+        return signalId != null && signalId.matches("[1-9][0-9]*");
+    }
+
+    /** Filter before totals, sorting and pagination; preserve the underlying historical rows. */
+    private List<SubscriberStat> providerStatistics() {
+        List<SubscriberStat> valid = new ArrayList<>();
+        for (SubscriberStat stat : databaseManager.getCatalogueSubscriberStatistics()) {
+            if (isProviderId(stat.getSignalId())) valid.add(stat);
+        }
+        return valid;
     }
 
     private SubscriberStat findStat(String signalId, String version) {

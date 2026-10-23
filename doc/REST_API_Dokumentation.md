@@ -113,6 +113,14 @@ Keine Parameter. Antwort siehe Abschnitt 2.
 
 Abonnenten-Stand je Provider inkl. Änderungen der letzten 7/30 Tage (gleiche Werte wie der Statistik-Dialog der GUI).
 
+JSON-Providerobjekte enthalten außerdem `weeks` (Integer oder `null`) und
+`weeksSource` (`mql_profile_cached_weeks_lower_bound` oder `null`). Grundlage ist
+der strukturierte Wochenindikator der lokal gespeicherten Profilseite mit
+passender Signal-ID und MT4-/MT5-Identität. Der gespeicherte Stand wird nicht um
+seitdem verstrichene Wochen erhöht. Fehlende, ungültige oder widersprüchliche
+Belege bleiben unbekannt; weder Dateizeit noch Abonnenten-Historie ersetzen sie.
+CSV-Statistikexport und TXT-Metrics behalten ihr bestehendes Schema.
+
 | Parameter | Werte | Wirkung |
 |---|---|---|
 | `version` | `mql4`,`mql5`,`mt4`,`mt5` | nur diese Plattform |
@@ -505,3 +513,30 @@ konfiguriertes Limit stehen dann in `message`. `signaleGeliefert` zählt die
 im Lauf verarbeiteten Signale mit Abonnenten, nicht den vollständigen
 Plattformbestand. Eine `202`-Antwort bestätigt zunächst nur die Jobannahme;
 Fortschritt, Abschluss und Fehler stehen im gepollten Status. `ergebnis` ist ein JSON-Objekt und `hinweise` ein Array. Download-/Konvertierungsfehler ergeben `error`, positive `tradelistenFehler` und `tradelistenAbgebrochen=true`; ein erfolgreicher 3-Tage-Vermerk wird dann nicht geschrieben. Terminale Zustände bleiben auch gegenüber einem verspäteten Status-Poller erhalten.
+
+
+### Reine Abonnentenmessung (23.10.2026)
+
+`GET /api/v1/health` meldet `abonnentenRefresh: true`. Erst dieser Nachweis
+bestaetigt Unterstuetzung fuer `POST /api/v1/update` mit
+`{"nurAbonnenten":true,"target":200,"tradelisten":false,"katalogMaxAlterH":0}`.
+`nurAbonnenten` muss ein JSON-Boolean sein; `target` eine Ganzzahl von 1 bis 200.
+Ohne `nurAbonnenten:true` gelten die bisherigen Download-/GUI-Wege unveraendert.
+
+Der neue Modus liest ausschliesslich nach Abonnenten absteigend sortierte
+MT4-/MT5-Listen bis zum ersten belegten Nullwert oder zur Kandidatengrenze.
+Er liest je Plattform hoechstens `target` Kandidaten, damit nach der Vereinigung
+die globalen hoechstens `target` Anbieter mit mindestens einem Abonnenten
+korrekt ausgewaehlt werden koennen. Einzelprofile, Kennzahlen-Konvertierung und
+Tradelisten werden dabei nicht abgerufen. Beide Listen muessen erfolgreich
+verifiziert sein; erst dann werden aktuelle Mitgliedschaft, Zaehler und Historien
+atomar publiziert. Alte Profile, Risiko-/Farbnotizen und Historien bleiben erhalten.
+Direkte Anbieter-/History-/Metrics-Abfragen bleiben fuer Archividentitaeten
+lesbar. Die Katalogliste enthaelt nach diesem Modus nur die aktuelle Auswahl.
+Ein erfolgreicher spaeterer regulaerer REST-Vollupdate stellt dessen bisherige
+Katalogpolitik wieder her.
+
+Der Job meldet `ergebnis.nurAbonnenten:true`, die tatsaechlich gelieferte Anzahl
+und null neue/aktualisierte Tradelisten. Der Vollkatalog-/Profil-Frischemarker
+wird vor der Publikation ungueltig gemacht; eine reine Zaehlerbeobachtung darf
+keine aktuelle Kennzahlen- oder Tradepruefung vortaeuschen.

@@ -8,7 +8,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.logging.log4j.core.LoggerContext;
 import org.apache.logging.log4j.core.Appender;
-import org.apache.logging.log4j.core.config.Configurator;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilder;
 import org.apache.logging.log4j.core.config.builder.api.ConfigurationBuilderFactory;
 import org.apache.logging.log4j.core.config.builder.impl.BuiltConfiguration;
@@ -38,7 +37,9 @@ public class LoggerManager {
         if (log4jConfigFile.exists()) {
             try {
                 System.out.println("Log4j-Konfigurationsdatei gefunden: " + log4jConfigFile.getAbsolutePath());
-                Configurator.initialize(null, log4jConfigFile.getAbsolutePath());
+                // Static loggers commonly create the default context before main().
+                // initialize() then keeps ERROR-only defaults instead of this file.
+                loggerContext().setConfigLocation(log4jConfigFile.toURI());
                 logger.info("Log4j configuration file loaded successfully.");
             } catch (Exception e) {
                 System.err.println("Fehler beim Laden der Log4j-Konfiguration: " + e.getMessage());
@@ -79,7 +80,15 @@ public class LoggerManager {
                 .add(builder.newAppenderRef("Console"))
                 .add(builder.newAppenderRef("LogToFile")));
 
-        Configurator.initialize(builder.build());
+        loggerContext().setConfiguration(builder.build());
+    }
+
+    private static LoggerContext loggerContext() {
+        // getContext(false) selects the default context when LogManager is
+        // called from outside a named logger. Static application loggers can
+        // belong to a different classloader context, particularly in the fat
+        // JAR. Configure and flush the context that actually owns this logger.
+        return ((org.apache.logging.log4j.core.Logger) logger).getContext();
     }
     
     /**
@@ -99,7 +108,7 @@ public class LoggerManager {
                 return;
             }
             
-            LoggerContext context = (LoggerContext) LogManager.getContext(false);
+            LoggerContext context = loggerContext();
             if (context != null && context.getConfiguration() != null) {
                 // SICHERE Flush-Methode - NUR flush() ohne stop/start
                 context.getConfiguration().getAppenders().values().forEach(appender -> {
@@ -229,7 +238,7 @@ public class LoggerManager {
                 
                 if (lockAcquired) {
                     // Finaler sanfter Flush vor Shutdown
-                    LoggerContext context = (LoggerContext) LogManager.getContext(false);
+                    LoggerContext context = loggerContext();
                     if (context != null && context.getConfiguration() != null) {
                         context.getConfiguration().getAppenders().values().forEach(appender -> {
                             if (appender != null && appender.isStarted()) {

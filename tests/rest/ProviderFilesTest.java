@@ -92,6 +92,36 @@ class ProviderFilesTest {
     }
 
     @Test
+    void renamedProfileMetricsFollowSelectedCsvEvenWhenOldMetricsWereReconvertedLater() throws IOException {
+        Path folder = Files.createDirectories(tempDir.resolve("mql5"));
+        File oldCsv = folder.resolve("Old_Name_123.csv").toFile();
+        File currentCsv = folder.resolve("Current_Name_123.csv").toFile();
+        File oldMetrics = folder.resolve("Old_Name_123_root.txt").toFile();
+        File currentMetrics = folder.resolve("Current_Name_123_root.txt").toFile();
+        for (File file : new File[]{oldCsv, currentCsv, oldMetrics, currentMetrics}) {
+            Files.write(file.toPath(), new byte[]{1});
+        }
+        assertTrue(oldCsv.setLastModified(1000));
+        assertTrue(currentCsv.setLastModified(2000));
+        assertTrue(currentMetrics.setLastModified(3000));
+        assertTrue(oldMetrics.setLastModified(4000));
+        assertEquals(currentCsv, ProviderFiles.resolveTradeCsv(tempDir.toFile(), "123", "mql5"));
+        assertEquals(currentMetrics, ProviderFiles.resolveRootTxt(tempDir.toFile(), "123", "mql5"));
+        assertTrue(oldMetrics.exists());
+    }
+
+    @Test
+    void missingMetricsOfSelectedCsvNeverFallBackToAnotherRegularProfileName() throws IOException {
+        Path folder = Files.createDirectories(tempDir.resolve("mql4"));
+        Path csv = folder.resolve("Current_Name_55.csv");
+        Path other = folder.resolve("Old_Name_55_root.txt");
+        Files.write(csv, new byte[]{1});
+        Files.write(other, new byte[]{2});
+        assertNull(ProviderFiles.resolveRootTxt(tempDir.toFile(), "55", "mt4"));
+        assertEquals(2, Files.readAllBytes(other)[0]);
+    }
+
+    @Test
     void mt4ArchiveRequiresMt4EvidenceAndOrderbookFormat() throws IOException {
         Path csv = archive("archive", "P_55", "<div data-id='55' data-mt='4'></div>", MT4_HEADER);
         assertEquals(csv.toFile(), ProviderFiles.resolveTradeCsv(tempDir.toFile(), "55", "mt4"));

@@ -50,7 +50,7 @@ public class MqlDownloaderGui extends JFrame {
     private JLabel autoModeInfoLabel;
     private DefaultListModel<String> subscriberChangesListModel;
     private JList<String> subscriberChangesList;
-    private boolean overallProcessRunning;
+    private volatile boolean overallProcessRunning;
 
     public MqlDownloaderGui() {
         this("C:\\Forex\\MqlAnalyzer");
@@ -104,6 +104,11 @@ public class MqlDownloaderGui extends JFrame {
             public synchronized rest.UpdateStarter.UpdateAntwort starte(java.util.Map<String, Object> body) {
                 rest.UpdateJob laufend = updateJob;
                 if (laufend != null && laufend.laeuft()) {
+                    java.util.Map<?,?> result = (java.util.Map<?,?>) laufend.statusJson().get("ergebnis");
+                    if (result.containsKey("providerId"))
+                        return rest.UpdateStarter.UpdateAntwort.beschaeftigt("Ein gezielter Anbieterabruf laeuft bereits.");
+                    if (Boolean.TRUE.equals(body.get("nurAbonnenten")) != Boolean.TRUE.equals(result.get("nurAbonnenten")))
+                        return rest.UpdateStarter.UpdateAntwort.beschaeftigt("Ein anderer Aktualisierungsmodus laeuft bereits.");
                     return rest.UpdateStarter.UpdateAntwort.laufend(laufend);
                 }
                 if (overallProcessRunning || downloadManager.isDownloadRunning()
@@ -112,11 +117,32 @@ public class MqlDownloaderGui extends JFrame {
                             "Es läuft bereits ein Download oder eine Konvertierung.");
                 }
                 int katalogMaxAlterH = zahlAus(body, "katalogMaxAlterH", 72);
+                boolean tradelisten = !Boolean.FALSE.equals(body.get("tradelisten"));
+                boolean nurAbonnenten = Boolean.TRUE.equals(body.get("nurAbonnenten"));
+                int target = Math.max(1, Math.min(200, zahlAus(body, "target", 200)));
                 rest.UpdateJob neu = new rest.UpdateJob("u-" + java.util.UUID.randomUUID());
+                neu.ergebnis("nurAbonnenten", nurAbonnenten);
                 neu.reservieren();
                 updateJob = neu;
-                javax.swing.SwingUtilities.invokeLater(() -> starteUpdateKaskade(neu, katalogMaxAlterH));
+                javax.swing.SwingUtilities.invokeLater(() -> starteUpdateKaskade(neu, katalogMaxAlterH, tradelisten, nurAbonnenten, target));
                 return rest.UpdateStarter.UpdateAntwort.gestartet(neu);
+            }
+
+            @Override public boolean providerRefreshSupported() { return true; }
+
+            @Override public synchronized rest.UpdateStarter.UpdateAntwort starteProvider(long id, String version) {
+                if (id <= 0 || !("mql4".equals(version) || "mql5".equals(version)))
+                    throw new IllegalArgumentException("Anbieter-ID/Plattform ungueltig");
+                if ((updateJob != null && updateJob.laeuft()) || overallProcessRunning
+                        || downloadManager.isDownloadRunning() || conversionManager.isConversionRunning())
+                    return rest.UpdateStarter.UpdateAntwort.beschaeftigt("Ein anderer Quellenjob laeuft bereits.");
+                rest.UpdateJob job = new rest.UpdateJob("p-" + java.util.UUID.randomUUID());
+                job.ergebnis("providerId", Long.toString(id));
+                job.ergebnis("version", version);
+                job.reservieren();
+                updateJob = job;
+                SwingUtilities.invokeLater(() -> starteProviderRefresh(job, id, version));
+                return rest.UpdateStarter.UpdateAntwort.gestartet(job);
             }
 
             @Override
@@ -124,6 +150,53 @@ public class MqlDownloaderGui extends JFrame {
                 return updateJob;
             }
         };
+    }
+
+    /** Derselbe Busy-/Download-Lebenszyklus, aber exakt ein Anbieter und keine Publikation. */
+    private void starteProviderRefresh(rest.UpdateJob job, long id, String version) {
+        if (overallProcessRunning || downloadManager.isDownloadRunning() || conversionManager.isConversionRunning()) {
+            job.fehler("Es laeuft bereits ein Download oder eine Konvertierung.");
+            return;
+        }
+        overallProcessRunning = true;
+        disableAllButtons();
+        downloadManager.resetSubscribersCounters();
+        downloadManager.setDoAllAtOnce(true);
+        Thread worker = new Thread(() -> {
+            try {
+                new ProviderRefreshRunner(job, new ProviderRefreshRunner.Services() {
+                    @Override public java.util.List<database.SubscriberStat> providers() {
+                        return downloadManager.getDatabaseManager().getAllSubscriberStatistics();
+                    }
+                    @Override public void download(String platform, java.util.List<database.SubscriberStat> exact) throws Exception {
+                        downloadManager.startUpdateDownload(platform, exact, true);
+                        downloadManager.waitForDownloadCompletion();
+                    }
+                    @Override public void convert(String platform, String providerId) throws Exception {
+                        conversionManager.startProviderConversion(platform, providerId);
+                        conversionManager.waitForConversionCompletion();
+                    }
+                    @Override public void verify(String platform, String providerId, long startedAt) throws Exception {
+                        ProviderRefreshRunner.verifyArtifacts(
+                                java.nio.file.Paths.get(configManager.getRootDirPath(), "download").toFile(),
+                                providerId, platform, startedAt);
+                    }
+                    @Override public int newTrades() { return downloadManager.getNewTradeLists(); }
+                    @Override public int updatedTrades() { return downloadManager.getUpdatedTradeLists(); }
+                    @Override public int failed() { return downloadManager.getFailedProvidersCount(); }
+                }, id, version).run();
+            } catch (Exception error) {
+                job.fehler(error.getMessage() == null ? error.getClass().getSimpleName() : error.getMessage());
+            } finally {
+                downloadManager.setDoAllAtOnce(false);
+                SwingUtilities.invokeLater(() -> {
+                    overallProcessRunning = false;
+                    enableAllButtons();
+                });
+            }
+        }, "mql-provider-refresh");
+        worker.setDaemon(true);
+        worker.start();
     }
 
     private static int zahlAus(java.util.Map<String, Object> body, String schluessel, int defaultWert) {
@@ -141,23 +214,11 @@ public class MqlDownloaderGui extends JFrame {
         return defaultWert;
     }
 
-    /** Stufe-0-Kaskade (doc/23): dieselbe Kette wie „Alles ausführen“
-     *  (MQL4 → MQL5 → Konvertierung, Selenium-Login läuft automatisch mit
-     *  den gespeicherten Zugangsdaten), aber ohne Dialog und mit Live-Meldung
-     *  in den Job. 3-Tage-Regel: Lief der Gesamtprozess vor weniger als
-     *  katalogMaxAlterH Stunden erfolgreich, wird er komplett übersprungen
-     *  (Katalog und Tradelisten sind hier EIN Download). Muss auf dem EDT
-     *  aufgerufen werden. */
-    private void starteUpdateKaskade(rest.UpdateJob job, int katalogMaxAlterH) {
+    /** Stufe 0: Katalogfrische und angeforderte Trade-Aktualisierung sind unabhängig.
+     *  Ein frischer Katalog liefert den bekannten Scope; jeder Tradeabruf bleibt frisch.
+     *  Einstieg auf dem EDT, Arbeit wie bisher im Hintergrund. */
+    private void starteUpdateKaskade(rest.UpdateJob job, int katalogMaxAlterH, boolean tradelisten, boolean nurAbonnenten, int target) {
         java.nio.file.Path vermerk = java.nio.file.Path.of("config", "update_state.json");
-        String letzterLoad = leseKatalogVermerk(vermerk);
-        if (letzterLoad != null && katalogFrischGenug(letzterLoad, katalogMaxAlterH)) {
-            job.ergebnis("katalogUebersprungen", true);
-            job.fertig(letzterLoad);
-            logHandler.log("UPDATE-JOB " + job.jobId() + ": übersprungen (3-Tage-Regel, letzter Load "
-                    + letzterLoad + ").");
-            return;
-        }
         if (overallProcessRunning || downloadManager.isDownloadRunning()
                 || conversionManager.isConversionRunning()) {
             job.fehler("Es läuft bereits ein Download oder eine Konvertierung.");
@@ -180,7 +241,7 @@ public class MqlDownloaderGui extends JFrame {
                 }
                 String status = downloadManager.getDownloadStatus();
                 String phase = conversionManager.isConversionRunning() ? "konvertieren" : "download";
-                job.melde(phase, 0, 0, status);
+                job.melde(phase, downloadManager.getProgressDone(), downloadManager.getProgressTotal(), status);
             }
         }, "mql-update-status");
         statusPoller.setDaemon(true);
@@ -188,30 +249,44 @@ public class MqlDownloaderGui extends JFrame {
 
         Thread kaskade = new Thread(() -> {
             try {
-                logHandler.log("Starte MQL4 Download...");
-                downloadManager.startDownload("MQL4");
-                downloadManager.waitForDownloadCompletion();
-
-                logHandler.log("Starte MQL5 Download...");
-                job.melde("mql5", 0, 0, "MQL5-Download ...");
-                downloadManager.startDownload("MQL5");
-                downloadManager.waitForDownloadCompletion();
-
-                logHandler.log("Starte Konvertierung...");
-                job.melde("konvertieren", 0, 0, "Konvertierung ...");
-                conversionManager.startConversion();
-                conversionManager.waitForConversionCompletion();
-
-                int mql4Count = downloadManager.getMql4SubscribersDownloadedCount();
-                int mql5Count = downloadManager.getMql5SubscribersDownloadedCount();
-                job.ergebnis("signaleGeliefert", mql4Count + mql5Count);
-                job.hinweis("Signale MIT Abonnenten: " + mql5Count + " (MQL5) + "
-                        + mql4Count + " (MQL4) — Downloads nach konfigurierten MQL4-/MQL5-Limits.");
-                schreibeKatalogVermerk(vermerk);
-                job.fertig(java.time.LocalDateTime.now().format(
-                        java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss")));
-                logHandler.log("UPDATE-JOB " + job.jobId() + " fertig: " + (mql4Count + mql5Count)
-                        + " Signale mit Abonnenten.");
+                if(nurAbonnenten) {
+                    new AbonnentenUpdateRunner(job,new AbonnentenUpdateRunner.Services() {
+                        @Override public java.util.List<database.SubscriberStat> collect(String version,int requested) throws Exception {
+                            downloadManager.startSubscriberListDownload(version,requested);
+                            downloadManager.waitForDownloadCompletion();
+                            return downloadManager.getMeasuredSubscribers();
+                        }
+                        @Override public void publish(java.util.List<database.SubscriberStat> selected) throws Exception {
+                            downloadManager.getDatabaseManager().publishSubscriberCatalogue(selected);
+                        }
+                    },vermerk,target).run();
+                } else {
+                new ClientUpdateRunner(job, new ClientUpdateRunner.Services() {
+                    @Override public java.util.List<database.SubscriberStat> providers() {
+                        return downloadManager.getDatabaseManager().getAllSubscriberStatistics();
+                    }
+                    @Override public void download(String version, java.util.List<database.SubscriberStat> known,
+                                                   boolean includeTrades) throws Exception {
+                        downloadManager.startUpdateDownload(version, known, includeTrades);
+                        downloadManager.waitForDownloadCompletion();
+                    }
+                    @Override public void convert() throws Exception {
+                        conversionManager.startConversion();
+                        conversionManager.waitForConversionCompletion();
+                        downloadManager.getDatabaseManager().clearSubscriberCatalogueSelection();
+                    }
+                    @Override public int delivered() {
+                        return downloadManager.getMql4SubscribersDownloadedCount()
+                                + downloadManager.getMql5SubscribersDownloadedCount();
+                    }
+                    @Override public int newTrades() { return downloadManager.getNewTradeLists(); }
+                    @Override public int updatedTrades() { return downloadManager.getUpdatedTradeLists(); }
+                    @Override public int failed() { return downloadManager.getFailedProvidersCount(); }
+                }, vermerk, katalogMaxAlterH, tradelisten).run();
+                job.hinweis("Katalog-Discovery nach konfigurierten MQL4-/MQL5-Limits; "
+                        + "bei frischem Katalog werden dessen bekannte Anbieter aktualisiert.");
+                }
+                logHandler.log("UPDATE-JOB " + job.jobId() + " beendet: " + job.state());
             } catch (Exception e) {
                 logHandler.logError("Fehler im UPDATE-JOB: " + e.getMessage(), e);
                 job.ergebnis("tradelistenFehler", Math.max(1,downloadManager.getFailedProvidersCount()));
@@ -455,7 +530,8 @@ public class MqlDownloaderGui extends JFrame {
             return;
         }
 
-        if (overallProcessRunning || downloadManager.isDownloadRunning() || conversionManager.isConversionRunning()) {
+        if (overallProcessRunning || (updateJob != null && updateJob.laeuft())
+                || downloadManager.isDownloadRunning() || conversionManager.isConversionRunning()) {
             logHandler.log("Gesamtprozess nicht gestartet: Es l\u00e4uft bereits eine Operation.");
             return;
         }

@@ -23,6 +23,14 @@ public class ConversionManager {
     }
 
     public void startConversion() {
+        startConversion(null, null);
+    }
+
+    public void startProviderConversion(String version, String providerId) {
+        startConversion(version, providerId);
+    }
+
+    private void startConversion(String version, String providerId) {
         conversionFailure = null;
         logHandler.log("Starte Konvertierungsprozess...");
         setupUIForConversion();
@@ -40,7 +48,8 @@ public class ConversionManager {
                     });
                 });
                 
-                converter.convertAllHtmlFiles();
+                if (providerId == null) converter.convertAllHtmlFiles();
+                else converter.convertProvider(version, providerId);
                 if (converter.getFailedProvidersCount() > 0) {
                     throw new java.io.IOException(converter.getFailedProvidersCount() + " Provider konnten nicht konvertiert werden");
                 }

@@ -72,6 +72,8 @@ public class DatabaseManager {
         try (Connection conn = getConnection();
              Statement stmt = conn.createStatement()) {
             stmt.execute(createTableSql);
+            stmt.execute("CREATE TABLE IF NOT EXISTS subscriber_catalog_members (signal_id VARCHAR(100) NOT NULL, mql_version VARCHAR(10) NOT NULL, PRIMARY KEY(signal_id,mql_version))");
+            stmt.execute("CREATE TABLE IF NOT EXISTS subscriber_catalog_state (id INT PRIMARY KEY, measured_at TIMESTAMP NOT NULL)");
             stmt.execute(alterTableSql);
             stmt.execute(alterRiskColumnSql);
             stmt.execute(alterRowColorColumnSql);
@@ -298,6 +300,69 @@ public class DatabaseManager {
         }
     }
 
+    /** Atomically publish only the merged top selection. Historical providers and details stay intact. */
+    public synchronized void publishSubscriberCatalogue(List<SubscriberStat> measured) throws SQLException {
+        if (measured.size() > 200) throw new IllegalArgumentException("Hoechstens 200 Anbieter");
+        java.util.Set<String> identities = new java.util.HashSet<>();
+        for (SubscriberStat p : measured) {
+            if (p.getSignalId() == null || !p.getSignalId().matches("[1-9][0-9]*")
+                    || !("mql4".equals(p.getMqlVersion()) || "mql5".equals(p.getMqlVersion()))
+                    || p.getSubscribers() < 1 || !identities.add(subscriberHistoryKey(p.getSignalId(), p.getMqlVersion())))
+                throw new IllegalArgumentException("Ungueltige oder doppelte Abonnentenidentitaet");
+        }
+        Timestamp now = new Timestamp(System.currentTimeMillis());
+        try (Connection conn = getConnection()) {
+            conn.setAutoCommit(false);
+            try {
+                try (Statement statement = conn.createStatement()) { statement.executeUpdate("DELETE FROM subscriber_catalog_members"); }
+                for (SubscriberStat p : measured) {
+                    Integer old = null;
+                    try (PreparedStatement q = conn.prepareStatement("SELECT subscribers FROM signal_subscribers WHERE signal_id=? AND mql_version=?")) {
+                        q.setString(1,p.getSignalId()); q.setString(2,p.getMqlVersion());
+                        try(ResultSet r=q.executeQuery()) { if(r.next()) old=r.getInt(1); }
+                    }
+                    String sql = old == null
+                        ? "INSERT INTO signal_subscribers(subscribers,signal_name,last_updated,url,signal_id,mql_version) VALUES(?,?,?,?,?,?)"
+                        : "UPDATE signal_subscribers SET subscribers=?,signal_name=?,last_updated=?,url=COALESCE(?,url) WHERE signal_id=? AND mql_version=?";
+                    try (PreparedStatement q=conn.prepareStatement(sql)) {
+                        q.setInt(1,p.getSubscribers()); q.setString(2,p.getSignalName()); q.setTimestamp(3,now);
+                        q.setString(4,p.getUrl()); q.setString(5,p.getSignalId()); q.setString(6,p.getMqlVersion()); q.executeUpdate();
+                    }
+                    insertHistory(conn,"INSERT INTO subscriber_history(signal_id,mql_version,signal_name,subscribers,change_amount,record_type,timestamp) VALUES(?,?,?,?,?,?,?)",
+                        p.getSignalId(),p.getMqlVersion(),p.getSignalName(),p.getSubscribers(),old==null?0:p.getSubscribers()-old,
+                        old==null?HISTORY_TYPE_BASELINE:HISTORY_TYPE_EVENT,now);
+                    try (PreparedStatement q=conn.prepareStatement("INSERT INTO subscriber_catalog_members VALUES(?,?)")) {
+                        q.setString(1,p.getSignalId());q.setString(2,p.getMqlVersion());q.executeUpdate();
+                    }
+                }
+                try (PreparedStatement q=conn.prepareStatement("MERGE INTO subscriber_catalog_state KEY(id) VALUES(1,?)")) {
+                    q.setTimestamp(1,now);q.executeUpdate();
+                }
+                conn.commit();
+            } catch (SQLException | RuntimeException e) { conn.rollback(); throw e; }
+        }
+    }
+
+    /** A successful full update restores its historical catalogue policy. */
+    public synchronized void clearSubscriberCatalogueSelection() throws SQLException {
+        try (Connection conn=getConnection(); Statement q=conn.createStatement()) {
+            q.executeUpdate("DELETE FROM subscriber_catalog_state");
+        }
+    }
+
+    public synchronized List<SubscriberStat> getCatalogueSubscriberStatistics() {
+        List<SubscriberStat> all=getAllSubscriberStatistics();
+        try(Connection conn=getConnection(); Statement q=conn.createStatement()) {
+            try(ResultSet r=q.executeQuery("SELECT id FROM subscriber_catalog_state WHERE id=1")) { if(!r.next()) return all; }
+            java.util.Set<String> members=new java.util.HashSet<>();
+            try(ResultSet r=q.executeQuery("SELECT signal_id,mql_version FROM subscriber_catalog_members")) {
+                while(r.next()) members.add(subscriberHistoryKey(r.getString(1),r.getString(2)));
+            }
+            all.removeIf(p -> !members.contains(subscriberHistoryKey(p.getSignalId(),p.getMqlVersion())));
+            return all;
+        } catch(SQLException e) { throw new IllegalStateException("Aktueller Abonnentenkatalog nicht lesbar",e); }
+    }
+
     public synchronized List<SubscriberStat> getAllSubscriberStatistics() {
         List<SubscriberStat> stats = new ArrayList<>();
         // A weekly comparison accepts at most two days of scheduler/manual-run drift.
@@ -469,10 +534,24 @@ public class DatabaseManager {
      */
     public synchronized List<SubscriberEvent> getRecentEvents(Timestamp since, Timestamp until,
                                                               boolean onlyChanges, int limit) {
+        return queryRecentEvents(since, until, onlyChanges, limit, false);
+    }
+
+    /** Public provider events exclude preserved legacy labels before applying LIMIT. */
+    public synchronized List<SubscriberEvent> getRecentProviderEvents(Timestamp since, Timestamp until,
+                                                                      boolean onlyChanges, int limit) {
+        return queryRecentEvents(since, until, onlyChanges, limit, true);
+    }
+
+    private List<SubscriberEvent> queryRecentEvents(Timestamp since, Timestamp until,
+                                                    boolean onlyChanges, int limit, boolean providerIdsOnly) {
         List<SubscriberEvent> events = new ArrayList<>();
         StringBuilder sql = new StringBuilder(
                 "SELECT signal_id, mql_version, signal_name, timestamp, subscribers, " +
                 "change_amount, record_type FROM subscriber_history WHERE 1 = 1");
+        if (providerIdsOnly) {
+            sql.append(" AND REGEXP_LIKE(signal_id, '\\A[1-9][0-9]*\\z')");
+        }
         if (since != null) {
             sql.append(" AND timestamp >= ?");
         }

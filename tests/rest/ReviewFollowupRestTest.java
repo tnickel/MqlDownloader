@@ -67,6 +67,32 @@ class ReviewFollowupRestTest {
         assertEquals("unknown", json("/providers/123/mql5/metrics").getAsJsonObject("metrics").get("Currency").getAsString());
     }
 
+    @Test void metricsAndTradesUseSameRenamedProfileFamilyAndMissingSiblingIs404() throws Exception {
+        Path folder = Files.createDirectories(dir.resolve("download/mql5"));
+        Path oldCsv = folder.resolve("Previous_123.csv");
+        Path currentCsv = folder.resolve("Current_123.csv");
+        Path oldMetrics = folder.resolve("Previous_123_root.txt");
+        Path currentMetrics = folder.resolve("Current_123_root.txt");
+        byte[] history = "Time;Type;Volume;Symbol;Price;Volume;Time;Price;Commission;Swap;Profit\n".getBytes(StandardCharsets.UTF_8);
+        byte[] oldData = "Balance=999\nCurrency=EUR\n".getBytes(StandardCharsets.UTF_8);
+        Files.write(oldCsv, history); Files.write(currentCsv, history);
+        Files.write(oldMetrics, oldData);
+        Files.write(currentMetrics, "Balance=100\nCurrency=USD\n".getBytes(StandardCharsets.UTF_8));
+        Files.setLastModifiedTime(oldCsv, java.nio.file.attribute.FileTime.fromMillis(1000));
+        Files.setLastModifiedTime(currentCsv, java.nio.file.attribute.FileTime.fromMillis(2000));
+        Files.setLastModifiedTime(currentMetrics, java.nio.file.attribute.FileTime.fromMillis(3000));
+        Files.setLastModifiedTime(oldMetrics, java.nio.file.attribute.FileTime.fromMillis(4000));
+        assertEquals("Current_123.csv", json("/providers/123/mql5/trades").getAsJsonObject("file").get("name").getAsString());
+        JsonObject metrics = json("/providers/123/mql5/metrics");
+        assertEquals("Current_123_root.txt", metrics.getAsJsonObject("file").get("name").getAsString());
+        assertEquals("USD", metrics.getAsJsonObject("metrics").get("Currency").getAsString());
+        assertEquals(100, metrics.getAsJsonObject("metrics").get("Balance").getAsInt());
+        Files.delete(currentMetrics);
+        response("/providers/123/mql5/metrics", 404);
+        assertArrayEquals(history, Files.readAllBytes(currentCsv));
+        assertArrayEquals(oldData, Files.readAllBytes(oldMetrics));
+    }
+
     @Test void legacyMetricsRecoverExplicitCurrencyFromIdentifiedMatchingHtmlWithoutWritingFiles() throws Exception {
         Path folder = Files.createDirectories(dir.resolve("download/mql5"));
         Path root = folder.resolve("Synthetic_123_root.txt");

@@ -36,6 +36,10 @@ public class DownloadManager {
     private int mql4SubscribersDownloadedCount = 0;
     private int mql5SubscribersDownloadedCount = 0;
     private boolean isDoAllAtOnce = false;
+    private volatile int newTradeLists;
+    private volatile int updatedTradeLists;
+    private volatile int progressDone;
+    private volatile int progressTotal;
 
     public DownloadManager(ConfigurationManager configManager, LogHandler logHandler,
                            ButtonPanelManager buttonManager, MqlDownloaderGui gui) {
@@ -51,7 +55,29 @@ public class DownloadManager {
         return databaseManager;
     }
 
+    private volatile java.util.List<database.SubscriberStat> measuredSubscribers = java.util.Collections.emptyList();
+    public java.util.List<database.SubscriberStat> getMeasuredSubscribers() { return new java.util.ArrayList<>(measuredSubscribers); }
+    public void startSubscriberListDownload(String version, int target) {
+        startDownload(version, null, false, true, target);
+    }
+
     public void startDownload(String version) {
+        startDownload(version, null, true, false);
+    }
+
+    public void startUpdateDownload(String version, java.util.List<database.SubscriberStat> providers,
+                                    boolean includeTrades) {
+        startDownload(version, providers, includeTrades, true);
+    }
+
+    private void startDownload(String version, java.util.List<database.SubscriberStat> providers,
+                               boolean includeTrades, boolean updateRequest) {
+        startDownload(version, providers, includeTrades, updateRequest, null);
+    }
+
+    private void startDownload(String version, java.util.List<database.SubscriberStat> providers,
+                               boolean includeTrades, boolean updateRequest, Integer subscriberTarget) {
+        measuredSubscribers = java.util.Collections.emptyList();
         logHandler.log("=== STARTE " + version + " DOWNLOAD-PROZESS ===");
         stopRequested = false;
         downloadFailure = null;
@@ -70,7 +96,10 @@ public class DownloadManager {
         
         // MQL-Version auf mt4 oder mt5 setzen
         String mqlVersion = version.equals("MQL4") ? "mt4" : "mt5";
-        int limit = version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
+        int limit = subscriberTarget != null ? subscriberTarget : providers != null ? providers.size()
+                : version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
+        progressDone = 0;
+        progressTotal = limit;
         
         try {
             configManager.setMqlVersion(mqlVersion);
@@ -84,6 +113,7 @@ public class DownloadManager {
         setupUIForDownload(version);
         
         downloadThread = new Thread(() -> {
+            SignalDownloader completedDownloader = null;
             try {
                 logging.LoggerManager.safeLog("Initialisiere Verzeichnisse...");
                 configManager.initializeDirectories();
@@ -94,11 +124,14 @@ public class DownloadManager {
 
                 logging.LoggerManager.safeLog("Starte Download Prozess...");
                 SignalDownloader downloader = new SignalDownloader(currentDriver, configManager, configManager.getCredentials());
+                completedDownloader = downloader;
                 downloader.setStopFlag(stopRequested);
                 downloader.setDownloadProtokoll(downloadProtokoll);
                 downloader.setDatabaseManager(databaseManager);
                 downloader.setSubscriberChangeCallback(change -> gui.addSubscriberChange(change));
                 activeDownloader = downloader; // Fix #1: Referenz halten fuer Stop-Propagation
+                if (updateRequest) downloader.setUpdateMode(includeTrades, providers);
+                if (subscriberTarget != null) downloader.setSubscriberListMode(subscriberTarget);
                 
                 // Fortschritt der Schutzwartezeit an GUI-Progressbar \u00fcbermitteln
                 downloader.setWaitCallback(new downloader.WaitCallback() {
@@ -143,6 +176,7 @@ public class DownloadManager {
                 
                 // VERBESSERTE ProgressCallback mit thread-sicherem Logging
                 downloader.setProgressCallback(count -> {
+                    progressDone = count;
                     SwingUtilities.invokeLater(() -> {
                         buttonManager.updateCounter(version, count);
                         
@@ -153,7 +187,7 @@ public class DownloadManager {
                         }
                         
                         // Limit-Check nur einmal loggen
-                        if (count >= limit && !limitReachedLogged) {
+                        if (!updateRequest && count >= limit && !limitReachedLogged) {
                             limitReachedLogged = true;
                             stopRequested = true;
                             
@@ -177,14 +211,6 @@ public class DownloadManager {
                     throw new IOException("Download wurde abgebrochen");
                 }
 
-                // Subscriber-Zaehler je Version aufaddieren
-                int subCount = downloader.getSubscribersDownloadedCount();
-                if (version.equals("MQL4")) {
-                    mql4SubscribersDownloadedCount += subCount;
-                } else {
-                    mql5SubscribersDownloadedCount += subCount;
-                }
-
             } catch (Exception e) {
                 downloadFailure = e;
                 if (activeDownloader != null) failedProvidersCount = activeDownloader.getFailedProvidersCount();
@@ -203,6 +229,15 @@ public class DownloadManager {
                     });
                 }
             } finally {
+                SignalDownloader completed = completedDownloader;
+                if (completed != null) {
+                    measuredSubscribers = completed.getSubscriberList();
+                    int subCount = completed.getSubscribersDownloadedCount();
+                    if (version.equals("MQL4")) mql4SubscribersDownloadedCount += subCount;
+                    else mql5SubscribersDownloadedCount += subCount;
+                    newTradeLists += completed.getNewTradeLists();
+                    updatedTradeLists += completed.getUpdatedTradeLists();
+                }
                 if (!limitReachedLogged) { // Nur loggen wenn nicht bereits durch Limit-Erreichen geloggt
                     SwingUtilities.invokeLater(() -> {
                         if (stopRequested) {
@@ -330,6 +365,8 @@ public class DownloadManager {
     public void resetSubscribersCounters() {
         mql4SubscribersDownloadedCount = 0;
         mql5SubscribersDownloadedCount = 0;
+        newTradeLists = 0;
+        updatedTradeLists = 0;
     }
 
     public void setDoAllAtOnce(boolean value) {
@@ -344,13 +381,18 @@ public class DownloadManager {
         return mql5SubscribersDownloadedCount;
     }
 
+    public int getNewTradeLists() { return newTradeLists; }
+    public int getUpdatedTradeLists() { return updatedTradeLists; }
+    public int getProgressDone() { return progressDone; }
+    public int getProgressTotal() { return progressTotal; }
+
     /**
      * Gibt detaillierte Informationen ueber den aktuellen Download-Status
      */
     public String getDownloadStatus() {
         if (isDownloadRunning()) {
             String version = configManager.getMqlVersion().startsWith("mt4") ? "MQL4" : "MQL5";
-            int limit = version.equals("MQL4") ? configManager.getMql4Limit() : configManager.getMql5Limit();
+            int limit = progressTotal;
             return String.format("%s Download laeuft (Limit: %d Provider)", version, limit);
         } else {
             return "Kein Download aktiv";

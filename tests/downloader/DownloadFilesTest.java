@@ -22,4 +22,16 @@ class DownloadFilesTest {
         Files.write(dir.resolve("101 (1).csv"),new byte[]{1});
         assertEquals("101 (1).csv",DownloadFiles.findDownload(dir.toFile(),"101").getName());
     }
+    @Test void actualMqlHistoryAndPositionsNamesKeepExactIdAndPlatform(@TempDir Path dir) throws Exception {
+        Files.write(dir.resolve("1101.history.csv"), new byte[]{1});
+        Files.write(dir.resolve("101.positions.csv"), new byte[]{1});
+        assertNull(DownloadFiles.findDownload(dir.toFile(), "101", "mt4"));
+        assertEquals("101.positions.csv", DownloadFiles.findDownload(dir.toFile(), "101", "mt5").getName());
+        Files.write(dir.resolve("101.history.csv"), new byte[]{1});
+        assertEquals("101.history.csv", DownloadFiles.findDownload(dir.toFile(), "101", "mt4").getName());
+        Files.delete(dir.resolve("101.positions.csv"));
+        Files.write(dir.resolve("101.positions (2).csv"), new byte[]{1});
+        assertEquals("101.positions (2).csv", DownloadFiles.findDownload(dir.toFile(), "101", "mql5").getName());
+        assertNull(DownloadFiles.findDownload(dir.toFile(), "101", "unknown"));
+    }
 }
