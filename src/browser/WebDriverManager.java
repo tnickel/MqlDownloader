@@ -51,8 +51,10 @@ public class WebDriverManager {
                 // WebDriverManager automatisch setup
                 io.github.bonigarcia.wdm.WebDriverManager.chromedriver().setup();
                 
-                // Erstelle Chrome-Optionen mit eindeutiger user-data-dir
-                ChromeOptions options = createRobustChromeOptions();
+                // Erster Versuch mit persistentem Profil (hält die MQL5-Session
+                // über Browser-Neustarts, damit ein Login je Sitzung reicht);
+                // Folgeversuche mit einmaligem Profil, falls das Profil blockiert ist.
+                ChromeOptions options = createRobustChromeOptions(attempt == 1);
                 
                 // Versuche WebDriver zu erstellen
                 driver = new ChromeDriver(options);
@@ -96,13 +98,16 @@ public class WebDriverManager {
     }
 
     /**
-     * Erstellt robuste Chrome-Optionen mit eindeutiger user-data-dir und optimierten Einstellungen
+     * Erstellt robuste Chrome-Optionen und optimierten Einstellungen
      * 
+     * @param persistentProfile true: stabiles Profil unter dem Download-Pfad
+     *                          (Session-Cookies überleben Browser-Neustarts);
+     *                          false: einmaliges Profil als Fallback
      * @return ChromeOptions mit robusten Einstellungen
      */
-    private ChromeOptions createRobustChromeOptions() {
-        // Erstelle eindeutige user-data-dir
-        currentUserDataDir = createUniqueUserDataDir();
+    private ChromeOptions createRobustChromeOptions(boolean persistentProfile) {
+        // Persistente user-data-dir hält Login-Cookies über Prozesse hinweg
+        currentUserDataDir = persistentProfile ? createPersistentUserDataDir() : createUniqueUserDataDir();
         
         Map<String, Object> prefs = new HashMap<>();
         prefs.put("download.default_directory", downloadPath);
@@ -117,7 +122,7 @@ public class WebDriverManager {
         options.setExperimentalOption("prefs", prefs);
         options.addArguments("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
         
-        // Eindeutige user-data-dir (löst das Hauptproblem)
+        // user-data-dir: persistent (Session halten) oder einmalig (Fallback)
         options.addArguments("--user-data-dir=" + currentUserDataDir);
         
         // Robustheit-Optionen
@@ -144,6 +149,37 @@ public class WebDriverManager {
         logger.info("Chrome-Optionen erstellt mit user-data-dir: {}", currentUserDataDir);
         
         return options;
+    }
+
+    /**
+     * Stabiles Profil unter dem Download-Pfad: MQL5-Login-Cookies überleben
+     * Browser-Neustarts, sodass Folgeprozesse ohne erneuten Login arbeiten.
+     * 
+     * @return Pfad zur persistenten user-data-dir
+     */
+    private String createPersistentUserDataDir() {
+        try {
+            String userDataDir = Paths.get(downloadPath, "chrome_profile").toString();
+            Files.createDirectories(Paths.get(userDataDir));
+            logger.info("Persistente user-data-dir verwendet: {}", userDataDir);
+            return userDataDir;
+        } catch (IOException e) {
+            logger.warn("Persistente user-data-dir nicht anlegbar ({}), verwende einmaliges Profil", e.getMessage());
+            return createUniqueUserDataDir();
+        }
+    }
+
+    /**
+     * Prüft, ob ein Verzeichnis das persistente Profil ist (wird nie gelöscht).
+     */
+    private boolean isPersistentUserDataDir(String dir) {
+        if (dir == null) return false;
+        try {
+            return Paths.get(dir).toAbsolutePath().normalize()
+                    .equals(Paths.get(downloadPath, "chrome_profile").toAbsolutePath().normalize());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -180,10 +216,11 @@ public class WebDriverManager {
     }
 
     /**
-     * Bereinigt vorherige Session-Daten
+     * Bereinigt vorherige Session-Daten. Das persistente Profil bleibt
+     * bewusst erhalten — es hält die MQL5-Login-Session für Folgeläufe.
      */
     private void cleanupPreviousSession() {
-        if (currentUserDataDir != null) {
+        if (currentUserDataDir != null && !isPersistentUserDataDir(currentUserDataDir)) {
             try {
                 Path userDataPath = Paths.get(currentUserDataDir);
                 if (Files.exists(userDataPath)) {

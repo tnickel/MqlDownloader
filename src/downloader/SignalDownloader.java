@@ -426,6 +426,12 @@ public class SignalDownloader {
     }
 
     private void performLogin() {
+        // Nutzer-Regel 25.10.: einmal einloggen je Sitzung. Das persistente
+        // Chrome-Profil hält die MQL5-Cookies über Browser-Neustarts; ein
+        // erneutes Ausfüllen des Login-Formulars ist nur ohne aktive Session nötig.
+        if (bereitsEingeloggt()) {
+            return;
+        }
         logger.info("Starte Anmeldeprozess...");
         
         try {
@@ -449,6 +455,34 @@ public class SignalDownloader {
                 logger.error("Fehler beim Login - versuche Recovery: {}", e.getMessage());
                 throw new RuntimeException("Login fehlgeschlagen", e);
             }
+        }
+    }
+
+    /**
+     * Erkennt eine aktive MQL5-Session, ohne das Formular auszufüllen:
+     * Eingeloggte Besucher werden von der Login-Seite weggeführt bzw. sehen
+     * kein Formular. Im Zweifel false — dann läuft der normale Login-Pfad.
+     */
+    private boolean bereitsEingeloggt() {
+        try {
+            safeNavigate("https://www.mql5.com/en/auth_login");
+            try {
+                new WebDriverWait(driver, Duration.ofSeconds(6))
+                        .until(ExpectedConditions.visibilityOfElementLocated(By.id("Login")));
+                return false; // Login-Formular sichtbar: keine aktive Session
+            } catch (TimeoutException formularNichtSichtbar) {
+                String url = String.valueOf(driver.getCurrentUrl());
+                boolean weitergeleitet = !url.contains("auth_login");
+                boolean loginSteuerungDa = findLoginButton() != null;
+                if (weitergeleitet || !loginSteuerungDa) {
+                    logger.info("Bestehende MQL5-Session erkannt (URL: {}) - Login übersprungen.", url);
+                    return true;
+                }
+                return false; // Seite noch im Aufbau: normaler Login mit vollem Wait
+            }
+        } catch (Exception e) {
+            logger.warn("Login-Statusprüfung fehlgeschlagen ({}), führe normalen Login durch.", e.getMessage());
+            return false;
         }
     }
 
