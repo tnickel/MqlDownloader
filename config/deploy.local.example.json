@@ -1,0 +1,7 @@
+{
+  "host": "<IP oder DNS des Tradingservers>",
+  "user": "<SSH-Benutzer>",
+  "ssh_key_pfad": "<Pfad zum privaten SSH-Deploy-Key>",
+  "ziel": "C:/Forex/MqlAnalyzer/bin/MqlDownloaderApp.jar",
+  "hostname_erwartet": "<erwarteter Hostname des Ziels (Falsch-Rechner-Schutz)>"
+}

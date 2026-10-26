@@ -8,3 +8,6 @@
 
 # Stufe-0-Laufzeitzustand (3-Tage-Vermerk) — kein Code
 config/update_state.json
+
+# Deploy-Zugang Tradingserver (LAN-IP + Key-Pfad) - nicht eincommitten
+config/deploy.local.json
