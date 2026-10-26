@@ -48,4 +48,39 @@ class SubscriberStatisticsRenderingTest {
             }
         });
     }
+
+    @Test
+    void urlCellShowsPlatformSuffixAndFullUrlTooltip() throws Exception {
+        Class<?> rendererClass = Class.forName("gui.SubscriberStatisticsDialog$UrlTextRenderer");
+        Constructor<?> constructor = rendererClass.getDeclaredConstructor();
+        constructor.setAccessible(true);
+        TableCellRenderer renderer = (TableCellRenderer) constructor.newInstance();
+
+        SwingUtilities.invokeAndWait(() -> {
+            JTable table = new JTable(1, 1);
+            table.setFont(new Font(Font.DIALOG, Font.PLAIN, 12));
+            table.setForeground(Color.BLACK);
+            table.setBackground(Color.WHITE);
+
+            JLabel mql4 = (JLabel) renderer.getTableCellRendererComponent(table,
+                    new SubscriberStatisticsDialog.UrlLink("https://www.mql5.com/en/signals/2306053", "mql4"),
+                    false, false, 0, 0);
+            assertEquals("\u2197 mql5.com \u00b7 MQL4", mql4.getText());
+            assertEquals("https://www.mql5.com/en/signals/2306053", mql4.getToolTipText());
+
+            JLabel mql5 = (JLabel) renderer.getTableCellRendererComponent(table,
+                    new SubscriberStatisticsDialog.UrlLink("https://www.mql5.com/en/signals/947158", "mql5"),
+                    false, false, 0, 0);
+            assertEquals("\u2197 mql5.com \u00b7 MQL5", mql5.getText());
+
+            JLabel legacyString = (JLabel) renderer.getTableCellRendererComponent(table,
+                    "https://example.com/signal", false, false, 0, 0);
+            assertEquals("\u2197 example.com", legacyString.getText());
+
+            JLabel empty = (JLabel) renderer.getTableCellRendererComponent(table,
+                    new SubscriberStatisticsDialog.UrlLink("", "mql4"), false, false, 0, 0);
+            assertEquals("", empty.getText());
+            assertNull(empty.getToolTipText());
+        });
+    }
 }

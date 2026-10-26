@@ -154,6 +154,8 @@ public class SubscriberStatisticsDialog extends JDialog {
                         return SparklineData.class;
                     case REPORTS_COLUMN:
                         return TestReports.class;
+                    case URL_COLUMN:
+                        return UrlLink.class;
                     default:
                         return String.class;
                 }
@@ -252,7 +254,7 @@ public class SubscriberStatisticsDialog extends JDialog {
         statsTable.getColumnModel().getColumn(7).setPreferredWidth(135);
         statsTable.getColumnModel().getColumn(SPARKLINE_COLUMN).setPreferredWidth(143);
         statsTable.getColumnModel().getColumn(REPORTS_COLUMN).setPreferredWidth(85);
-        statsTable.getColumnModel().getColumn(URL_COLUMN).setPreferredWidth(115);
+        statsTable.getColumnModel().getColumn(URL_COLUMN).setPreferredWidth(130);
 
         statsTable.addMouseListener(new SubscriberStatisticsClickHandler(statsTable,
                 RISK_COLUMN, REPORTS_COLUMN, URL_COLUMN, new SubscriberStatisticsClickHandler.Actions() {
@@ -474,7 +476,7 @@ public class SubscriberStatisticsDialog extends JDialog {
                     dateStr,
                     SparklineData.fromLast30Days(history, stat.getSubscribers(), stat.getLastUpdated()),
                     reports,
-                    stat.getUrl()
+                    new UrlLink(stat.getUrl(), stat.getMqlVersion())
             });
         }
 
@@ -1120,13 +1122,21 @@ public class SubscriberStatisticsDialog extends JDialog {
         }
     }
 
-    /** URL-Spalte: kompakter Link mit Tooltip und Hand-Cursor. */
+    /** URL-Spalte: kompakter Link mit MQL-Versions-Kennung, Tooltip und Hand-Cursor. */
     private static final class UrlTextRenderer extends TextCellRenderer {
         @Override
         protected void style(JTable table, Object value, boolean isSelected) {
-            String url = value != null ? value.toString() : "";
-            setText(url.isEmpty() ? "" : "\u2197 " + compactUrl(url));
-            setToolTipText(url.isEmpty() ? null : url);
+            UrlLink link = value instanceof UrlLink ? (UrlLink) value : null;
+            String url = link != null ? link.getUrl() : (value != null ? value.toString() : "");
+            if (url.isEmpty()) {
+                setText("");
+                setToolTipText(null);
+            } else {
+                String version = link != null ? link.getVersionLabel() : "";
+                String suffix = version.isEmpty() ? "" : " \u00b7 " + version;
+                setText("\u2197 " + compactUrl(url) + suffix);
+                setToolTipText(url);
+            }
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             if (!isSelected) {
                 setForeground(new Color(0, 102, 180));
@@ -1144,6 +1154,37 @@ public class SubscriberStatisticsDialog extends JDialog {
             } catch (Exception ignored) {
                 return "Link \u00f6ffnen";
             }
+        }
+    }
+
+    /**
+     * Zellenwert der URL-Spalte: Signal-Link plus MQL-Version des Signals.
+     * MT4- und MT5-Signale liegen beide auf mql5.com — die Versions-Kennung
+     * in der Anzeige macht den Unterschied sichtbar. Alle Signalseiten von
+     * MQL5.com nutzen dieselbe Domain, auch f\u00fcr MQL4-Systeme.
+     */
+    static final class UrlLink {
+        private final String url;
+        private final String mqlVersion;
+
+        UrlLink(String url, String mqlVersion) {
+            this.url = url != null ? url.trim() : "";
+            this.mqlVersion = mqlVersion != null ? mqlVersion.trim() : "";
+        }
+
+        String getUrl() {
+            return url;
+        }
+
+        /** Anzeige-Kurzform der Plattform (z. B. "MQL4") oder leer, wenn unbekannt. */
+        String getVersionLabel() {
+            return mqlVersion.isEmpty() ? "" : mqlVersion.toUpperCase(Locale.ROOT);
+        }
+
+        /** Suchfilter vergleicht toString: URL und Plattform finden beide. */
+        @Override
+        public String toString() {
+            return mqlVersion.isEmpty() ? url : url + " " + getVersionLabel();
         }
     }
 
